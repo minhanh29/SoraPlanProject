@@ -1,0 +1,648 @@
+<title>SoraPlan System Overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: drafting-sheet page — one 1080px column, sticky section nav, diagrams as full-width plates with dimension-line accents */
+:root {
+  --paper: #eef2f1;
+  --surface: #ffffff;
+  --ink: #15212a;
+  --ink-2: #4b5b66;
+  --line: #c7d1d4;
+  --grid: rgba(29, 95, 134, 0.07);
+  --accent: #1d5f86;
+  --accent-soft: #dcebf3;
+  --warn: #a95a14;
+  --warn-soft: #f6e6d4;
+  --ok: #2c7550;
+  --ok-soft: #dcefe3;
+  --ext: #6a4d8f;
+  --ext-soft: #ece4f5;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1418; --surface: #162028; --ink: #e2eaed; --ink-2: #98a9b3; --line: #2d3b45;
+    --grid: rgba(108, 180, 221, 0.06); --accent: #6cb4dd; --accent-soft: #17323f;
+    --warn: #e2a062; --warn-soft: #3a2a19; --ok: #6cc28f; --ok-soft: #173326; --ext: #b79ae0; --ext-soft: #2b2338;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1418; --surface: #162028; --ink: #e2eaed; --ink-2: #98a9b3; --line: #2d3b45;
+  --grid: rgba(108, 180, 221, 0.06); --accent: #6cb4dd; --accent-soft: #17323f;
+  --warn: #e2a062; --warn-soft: #3a2a19; --ok: #6cc28f; --ok-soft: #173326; --ext: #b79ae0; --ext-soft: #2b2338;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font: 400 16px/1.6 var(--f-body);
+  padding-inline: 16px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+nav.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  margin-inline: -16px; padding: 10px 16px;
+}
+nav.top .wrap { display: flex; gap: 6px 18px; flex-wrap: wrap; align-items: baseline; }
+nav.top .brand { font: 700 15px/1 var(--f-display); font-stretch: 112%; letter-spacing: 0.02em; margin-right: auto; }
+nav.top a { color: var(--ink-2); text-decoration: none; font-size: 13px; }
+nav.top a:hover, nav.top a:focus-visible { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+header.hero { padding-block: 56px 40px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px; align-items: center; }
+.eyebrow { font: 500 12px/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 800 clamp(36px, 6vw, 60px)/1.02 var(--f-display); font-stretch: 118%; letter-spacing: -0.01em; margin: 14px 0 18px; text-wrap: balance; }
+.lede { font-size: 18px; color: var(--ink-2); max-width: 58ch; margin: 0; }
+.lede strong { color: var(--ink); font-weight: 600; }
+.hero-plan { width: 100%; max-width: 100%; height: auto; }
+
+section { padding-block: 44px; border-top: 1px solid var(--line); }
+h2 { font: 700 30px/1.15 var(--f-display); font-stretch: 110%; margin: 8px 0 12px; text-wrap: balance; }
+h3 { font: 700 18px/1.3 var(--f-display); font-stretch: 105%; margin: 0 0 6px; }
+p { margin: 0 0 12px; }
+.intro { color: var(--ink-2); max-width: 70ch; margin-bottom: 24px; }
+code, .mono { font-family: var(--f-mono); font-size: 0.86em; }
+code { background: var(--accent-soft); color: var(--ink); padding: 1px 5px; border-radius: 4px; }
+
+/* comparison */
+.vs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.vs > div { padding: 20px 22px; min-width: 0; }
+.vs > div + div { border-left: 1px solid var(--line); }
+.vs .label { font: 500 11px/1 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 10px; }
+.vs .them .label { color: var(--warn); }
+.vs .us .label { color: var(--ok); }
+.vs ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+
+/* steps */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: s; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0; }
+.step .n { font: 700 13px/1 var(--f-mono); color: var(--accent); display: block; margin-bottom: 10px; }
+.step.star { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.step ul { margin: 8px 0 0; padding-left: 18px; color: var(--ink-2); font-size: 14.5px; display: grid; gap: 4px; }
+.tag { display: inline-block; font: 500 11px/1 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); vertical-align: middle; margin-left: 6px; }
+
+/* diagrams */
+.plate { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.plate-scroll { overflow-x: auto; }
+.plate svg { display: block; width: 100%; height: auto; min-width: 760px; }
+.plate figcaption { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+svg text { font-family: var(--f-body); fill: var(--ink); }
+svg .t-title { font: 700 15px var(--f-display); fill: var(--ink); }
+svg .t-sub { font-size: 11.5px; fill: var(--ink-2); }
+svg .t-mono { font: 500 11px var(--f-mono); fill: var(--ink-2); }
+svg .t-edge { font: 500 10.5px var(--f-mono); fill: var(--accent); }
+svg .t-zone { font: 500 10.5px var(--f-mono); letter-spacing: 0.1em; fill: var(--ink-2); }
+svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.25; }
+svg .box-core { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .box-ext { fill: var(--ext-soft); stroke: var(--ext); stroke-width: 1.25; }
+svg .box-data { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.25; }
+svg .zone { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 4; }
+svg .edge { stroke: var(--accent); stroke-width: 1.5; fill: none; }
+svg .edge-dash { stroke: var(--ink-2); stroke-width: 1.25; fill: none; stroke-dasharray: 5 4; }
+svg .arrowhead { fill: var(--accent); }
+svg .arrowhead-dim { fill: var(--ink-2); }
+svg .dim { stroke: var(--warn); stroke-width: 1.25; fill: none; }
+svg .dim-text { font: 500 12px var(--f-mono); fill: var(--warn); }
+svg .wall { stroke: var(--ink); stroke-width: 5; fill: none; stroke-linecap: square; }
+svg .furn { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.25; }
+svg .swing { stroke: var(--ink-2); stroke-width: 1; fill: none; stroke-dasharray: 3 3; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--ink-2); margin-top: 12px; }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid; }
+.legend .l-core::before { background: var(--accent-soft); border-color: var(--accent); }
+.legend .l-svc::before { background: var(--surface); border-color: var(--line); }
+.legend .l-ext::before { background: var(--ext-soft); border-color: var(--ext); }
+.legend .l-data::before { background: var(--ok-soft); border-color: var(--ok); }
+
+/* rules */
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 20px; }
+.rule { padding: 14px 16px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 8px 8px 0; font-size: 14.5px; min-width: 0; }
+.rule b { display: block; font-family: var(--f-display); font-size: 15px; margin-bottom: 2px; }
+
+/* pipelines */
+.pipe { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; counter-reset: p; }
+.pipe li { counter-increment: p; position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 14px; min-width: 0; }
+.pipe li::before { content: counter(p, decimal-leading-zero); font: 500 11px/1 var(--f-mono); color: var(--accent); display: block; margin-bottom: 6px; }
+.pipe li b { display: block; font-weight: 600; margin-bottom: 2px; }
+.pipe li span { color: var(--ink-2); font-size: 13px; }
+.pipe li .who { display: inline-block; margin-top: 6px; font: 500 10.5px/1 var(--f-mono); color: var(--ext); }
+.pipe li .who.g { color: var(--accent); }
+.pipe li .who.c { color: var(--ok); }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.two > div { min-width: 0; }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 640px; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px/1.2 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); }
+tr:last-child td { border-bottom: 0; }
+td.k { font-weight: 600; white-space: nowrap; }
+.pill { display: inline-block; font: 600 11px/1 var(--f-mono); padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.no { background: var(--ext-soft); color: var(--ext); }
+
+/* timeline */
+.timeline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.ms { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.ms .when { font: 500 11px/1 var(--f-mono); color: var(--accent); }
+.ms h3 { font-size: 15px; margin-top: 8px; }
+.ms p { font-size: 13px; color: var(--ink-2); margin: 0; }
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 18px; }
+.role { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 13.5px; min-width: 0; }
+.role b { font-family: var(--f-mono); font-size: 12px; color: var(--accent); display: block; margin-bottom: 4px; }
+.crit { margin-top: 18px; font: 500 13px/1.9 var(--f-mono); color: var(--ink-2); background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+.crit b { color: var(--ink); font-weight: 500; }
+
+/* demo */
+.demo { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; border-left: 2px solid var(--line); }
+.demo li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; padding: 8px 0 8px 16px; position: relative; }
+.demo li::before { content: ""; position: absolute; left: -6px; top: 15px; width: 10px; height: 10px; border-radius: 50%; background: var(--paper); border: 2px solid var(--accent); }
+.demo li.key::before { background: var(--accent); }
+.demo time { font: 500 13px/1.6 var(--f-mono); color: var(--accent); }
+
+.docs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 24px; font-size: 14.5px; }
+.docs div { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.docs .mono { color: var(--accent); white-space: nowrap; }
+.docs span:last-child { color: var(--ink-2); }
+footer { padding-block: 32px 48px; color: var(--ink-2); font-size: 13px; border-top: 1px solid var(--line); }
+
+@media (max-width: 860px) {
+  header.hero { grid-template-columns: 1fr; padding-block: 36px 28px; }
+  .steps, .two { grid-template-columns: 1fr; }
+  .timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vs { grid-template-columns: 1fr; }
+  .vs > div + div { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+</style>
+
+<nav class="top" aria-label="Sections">
+  <div class="wrap">
+    <span class="brand">SoraPlan</span>
+    <a href="#flow">Flow</a>
+    <a href="#principle">Scene graph</a>
+    <a href="#arch">Architecture</a>
+    <a href="#pipelines">Pipelines</a>
+    <a href="#decisions">3D providers</a>
+    <a href="#google">Google stack</a>
+    <a href="#plan">Plan &amp; team</a>
+    <a href="#demo">Demo</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <div class="eyebrow">System overview · Google AI builder hackathon</div>
+    <h1>From floor-plan sketch to a home you can walk through</h1>
+    <p class="lede">Upload a sketch and SoraPlan builds a <strong>real-scale 3D home</strong>. You can orbit it, walk through it, and move or resize furniture in centimetres. You can use our preset furniture or <strong>photos of your own pieces</strong>, which AI turns into 3D models.</p>
+  </div>
+  <svg class="hero-plan" viewBox="0 0 420 300" role="img" aria-label="Plan sketch of a living room: a 4.20 m by 3.60 m room with a 2.10 m sofa and a door swing">
+    <defs>
+      <marker id="tick" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M2 8 L8 2" class="dim"/></marker>
+    </defs>
+    <path class="wall" d="M60 50 H360 V250 H190 M130 250 H60 V50"/>
+    <path class="swing" d="M130 250 A60 60 0 0 1 190 190"/>
+    <line x1="190" y1="250" x2="190" y2="190" stroke="var(--ink-2)" stroke-width="1.5"/>
+    <rect class="furn" x="110" y="62" width="150" height="62" rx="6"/>
+    <rect class="furn" x="118" y="66" width="134" height="16" rx="3" opacity="0.6"/>
+    <text x="185" y="104" text-anchor="middle" class="t-mono">SOFA</text>
+    <rect class="furn" x="290" y="150" width="56" height="88" rx="4"/>
+    <text x="318" y="198" text-anchor="middle" class="t-mono">TV</text>
+    <path class="dim" d="M110 140 H260" marker-start="url(#tick)" marker-end="url(#tick)"/>
+    <text x="185" y="156" text-anchor="middle" class="dim-text">2.10 m</text>
+    <path class="dim" d="M60 24 H360" marker-start="url(#tick)" marker-end="url(#tick)"/>
+    <text x="210" y="18" text-anchor="middle" class="dim-text">4.20 m</text>
+    <path class="dim" d="M390 50 V250" marker-start="url(#tick)" marker-end="url(#tick)"/>
+    <text x="402" y="154" class="dim-text" transform="rotate(90 402 154)" text-anchor="middle">3.60 m</text>
+    <text x="96" y="285" class="t-mono">walkway 0.95 m ✓ · door swing clear ✓</text>
+  </svg>
+</header>
+
+<section aria-labelledby="why">
+  <div class="eyebrow">Why it wins</div>
+  <h2 id="why">AI room images look right but don't have to fit. Our scenes have to.</h2>
+  <div class="vs">
+    <div class="them">
+      <div class="label">Typical AI interior tools</div>
+      <ul>
+        <li>Generate a 2D image with invented proportions</li>
+        <li>No way to tell if the bed fits next to the wardrobe</li>
+        <li>One fixed camera angle</li>
+        <li>To change anything, you re-prompt and hope</li>
+      </ul>
+    </div>
+    <div class="us">
+      <div class="label">SoraPlan</div>
+      <ul>
+        <li>Every object lives in a scene measured in metres. A 2.1 m sofa is 2.1 m.</li>
+        <li>Collision, walkway and door-swing checks with live dimension lines</li>
+        <li>Walk mode, orbit and top-down views from any angle</li>
+        <li>Drag-and-resize editing, plus a voice architect that changes the scene for you</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="flow" aria-labelledby="flow-h">
+  <div class="eyebrow">User flow</div>
+  <h2 id="flow-h">Three steps, one scene</h2>
+  <p class="intro">Users can go back to any step at any time. All three edit the same scene file, so nothing gets out of sync.</p>
+  <div class="steps">
+    <div class="step">
+      <span class="n">STEP 1</span>
+      <h3>Plan</h3>
+      <p>Upload a sketch, PDF or screenshot. Gemini reads the walls, doors, windows, rooms and dimension labels.</p>
+      <ul>
+        <li>Scale is set from the dimension labels, with door widths as a fallback</li>
+        <li>The user corrects the result in a 2D editor laid over the sketch</li>
+        <li>If the scale is uncertain, the user marks one known length</li>
+      </ul>
+    </div>
+    <div class="step">
+      <span class="n">STEP 2</span>
+      <h3>Style &amp; preview</h3>
+      <p>Pick a style or describe one. A designer agent picks materials and furniture, from presets or the user's uploads, and places them.</p>
+      <ul>
+        <li>A plain grey render of the real layout is turned into a photoreal image by Nano Banana Pro</li>
+        <li>Adjust and regenerate, then approve</li>
+        <li>Furniture photos turn into 3D in the background</li>
+      </ul>
+    </div>
+    <div class="step star">
+      <span class="n">STEP 3 <span class="tag">main selling point</span></span>
+      <h3>3D world</h3>
+      <p>Walls are built by code from the plan, and furniture models are scaled to real size.</p>
+      <ul>
+        <li>Orbit with cut-away walls, top-down view and first-person walk</li>
+        <li>Drag, rotate and resize with snapping and live measurements</li>
+        <li>Warnings for collisions, walkway space and blocked doors</li>
+        <li>“Ask the architect” by voice, and a photo mode for high-quality stills</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="principle" aria-labelledby="principle-h">
+  <div class="eyebrow">Core design principle</div>
+  <h2 id="principle-h">The scene graph is the single source of truth</h2>
+  <p class="intro">AI suggests changes. Our own code checks and applies them. The 2D plan, the image preview and the 3D world are all drawn from the same JSON file, measured in metres. That is why proportions can't drift.</p>
+  <figure class="plate" style="margin:0">
+    <div class="plate-scroll">
+    <svg viewBox="0 0 1000 330" role="img" aria-label="Diagram: sketch, AI proposals and user edits all become SceneOps that are validated into the SceneGraph, which feeds the 2D plan editor, the AI image preview and the 3D world">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="arrowhead"/></marker>
+      </defs>
+      <text x="20" y="22" class="t-zone">INPUTS</text>
+      <rect class="box" x="20" y="36" width="200" height="62" rx="8"/>
+      <text x="36" y="62" class="t-title">Floor-plan sketch</text>
+      <text x="36" y="82" class="t-sub">photo · PDF · screenshot</text>
+      <rect class="box-ext" x="20" y="134" width="200" height="62" rx="8"/>
+      <text x="36" y="160" class="t-title">AI proposals</text>
+      <text x="36" y="180" class="t-sub">parser · designer agent · voice</text>
+      <rect class="box" x="20" y="232" width="200" height="62" rx="8"/>
+      <text x="36" y="258" class="t-title">User edits</text>
+      <text x="36" y="278" class="t-sub">gizmos · 2D editor · inspector</text>
+
+      <path class="edge" d="M220 67 C 270 67, 270 165, 300 165" marker-end="url(#ah)"/>
+      <path class="edge" d="M220 165 H300" marker-end="url(#ah)"/>
+      <path class="edge" d="M220 263 C 270 263, 270 165, 300 165" marker-end="url(#ah)"/>
+
+      <rect class="box" x="302" y="128" width="150" height="74" rx="8"/>
+      <text x="318" y="156" class="t-title">SceneOps</text>
+      <text x="318" y="176" class="t-sub">typed mutations</text>
+      <text x="318" y="192" class="t-mono">item.move · wall.add…</text>
+
+      <path class="edge" d="M452 165 H500" marker-end="url(#ah)"/>
+      <text x="456" y="155" class="t-edge">validate</text>
+
+      <rect class="box-core" x="502" y="92" width="210" height="146" rx="10"/>
+      <text x="520" y="122" class="t-title">SceneGraph</text>
+      <text x="520" y="142" class="t-mono">metres · Y-up · versioned</text>
+      <text x="520" y="168" class="t-sub">walls · openings · rooms</text>
+      <text x="520" y="186" class="t-sub">materials · furniture</text>
+      <text x="520" y="204" class="t-sub">pose + real dims (W×D×H)</text>
+      <text x="520" y="224" class="t-mono">Firestore · undo/redo log</text>
+
+      <path class="edge" d="M712 130 C 750 130, 750 67, 780 67" marker-end="url(#ah)"/>
+      <path class="edge" d="M712 165 H780" marker-end="url(#ah)"/>
+      <path class="edge" d="M712 200 C 750 200, 750 263, 780 263" marker-end="url(#ah)"/>
+
+      <text x="782" y="22" class="t-zone">PROJECTIONS</text>
+      <rect class="box" x="782" y="36" width="200" height="62" rx="8"/>
+      <text x="798" y="62" class="t-title">2D plan editor</text>
+      <text x="798" y="82" class="t-sub">correct the parse</text>
+      <rect class="box" x="782" y="134" width="200" height="62" rx="8"/>
+      <text x="798" y="160" class="t-title">AI image preview</text>
+      <text x="798" y="180" class="t-sub">grey render → Nano Banana</text>
+      <rect class="box-core" x="782" y="232" width="200" height="62" rx="8"/>
+      <text x="798" y="258" class="t-title">3D world</text>
+      <text x="798" y="278" class="t-sub">Three.js · built in browser</text>
+    </svg>
+    </div>
+  </figure>
+  <div class="rules">
+    <div class="rule"><b>Metres everywhere</b>Data and APIs store metres. Convert to cm or ft-in only in the UI.</div>
+    <div class="rule"><b>Never trust raw AI output</b>Every AI result is checked against a schema, then for valid geometry, before it is saved.</div>
+    <div class="rule"><b>Architecture is built by code</b>Walls, floors and openings are generated from the plan. Image-to-3D models never make them.</div>
+    <div class="rule"><b>Furniture is normalised</b>Each model is set with its base at the floor, its front facing +Z, and its size scaled to real dimensions.</div>
+  </div>
+</section>
+
+<section id="arch" aria-labelledby="arch-h">
+  <div class="eyebrow">High-level architecture</div>
+  <h2 id="arch-h">Stateless services on Cloud Run, with all slow work in queued jobs</h2>
+  <p class="intro">The browser builds the 3D world itself from the scene graph and CDN files, so the main feature costs almost nothing to serve. Slow AI calls run as background jobs on Cloud Tasks, and the browser watches their progress live through Firestore.</p>
+  <figure class="plate" style="margin:0">
+    <div class="plate-scroll">
+    <svg viewBox="0 0 1100 700" role="img" aria-label="Architecture diagram: web app talks to api on Cloud Run and to Gemini Live; api enqueues Cloud Tasks for ai-worker and asset-worker; workers call Gemini and Meshy and write to Firestore and Cloud Storage">
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="arrowhead"/></marker>
+        <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="arrowhead-dim"/></marker>
+      </defs>
+
+      <!-- zones -->
+      <rect class="zone" x="30" y="14" width="1050" height="118" rx="10"/>
+      <text x="44" y="32" class="t-zone">CLIENT</text>
+      <rect class="zone" x="30" y="156" width="1050" height="328" rx="10"/>
+      <text x="44" y="174" class="t-zone">GOOGLE CLOUD · CLOUD RUN + MANAGED SERVICES</text>
+      <rect class="zone" x="30" y="508" width="1050" height="118" rx="10"/>
+      <text x="44" y="526" class="t-zone">AI &amp; 3D PROVIDERS</text>
+
+      <!-- client -->
+      <rect class="box-core" x="60" y="44" width="460" height="74" rx="8"/>
+      <text x="78" y="72" class="t-title">Web app</text>
+      <text x="78" y="92" class="t-sub">Next.js · React Three Fiber · zustand · Firebase Auth</text>
+      <text x="78" y="108" class="t-mono">Firebase App Hosting</text>
+
+      <rect class="box-ext" x="760" y="44" width="300" height="74" rx="8"/>
+      <text x="778" y="72" class="t-title">Gemini Live API</text>
+      <text x="778" y="92" class="t-sub">voice architect · function calls → SceneOps</text>
+
+      <path class="edge" d="M520 81 H758" marker-start="url(#a2)" marker-end="url(#a2)"/>
+      <text x="548" y="73" class="t-edge">WebSocket · ephemeral token</text>
+
+      <!-- api -->
+      <rect class="box" x="60" y="194" width="460" height="80" rx="8"/>
+      <text x="78" y="222" class="t-title">api</text>
+      <text x="78" y="242" class="t-sub">FastAPI · auth · SceneOp commit &amp; validation</text>
+      <text x="78" y="260" class="t-sub">signed upload URLs · create jobs · Live tokens</text>
+
+      <path class="edge" d="M290 118 V192" marker-start="url(#a2)" marker-end="url(#a2)"/>
+      <text x="298" y="160" class="t-edge">REST · Firebase ID token</text>
+
+      <!-- tasks -->
+      <rect class="box" x="600" y="194" width="460" height="80" rx="8"/>
+      <text x="618" y="222" class="t-title">Cloud Tasks</text>
+      <text x="618" y="242" class="t-sub">plan-parse · design · render-preview</text>
+      <text x="618" y="260" class="t-sub">asset-prep · asset-3d · asset-normalize</text>
+
+      <path class="edge" d="M520 234 H598" marker-end="url(#a2)"/>
+      <text x="530" y="226" class="t-edge">enqueue</text>
+
+      <!-- workers -->
+      <rect class="box" x="600" y="340" width="220" height="92" rx="8"/>
+      <text x="616" y="366" class="t-title">ai-worker</text>
+      <text x="616" y="386" class="t-sub">Python · Google ADK agents</text>
+      <text x="616" y="402" class="t-sub">plan parse · designer · render</text>
+      <text x="616" y="418" class="t-sub">asset prep · vision QA</text>
+
+      <rect class="box" x="840" y="340" width="220" height="92" rx="8"/>
+      <text x="856" y="366" class="t-title">asset-worker</text>
+      <text x="856" y="386" class="t-sub">Node · gltf-transform · KTX2</text>
+      <text x="856" y="402" class="t-sub">Meshy jobs · normalise GLB</text>
+      <text x="856" y="418" class="t-sub">LOD · thumbnails</text>
+
+      <path class="edge" d="M710 274 V338" marker-end="url(#a2)"/>
+      <path class="edge" d="M950 274 V338" marker-end="url(#a2)"/>
+      <text x="718" y="312" class="t-edge">push · OIDC</text>
+      <path class="edge" d="M820 386 H838" marker-end="url(#a2)"/>
+
+      <!-- data -->
+      <rect class="box-data" x="60" y="340" width="220" height="92" rx="8"/>
+      <text x="76" y="366" class="t-title">Firestore</text>
+      <text x="76" y="386" class="t-sub">scenes · ops log · assets</text>
+      <text x="76" y="402" class="t-sub">jobs · vector search</text>
+
+      <rect class="box-data" x="300" y="340" width="220" height="92" rx="8"/>
+      <text x="316" y="366" class="t-title">Cloud Storage + CDN</text>
+      <text x="316" y="386" class="t-sub">uploads · GLB · KTX2</text>
+      <text x="316" y="402" class="t-sub">renders · thumbnails</text>
+
+      <path class="edge" d="M170 274 V338" marker-end="url(#a2)"/>
+      <path class="edge" d="M410 274 V338" marker-end="url(#a2)"/>
+      <path class="edge" d="M600 410 H522" marker-end="url(#a2)"/>
+      <text x="526" y="428" class="t-edge">results</text>
+
+      <!-- realtime + cdn -->
+      <path class="edge-dash" d="M60 386 H44 V100 H58" marker-end="url(#a3)"/>
+      <text x="38" y="300" class="t-mono" transform="rotate(-90 38 300)" text-anchor="middle">live job progress (onSnapshot)</text>
+      <path class="edge-dash" d="M520 360 C 560 340, 560 140, 470 120" marker-end="url(#a3)"/>
+      <text x="548" y="300" class="t-mono" transform="rotate(-90 548 300)" text-anchor="middle">GLB via CDN</text>
+
+      <!-- platform strip -->
+      <rect class="box" x="60" y="446" width="1000" height="26" rx="6"/>
+      <text x="76" y="463" class="t-mono">Pub/Sub · Secret Manager · Cloud Logging → BigQuery · Cloud Build · Artifact Registry · Terraform</text>
+
+      <!-- providers -->
+      <rect class="box-ext" x="600" y="538" width="220" height="76" rx="8"/>
+      <text x="616" y="564" class="t-title">Gemini · Vertex AI</text>
+      <text x="616" y="584" class="t-sub">3.1 Pro · Flash · Nano Banana</text>
+      <text x="616" y="600" class="t-sub">Pro · Embeddings · Veo</text>
+
+      <rect class="box-ext" x="840" y="538" width="220" height="76" rx="8"/>
+      <text x="856" y="564" class="t-title">Meshy</text>
+      <text x="856" y="584" class="t-sub">image → 3D · PBR GLB</text>
+      <text x="856" y="600" class="t-sub">Tripo as fallback</text>
+
+      <path class="edge" d="M710 432 V536" marker-end="url(#a2)"/>
+      <path class="edge" d="M950 432 V536" marker-end="url(#a2)"/>
+
+      <text x="60" y="560" class="t-sub">Provider limits are enforced by queue rates.</text>
+      <text x="60" y="578" class="t-sub">The same input photo is never generated twice:</text>
+      <text x="60" y="596" class="t-sub">assets are cached by content hash.</text>
+    </svg>
+    </div>
+    <div class="legend">
+      <span class="l-core">Core product surface</span>
+      <span class="l-svc">Our services</span>
+      <span class="l-data">Data stores</span>
+      <span class="l-ext">AI / external APIs</span>
+    </div>
+  </figure>
+
+  <div class="tbl" style="margin-top:22px">
+    <table>
+      <thead><tr><th>Service</th><th>Stack</th><th>Owns</th><th>Scaling</th></tr></thead>
+      <tbody>
+        <tr><td class="k">web</td><td>Next.js 15, R3F, drei, postprocessing</td><td>UI, 2D/3D editors, optimistic ops, grey layout render</td><td>App Hosting + CDN</td></tr>
+        <tr><td class="k">api</td><td>Python 3.12, FastAPI, Pydantic v2</td><td>Auth, projects, transactional scene commits, jobs</td><td>Cloud Run, 0–50, concurrency 80</td></tr>
+        <tr><td class="k">ai-worker</td><td>google-genai, ADK, shapely, opencv</td><td>Plan parsing, scale, designer agent, previews, asset prep</td><td>Cloud Run, I/O-bound, 30 min timeout</td></tr>
+        <tr><td class="k">asset-worker</td><td>Node 22, gltf-transform, toktx, puppeteer</td><td>Meshy jobs, GLB normalisation, LOD, thumbnails</td><td>Cloud Run, 2 vCPU / 4 GiB</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="pipelines" aria-labelledby="pipe-h">
+  <div class="eyebrow">AI pipelines</div>
+  <h2 id="pipe-h">Where the AI runs and where code takes over</h2>
+  <p class="intro">Each step is labelled with who does the work: <span class="mono" style="color:var(--accent)">Gemini</span>, <span class="mono" style="color:var(--ext)">external</span> or <span class="mono" style="color:var(--ok)">our code</span>.</p>
+
+  <div class="two">
+    <div>
+      <h3>Floor plan → scaled scene</h3>
+      <ol class="pipe">
+        <li><b>Pre-process</b><span>deskew, contrast, line hints</span><br><span class="who c">opencv</span></li>
+        <li><b>Extract</b><span>walls, openings, rooms, dimension labels as JSON</span><br><span class="who g">Gemini 3.1 Pro</span></li>
+        <li><b>Clean geometry</b><span>snap, merge, rebuild room shapes</span><br><span class="who c">shapely</span></li>
+        <li><b>Calibrate scale</b><span>labels → doors → user reference</span><br><span class="who c">median + outliers</span></li>
+        <li><b>Build scene</b><span>metres, defaults, drawn fixtures</span><br><span class="who c">scene-core</span></li>
+      </ol>
+    </div>
+    <div>
+      <h3>Furnish → grounded preview</h3>
+      <ol class="pipe">
+        <li><b>Designer agent</b><span>picks items and how they relate</span><br><span class="who g">ADK + Flash</span></li>
+        <li><b>Layout solver</b><span>exact positions, wall snap, clearances</span><br><span class="who c">our code</span></li>
+        <li><b>Grey layout render</b><span>plain render + ID + depth passes</span><br><span class="who c">browser</span></li>
+        <li><b>Photoreal</b><span>grey render + product refs + swatches</span><br><span class="who g">Nano Banana Pro</span></li>
+        <li><b>Drift check</b><span>all objects in place?</span><br><span class="who g">Gemini Flash</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <h3 style="margin-top:28px">User furniture photo → real-size 3D asset</h3>
+  <ol class="pipe">
+    <li><b>Understand</b><span>category, materials, estimated W×D×H</span><br><span class="who g">Gemini Flash</span></li>
+    <li><b>Isolate</b><span>white background, 3/4 view</span><br><span class="who g">Nano Banana Pro</span></li>
+    <li><b>Multi-view</b><span>side and back views for hidden faces</span><br><span class="who g">Nano Banana Pro</span></li>
+    <li><b>Generate 3D</b><span>PBR, 30k triangles, base at floor</span><br><span class="who">Meshy · Tripo</span></li>
+    <li><b>Normalise</b><span>axes, front, scale to dims, meshopt, KTX2, LOD</span><br><span class="who c">asset-worker</span></li>
+    <li><b>Vision QA</b><span>thumbnails vs source photo</span><br><span class="who g">Gemini Flash</span></li>
+    <li><b>Confirm size</b><span>“About 210 × 95 × 80 cm?”</span><br><span class="who c">user</span></li>
+  </ol>
+</section>
+
+<section id="decisions" aria-labelledby="dec-h">
+  <div class="eyebrow">Decision record</div>
+  <h2 id="dec-h">Meshy first, Tripo as fallback, img2threejs only at dev time</h2>
+  <p class="intro">Good-looking 3D objects are a hard requirement, so quality decided the main provider. img2threejs turned out to be a plugin for AI coding tools that writes Three.js code from an image. It isn't a viewer for 3D models.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Criterion</th><th>Meshy</th><th>Tripo</th><th>img2threejs</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Visual quality</td><td>Preferred ~64% vs Tripo 3.1 in blind tests by 3D artists</td><td>Good</td><td>Stylised shapes, not photoreal</td></tr>
+        <tr><td class="k">PBR materials</td><td>Base colour, metallic, roughness, normal; up to 4k</td><td>Yes</td><td>Procedural shaders</td></tr>
+        <tr><td class="k">Scale helpers</td><td><code>auto_size</code>, <code>origin_at: bottom</code></td><td><code>auto_size</code></td><td>n/a</td></tr>
+        <tr><td class="k">Multi-image input</td><td>Multi-Image-to-3D</td><td>Multiview</td><td>Single image</td></tr>
+        <tr><td class="k">Retexture</td><td>Yes</td><td>Limited</td><td>n/a</td></tr>
+        <tr><td class="k">Speed</td><td>~60 s</td><td>~10 s draft</td><td>Minutes, run by an agent</td></tr>
+        <tr><td class="k">Runs on our servers</td><td>REST API</td><td>REST API</td><td>Needs a Claude Code or Codex host</td></tr>
+        <tr><td class="k">Role</td><td><span class="pill ok">Primary</span></td><td><span class="pill warn">Fallback &amp; draft</span></td><td><span class="pill no">Dev-time, parametric items</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:14px;color:var(--ink-2);font-size:14.5px">Resizing tip: a stretched sofa model looks wrong. Organic furniture resizes uniformly and comes in 2–3 size variants. Boxy items such as cabinets, shelves and tables are generated from code, so they resize without distortion.</p>
+</section>
+
+<section id="google" aria-labelledby="g-h">
+  <div class="eyebrow">Hackathon fit</div>
+  <h2 id="g-h">Google services across the stack</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Need</th><th>Google service</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Floor-plan understanding</td><td>Gemini 3.1 Pro, structured JSON output</td></tr>
+        <tr><td class="k">Agents and tool calls</td><td>Google ADK + Gemini Flash</td></tr>
+        <tr><td class="k">Previews, cutouts, multi-view</td><td>Nano Banana Pro (final) · Nano Banana 2 (drafts)</td></tr>
+        <tr><td class="k">Voice architect</td><td>Gemini Live API with function calling</td></tr>
+        <tr><td class="k">Furniture and material search</td><td>Gemini Embedding 2 + Firestore vector search</td></tr>
+        <tr><td class="k">Walkthrough video (stretch)</td><td>Veo 3.1</td></tr>
+        <tr><td class="k">Auth, hosting, data</td><td>Firebase Auth · App Hosting · Firestore · Cloud Storage + CDN</td></tr>
+        <tr><td class="k">Compute and async jobs</td><td>Cloud Run · Cloud Tasks · Pub/Sub</td></tr>
+        <tr><td class="k">Operations</td><td>Secret Manager · Cloud Logging → BigQuery · Cloud Build · Artifact Registry</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:12px;color:var(--ink-2);font-size:14px">Model IDs live in <code>config/models.yaml</code>, because preview models change often.</p>
+</section>
+
+<section id="plan" aria-labelledby="plan-h">
+  <div class="eyebrow">Delivery</div>
+  <h2 id="plan-h">Milestones and team</h2>
+  <div class="timeline">
+    <div class="ms"><span class="when">M0 · day 1</span><h3>Skeleton</h3><p>Monorepo, schema package, emulators, first deploy</p></div>
+    <div class="ms"><span class="when">M1 · days 2–4</span><h3>Plan → 3D shell</h3><p>Parsed, scaled plan you can walk through, &lt;5% area error</p></div>
+    <div class="ms"><span class="when">M2 · days 4–7</span><h3>Furnished world</h3><p>Catalog, designer agent, editing with real dimensions</p></div>
+    <div class="ms"><span class="when">M3 · days 6–9</span><h3>Beauty &amp; previews</h3><p>Lighting, photo mode, previews that match the layout</p></div>
+    <div class="ms"><span class="when">M4 · days 7–10</span><h3>Own furniture</h3><p>Photo → real-size 3D model in under 4 min</p></div>
+    <div class="ms"><span class="when">M5 · days 10–12</span><h3>Wow &amp; polish</h3><p>Voice architect, share link, demo hardening</p></div>
+  </div>
+  <div class="roles">
+    <div class="role"><b>FE1 · 3D world</b>Walls and rooms, model loading, camera modes, gizmos, measurements, rendering quality</div>
+    <div class="role"><b>FE2 · Flows &amp; UI</b>Scene state, 2D plan editor, style step, library, inspector, voice bar</div>
+    <div class="role"><b>BE · api &amp; infra</b>Schema, scene-core, transactional commits, jobs, Terraform, CI/CD</div>
+    <div class="role"><b>AI · ai-worker</b>Plan parsing and evals, layout solver, designer agent, previews, asset prep</div>
+    <div class="role"><b>3D · assets</b>Meshy/Tripo providers, normalisation, catalog of 80 items, parametric models</div>
+  </div>
+  <div class="crit" aria-label="Critical path">
+    <b>Critical path</b> · schema + scene-core → plan parse + walls in 3D → catalog → 3D editing → designer agent → previews → own furniture → voice<br>
+    Frontend can start right away on a hand-written sample scene (<code>samples/apartment_2br.json</code>) and fixture models.
+  </div>
+</section>
+
+<section id="demo" aria-labelledby="demo-h">
+  <div class="eyebrow">Pitch</div>
+  <h2 id="demo-h">3-minute demo script</h2>
+  <ol class="demo">
+    <li><time>0:00</time><span>“AI room images look great, but would that sofa actually fit?” Show an AI image with impossible proportions.</span></li>
+    <li><time>0:20</time><span>Upload a photo of a hand-drawn sketch. The parsed plan appears over it: “Scale from 3 dimension labels ✓”.</span></li>
+    <li><time>0:45</time><span>Pick Japandi and upload a photo of <em>my own</em> armchair. Its pipeline runs in the background.</span></li>
+    <li><time>1:05</time><span>Furnish. Rooms fill in from above, and the photoreal living-room preview matches the layout.</span></li>
+    <li class="key"><time>1:25</time><span><b>Enter the 3D world.</b> Orbit with cut-away walls, then walk through the door into the living room.</span></li>
+    <li class="key"><time>1:50</time><span>Drag the sofa: “⚠ walkway 72 cm &lt; 90 cm”. Resize the bed to 180 cm: “blocks wardrobe door”. Image tools can't do this.</span></li>
+    <li><time>2:15</time><span>The armchair arrives as a real-size 3D model. Drag it next to the window.</span></li>
+    <li><time>2:30</time><span>Say: “Swap the floor to light oak and move the TV unit 40 centimetres left.” It happens live.</span></li>
+    <li><time>2:45</time><span>Photo mode, then a share link. Close on the Google stack slide.</span></li>
+  </ol>
+</section>
+
+<section aria-labelledby="docs-h">
+  <div class="eyebrow">Detailed design</div>
+  <h2 id="docs-h">Where to read next</h2>
+  <div class="docs">
+    <div><span class="mono">GEMINI.md</span><span>High-level design and repo conventions</span></div>
+    <div><span class="mono">docs/01</span><span>Research: Meshy vs Tripo vs img2threejs</span></div>
+    <div><span class="mono">docs/02</span><span>Architecture, job model, scaling, cost</span></div>
+    <div><span class="mono">docs/03</span><span>Data model: SceneGraph, SceneOps, Firestore (everyone)</span></div>
+    <div><span class="mono">docs/04</span><span>AI pipeline: prompts, schemas, agents</span></div>
+    <div><span class="mono">docs/05</span><span>Backend REST API and job contract</span></div>
+    <div><span class="mono">docs/06</span><span>Frontend: editors, 3D world, rendering</span></div>
+    <div><span class="mono">docs/07</span><span>3D asset pipeline and catalog</span></div>
+    <div><span class="mono">docs/08</span><span>Infrastructure, IAM, CI/CD</span></div>
+    <div><span class="mono">docs/09</span><span>Roadmap, tickets, demo</span></div>
+  </div>
+</section>
+
+<footer>SoraPlan · system overview for the dev team · by Minh Anh Nguyen &amp; Trung Tin Phan · October 2026</footer>
+</div>
