@@ -35,6 +35,30 @@ class Settings(BaseSettings):
         description="Optional local path to Service Account JSON key",
     )
 
+    # Google Cloud Storage configuration
+    GCS_BUCKET_NAME: str = Field(
+        default="soraplan-assest-dev",
+        description="Google Cloud Storage bucket for user uploads",
+    )
+    GCS_SIGNED_URL_EXPIRATION_SECONDS: int = Field(
+        default=86400,
+        description="Signed URL expiration in seconds (default 24h)",
+    )
+    MAX_UPLOAD_SIZE_BYTES: int = Field(
+        default=25 * 1024 * 1024,
+        description="Maximum allowed file upload size in bytes (default 25MB)",
+    )
+    ALLOWED_CONTENT_TYPES: List[str] = Field(
+        default=[
+            "image/png",
+            "image/jpeg",
+            "image/jpg",
+            "image/webp",
+            "application/pdf",
+        ],
+        description="Permitted MIME types for sketch, PDF, and screenshot uploads",
+    )
+
     # CORS configuration
     CORS_ORIGINS: Union[List[str], str] = Field(
         default=["http://localhost:3000", "http://localhost:5173", "*"],

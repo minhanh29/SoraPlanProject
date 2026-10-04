@@ -14,6 +14,10 @@ Thumbs.db
 *.pem
 *service-account*.json
 credentials*.json
+.secrets/
+*.json
+!frontend/package.json
+!packages/*/package.json
 
 # Node / Next.js
 node_modules/

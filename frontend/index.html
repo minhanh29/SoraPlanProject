@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SoraPlan — Sign In &amp; Studio Access</title>
-  <meta name="description" content="Sign in or register for SoraPlan to turn floor plan sketches into real-world scaled 3D homes.">
+  <title>SoraPlan — Metric Scene Graph &amp; Floor Plan Studio</title>
+  <meta name="description" content="SoraPlan turns floor plan sketches, PDFs, and screenshots into real-world scaled 3D homes using Google Cloud Storage and Gemini.">
   
   <!-- Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
   
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -20,34 +20,55 @@
 
   <!-- Header Nav -->
   <header class="top-bar">
-    <a href="#" class="brand-link" id="brand-logo" aria-label="SoraPlan Home">
+    <a href="#" class="brand-link" id="brand-logo" aria-label="SoraPlan Studio Home">
       <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
         <polyline points="2 17 12 22 22 17"></polyline>
         <polyline points="2 12 12 17 22 12"></polyline>
       </svg>
-      <span>SoraPlan</span>
+      <div class="brand-text">
+        <span class="brand-title">SoraPlan</span>
+        <span class="brand-badge">Studio</span>
+      </div>
     </a>
 
-    <button type="button" class="theme-toggle-btn" id="theme-toggle" aria-label="Toggle dark/light theme">
-      <svg id="theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="5"></circle>
-        <line x1="12" y1="1" x2="12" y2="3"></line>
-        <line x1="12" y1="21" x2="12" y2="23"></line>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-        <line x1="1" y1="12" x2="3" y2="12"></line>
-        <line x1="21" y1="12" x2="23" y2="12"></line>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-      </svg>
-    </button>
+    <div class="nav-controls">
+      <!-- Signed In User Mini Chip -->
+      <div class="user-nav-chip" id="user-nav-chip" style="display: none;">
+        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80" alt="Avatar" class="nav-avatar" id="nav-user-avatar">
+        <div class="nav-user-info">
+          <span class="nav-user-name" id="nav-user-name">Architect</span>
+          <span class="nav-user-plan" id="nav-user-plan">FREE</span>
+        </div>
+        <button type="button" class="nav-logout-btn" id="nav-logout-btn" title="Sign out of SoraPlan">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Sign Out</span>
+        </button>
+      </div>
+
+      <!-- Theme Switcher -->
+      <button type="button" class="theme-toggle-btn" id="theme-toggle" aria-label="Toggle dark/light theme">
+        <svg id="theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </button>
+    </div>
   </header>
 
-  <!-- Main Auth Card -->
-  <main class="auth-wrapper">
-    
-    <!-- Authentication Form Card -->
+  <!-- AUTHENTICATION VIEW (When not logged in) -->
+  <main class="auth-wrapper" id="auth-view">
     <div class="auth-card" id="auth-form-card">
       <div class="card-header">
         <span class="card-tag">Metric Scene Graph</span>
@@ -130,43 +151,292 @@
       </form>
     </div>
 
-    <!-- Active Profile State Card -->
-    <div class="auth-card profile-card" id="profile-card">
-      <div class="card-header">
-        <span class="card-tag">Authenticated Session</span>
-      </div>
-      
-      <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80" alt="User avatar" class="profile-avatar" id="user-avatar">
-      <h2 class="profile-name" id="user-display-name">Architect</h2>
-      <p class="profile-email" id="user-email">architect@soraplan.com</p>
-
-      <div class="quota-grid">
-        <div class="quota-item">
-          <div class="quota-label">Plan Tier</div>
-          <div class="quota-value" id="quota-plan">Free</div>
-        </div>
-        <div class="quota-item">
-          <div class="quota-label">Projects Quota</div>
-          <div class="quota-value" id="quota-projects">5 max</div>
-        </div>
-        <div class="quota-item">
-          <div class="quota-label">3D Assets</div>
-          <div class="quota-value" id="quota-assets">10 / mo</div>
-        </div>
-        <div class="quota-item">
-          <div class="quota-label">Renders</div>
-          <div class="quota-value" id="quota-renders">20 / day</div>
-        </div>
-      </div>
-
-      <button type="button" class="logout-btn" id="logout-btn">Log Out of SoraPlan</button>
-    </div>
-
     <div class="footer-info">
       Single Source of Truth · Metric Scene Graph · Cloud Run + Firestore
     </div>
-
   </main>
+
+  <!-- STUDIO DASHBOARD VIEW (When logged in) -->
+  <main class="studio-wrapper" id="studio-view" style="display: none;">
+
+    <!-- Studio Header & Live Quotas -->
+    <section class="studio-banner">
+      <div class="banner-content">
+        <span class="card-tag">Studio Workspace</span>
+        <h1 class="studio-title" id="studio-welcome">Floor Plan &amp; Project Studio</h1>
+        <p class="studio-subtitle">Upload floor plan sketches, PDF exports, or screenshots to build accurate, real-world-scaled 3D spaces.</p>
+      </div>
+
+      <div class="studio-quota-bar">
+        <div class="quota-pill" id="pill-projects">
+          <span class="quota-pill-label">Projects</span>
+          <span class="quota-pill-value" id="quota-projects-val">0 / 5</span>
+        </div>
+        <div class="quota-pill" id="pill-tier">
+          <span class="quota-pill-label">Plan Tier</span>
+          <span class="quota-pill-value accent-text" id="quota-tier-val">FREE</span>
+        </div>
+        <div class="quota-pill" id="pill-renders">
+          <span class="quota-pill-label">Renders</span>
+          <span class="quota-pill-value" id="quota-renders-val">20 / day</span>
+        </div>
+        <div class="quota-pill" id="pill-assets">
+          <span class="quota-pill-label">3D Assets</span>
+          <span class="quota-pill-value" id="quota-assets-val">10 / mo</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Create Project & Upload Floor Plan Card -->
+    <section class="auth-card project-creator-card" id="project-creator-card">
+      <div class="creator-header">
+        <div class="creator-header-left">
+          <span class="card-tag">Step ① Plan Ingestion</span>
+          <h2 class="creator-title">Create Project &amp; Upload Floor Plan</h2>
+          <p class="creator-desc">Create your project container, then stream your sketch, PDF, or screenshot directly to Google Cloud Storage via V4 signed upload URL.</p>
+        </div>
+        <button type="button" class="btn-secondary" id="btn-load-sample">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <span>⚡ Load Sample Blueprint</span>
+        </button>
+      </div>
+
+      <form id="create-project-form" novalidate>
+        <!-- Project Details Grid -->
+        <div class="creator-grid">
+          
+          <!-- Left Column: Project Metadata -->
+          <div class="creator-meta-col">
+            <div class="form-group">
+              <label for="project-name" class="form-label">Project Name *</label>
+              <div class="input-wrapper">
+                <input 
+                  type="text" 
+                  id="project-name" 
+                  name="project_name" 
+                  class="form-input" 
+                  placeholder="e.g. Skyline Penthouse Loft" 
+                  required
+                  maxlength="120"
+                >
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="project-description" class="form-label">Description (Optional)</label>
+              <div class="input-wrapper">
+                <textarea 
+                  id="project-description" 
+                  name="project_description" 
+                  class="form-input form-textarea" 
+                  placeholder="e.g. 2-bedroom open layout with high ceilings and kitchen island" 
+                  rows="3"
+                  maxlength="500"
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="gcs-info-box">
+              <div class="gcs-info-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <span>Direct Storage Ingestion</span>
+              </div>
+              <p class="gcs-info-text">
+                Target: <code>soraplan-assest-dev/{user_id}/{project_id}/{files}</code><br>
+                Method: <code>V4 Signed PUT</code> with 900s expiration and matching Content-Type header.
+              </p>
+            </div>
+          </div>
+
+          <!-- Right Column: Floor Plan Dropzone & File Preview -->
+          <div class="creator-file-col">
+            <label class="form-label">Floor Plan Document (Sketch / PDF / Screenshot) *</label>
+            
+            <!-- Hidden native file input -->
+            <input 
+              type="file" 
+              id="plan-file-input" 
+              accept=".png,.jpg,.jpeg,.webp,.pdf,image/png,image/jpeg,image/webp,application/pdf"
+              style="display: none;"
+            >
+
+            <!-- Interactive Dropzone -->
+            <div class="dropzone" id="plan-dropzone" tabindex="0" role="button" aria-label="Drop floor plan sketch here or click to browse">
+              <div class="dropzone-inner" id="dropzone-idle-content">
+                <div class="dropzone-icon-wrap">
+                  <svg class="dropzone-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                    <path d="M14 15l2-2 2 2"></path>
+                    <path d="M16 13v5"></path>
+                  </svg>
+                </div>
+                <div class="dropzone-primary-text">
+                  <strong>Click to select</strong> or drag and drop floor plan sketch
+                </div>
+                <div class="dropzone-hint">
+                  Supports Blueprint Sketches, PDF Exports, Screenshots (PNG, JPG, WebP, PDF up to 25MB)
+                </div>
+              </div>
+
+              <!-- Selected File Preview Card (Inside Dropzone) -->
+              <div class="file-preview-card" id="file-preview-card" style="display: none;">
+                <div class="preview-media" id="preview-media-container">
+                  <!-- Image thumbnail or PDF badge injected dynamically -->
+                </div>
+                <div class="preview-details">
+                  <div class="preview-filename" id="preview-filename">sketch.png</div>
+                  <div class="preview-meta">
+                    <span class="preview-badge" id="preview-type-badge">PNG</span>
+                    <span class="preview-size" id="preview-filesize">1.2 MB</span>
+                  </div>
+                  <button type="button" class="preview-remove-btn" id="btn-remove-file" title="Select different file">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    <span>Change File</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- Dynamic Multi-Step Upload Progress Bar -->
+        <div class="upload-progress-wrapper" id="upload-progress-wrapper" style="display: none;">
+          <div class="progress-steps">
+            <div class="progress-step-item" id="step-create">
+              <span class="step-num">1</span>
+              <span class="step-label">Create Project</span>
+            </div>
+            <div class="progress-step-item" id="step-url">
+              <span class="step-num">2</span>
+              <span class="step-label">Signed URL</span>
+            </div>
+            <div class="progress-step-item" id="step-put">
+              <span class="step-num">3</span>
+              <span class="step-label">GCS Upload</span>
+            </div>
+            <div class="progress-step-item" id="step-confirm">
+              <span class="step-num">4</span>
+              <span class="step-label">Confirm State</span>
+            </div>
+          </div>
+
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+
+          <div class="progress-status-bar">
+            <span class="progress-status-msg" id="progress-status-msg">Initializing upload pipeline...</span>
+            <span class="progress-status-pct" id="progress-status-pct">0%</span>
+          </div>
+        </div>
+
+        <!-- Creator Form Actions -->
+        <div class="creator-actions">
+          <button type="submit" class="submit-btn creator-submit-btn" id="btn-create-project">
+            <span class="spinner" id="creator-spinner" aria-hidden="true"></span>
+            <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <span id="creator-btn-text">Create Project &amp; Upload Floor Plan</span>
+          </button>
+        </div>
+
+      </form>
+    </section>
+
+    <!-- User Projects Gallery Section -->
+    <section class="projects-gallery-section" id="projects-section">
+      <div class="gallery-header">
+        <div class="gallery-header-left">
+          <span class="card-tag">Studio Projects</span>
+          <h2 class="gallery-title">Your Projects (<span id="projects-count">0</span>)</h2>
+        </div>
+        <button type="button" class="btn-secondary" id="btn-refresh-projects" title="Refresh projects list">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      <!-- Empty State -->
+      <div class="gallery-empty-state" id="gallery-empty-state" style="display: none;">
+        <div class="empty-icon-wrap">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="9" y1="21" x2="9" y2="9"></line>
+          </svg>
+        </div>
+        <h3 class="empty-title">No projects yet</h3>
+        <p class="empty-desc">Create your first project above to turn floor plan sketches into 3D metric scenes.</p>
+      </div>
+
+      <!-- Projects Grid -->
+      <div class="projects-grid" id="projects-grid">
+        <!-- Project cards injected dynamically -->
+      </div>
+    </section>
+
+    <div class="footer-info">
+      Single Source of Truth · Metric Scene Graph · Cloud Storage V4 Signed URLs · Cloud Run + Firestore
+    </div>
+  </main>
+
+  <!-- Modal: Floor Plan Lightbox Viewer -->
+  <div class="modal-backdrop" id="plan-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-plan-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <span class="card-tag">Signed Display URL Preview</span>
+          <h2 class="modal-title" id="modal-plan-title">Floor Plan Viewer</h2>
+          <span class="modal-meta" id="modal-plan-meta">fileName.png · 1.2 MB</span>
+        </div>
+        <button type="button" class="modal-close-btn" id="btn-close-modal" aria-label="Close modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body" id="modal-plan-body">
+        <!-- Image or PDF viewer injected dynamically -->
+      </div>
+
+      <div class="modal-footer">
+        <div class="modal-storage-info">
+          <span class="storage-label">GCS URI:</span>
+          <code class="storage-path" id="modal-gcs-uri">gs://soraplan-assest-dev/{user_id}/{project_id}/...</code>
+        </div>
+        <div class="modal-actions">
+          <a href="#" target="_blank" rel="noopener noreferrer" class="btn-secondary" id="modal-open-new-tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+            <span>Open Original URL</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Interactive Toast Notification -->
   <div class="toast" id="toast" role="status" aria-live="polite">

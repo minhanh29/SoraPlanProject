@@ -34,6 +34,25 @@ FastAPI backend service responsible for user management, authentication, and quo
 | `GET` | `/v1/users/me/quota` | Get user quota limits and tier information | Bearer Token |
 | `GET` | `/v1/users/{uid}` | Get user profile by UID | Bearer Token |
 
+### Projects & Floor Plan Uploads (`/v1/projects`)
+
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `POST` | `/v1/projects` | Create a new project (auto-generated Google Cloud ID) | Bearer Token |
+| `GET` | `/v1/projects` | List all projects for authenticated user with signed URLs | Bearer Token |
+| `GET` | `/v1/projects/{id}` | Get project details by ID with signed display URL | Bearer Token |
+| `POST` | `/v1/projects/{id}/upload-url` | Generate V4 signed PUT upload URL & signed display URL | Bearer Token |
+| `POST` | `/v1/projects/{id}/confirm-upload` | Confirm direct upload and write update to Firestore | Bearer Token |
+| `DELETE` | `/v1/projects/{id}` | Delete project and remove uploaded plan from GCS | Bearer Token |
+
+> **Single Plan Rule**: Each project accepts strictly **one** floor plan (sketch image, screenshot, or PDF). Once uploaded successfully, re-uploading to the same project is permanently blocked (HTTP 409 `PLAN_ALREADY_UPLOADED`). To upload another floor plan, users must create a new project.
+>
+> **Google Cloud Storage & ID Conventions**:
+> - Object storage path follows: `soraplan-assest-dev/{user_id}/{project_id}/{files}`
+> - Public display URLs are V4 signed GET URLs (`X-Goog-Algorithm=GOOG4-RSA-SHA256`).
+> - All identifiers (`projectId`, `uploadId` / `contentId`) are generated strictly following Google Cloud Firestore ID specifications, never created locally.
+
+
 ### System
 
 | Method | Endpoint | Description |
