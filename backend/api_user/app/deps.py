@@ -5,11 +5,15 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth as fb_auth
 from google.cloud import firestore as gcloud_firestore
 
+from google.cloud import storage as gcloud_storage
+
 from .errors import UnauthorizedException
-from .firebase import get_auth, get_firestore_client
+from .firebase import get_auth, get_firestore_client, get_storage_client
 from .models.user import UserProfile
 from .services.auth_service import AuthService
 from .services.user_service import UserService
+from .services.storage_service import StorageService
+from .services.project_service import ProjectService
 
 logger = logging.getLogger("api_user.deps")
 bearer_scheme = HTTPBearer(auto_error=True)
@@ -28,6 +32,24 @@ def get_user_service(db: gcloud_firestore.Client = Depends(get_db)) -> UserServi
 def get_auth_service(user_service: UserService = Depends(get_user_service)) -> AuthService:
     """Dependency for AuthService."""
     return AuthService(user_service=user_service)
+
+
+def get_storage() -> gcloud_storage.Client:
+    """Dependency for Google Cloud Storage client."""
+    return get_storage_client()
+
+
+def get_storage_service(storage_client: gcloud_storage.Client = Depends(get_storage)) -> StorageService:
+    """Dependency for StorageService."""
+    return StorageService(client=storage_client)
+
+
+def get_project_service(
+    db: gcloud_firestore.Client = Depends(get_db),
+    storage_service: StorageService = Depends(get_storage_service),
+) -> ProjectService:
+    """Dependency for ProjectService."""
+    return ProjectService(db=db, storage_service=storage_service)
 
 
 async def get_current_token_payload(

@@ -6,6 +6,9 @@ import firebase_admin
 from firebase_admin import auth, credentials, firestore
 from google.cloud import firestore as gcloud_firestore
 
+from google.cloud import storage as gcloud_storage
+from google.oauth2 import service_account
+
 from .config import get_settings
 
 logger = logging.getLogger("api_user.firebase")
@@ -19,6 +22,7 @@ warnings.filterwarnings(
 
 _firebase_app: Optional[firebase_admin.App] = None
 _firestore_client: Optional[gcloud_firestore.Client] = None
+_storage_client: Optional[gcloud_storage.Client] = None
 
 
 def init_firebase() -> firebase_admin.App:
@@ -70,3 +74,22 @@ def get_auth():
     """Get Firebase Auth module reference."""
     init_firebase()
     return auth
+
+
+def get_storage_client() -> gcloud_storage.Client:
+    """Get or create singleton Google Cloud Storage client."""
+    global _storage_client
+    if _storage_client is None:
+        init_firebase()
+        settings = get_settings()
+        if settings.FIREBASE_CREDENTIALS_PATH and os.path.exists(settings.FIREBASE_CREDENTIALS_PATH):
+            creds = service_account.Credentials.from_service_account_file(
+                settings.FIREBASE_CREDENTIALS_PATH
+            )
+            _storage_client = gcloud_storage.Client(
+                project=settings.FIREBASE_PROJECT_ID,
+                credentials=creds,
+            )
+        else:
+            _storage_client = gcloud_storage.Client(project=settings.FIREBASE_PROJECT_ID)
+    return _storage_client
