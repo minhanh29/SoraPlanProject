@@ -14,7 +14,7 @@ from .errors import (
     validation_exception_handler,
 )
 from .firebase import init_firebase
-from .routers import auth_router, users_router, projects_router
+from .routers import auth_router, users_router, projects_router, jobs_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -92,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(users_router, prefix=settings.API_V1_STR)
     app.include_router(projects_router, prefix=settings.API_V1_STR)
+    app.include_router(jobs_router, prefix=settings.API_V1_STR)
 
     return app
 

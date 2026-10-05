@@ -25,6 +25,28 @@ _firestore_client: Optional[gcloud_firestore.Client] = None
 _storage_client: Optional[gcloud_storage.Client] = None
 
 
+def _find_service_account_path(configured_path: Optional[str]) -> Optional[str]:
+    """Resolve service account JSON key file from various possible paths."""
+    candidates = []
+    if configured_path:
+        candidates.append(configured_path)
+        candidates.append(os.path.abspath(configured_path))
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend/api_user
+    workspace_root = os.path.dirname(os.path.dirname(base_dir))  # SoraPlan
+    candidates.extend([
+        os.path.join(base_dir, ".secrets", "serviceAccountKey.json"),
+        os.path.join(workspace_root, "backend", "api_user", ".secrets", "serviceAccountKey.json"),
+        os.path.join(os.getcwd(), "backend", "api_user", ".secrets", "serviceAccountKey.json"),
+        os.path.join(os.getcwd(), ".secrets", "serviceAccountKey.json"),
+    ])
+
+    for p in candidates:
+        if p and os.path.exists(p) and os.path.isfile(p):
+            return p
+    return None
+
+
 def init_firebase() -> firebase_admin.App:
     """Initialize Firebase Admin SDK with project credentials."""
     global _firebase_app
@@ -39,9 +61,10 @@ def init_firebase() -> firebase_admin.App:
 
     if not firebase_admin._apps:
         cred = None
-        if settings.FIREBASE_CREDENTIALS_PATH and os.path.exists(settings.FIREBASE_CREDENTIALS_PATH):
-            logger.info("Initializing Firebase with credentials from %s", settings.FIREBASE_CREDENTIALS_PATH)
-            cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
+        key_path = _find_service_account_path(settings.FIREBASE_CREDENTIALS_PATH)
+        if key_path:
+            logger.info("Initializing Firebase with credentials from %s", key_path)
+            cred = credentials.Certificate(key_path)
         else:
             try:
                 cred = credentials.ApplicationDefault()

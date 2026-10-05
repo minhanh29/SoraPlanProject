@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Interactive 2D Floor Plan</title>
+<style>
+  :root { --bg:#f5f5f7; --panel:#ffffff; --ink:#171717; --muted:#6b7280; --line:#d9d9df; --accent:#7c3aed; }
+  * { box-sizing: border-box; }
+  body { margin:0; height:100vh; display:flex; overflow:hidden; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+  aside { width:310px; background:var(--panel); border-right:1px solid var(--line); padding:18px; overflow:auto; }
+  h1 { margin:0 0 6px; font-size:19px; }
+  p { margin:0 0 16px; color:var(--muted); font-size:12.5px; line-height:1.45; }
+  .group { margin:15px 0; }
+  .group h2 { margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#52525b; }
+  label.row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:7px 0; font-size:13px; }
+  button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:8px 10px; cursor:pointer; font-weight:600; }
+  button:hover { background:#f7f7f9; }
+  .buttons { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  #selected { font-size:12px; background:#fafafa; border:1px solid var(--line); border-radius:8px; padding:10px; min-height:64px; white-space:pre-line; }
+  main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .toolbar { height:48px; display:flex; align-items:center; gap:10px; padding:0 14px; background:#fff; border-bottom:1px solid var(--line); font-size:12px; color:var(--muted); }
+  .canvas-wrap { flex:1; min-height:0; padding:14px; display:flex; align-items:center; justify-content:center; }
+  canvas { width:100%; height:100%; background:#fff; border:1px solid #e4e4e7; border-radius:12px; box-shadow:0 6px 22px rgba(0,0,0,.06); touch-action:none; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; }
+  .swatch { width:10px; height:10px; display:inline-block; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Interactive Floor Plan</h1>
+  <p>40′ × 30′ plan reconstructed from the supplied image. Every wall, furniture piece and fixture is a separate draggable canvas object.</p>
+
+  <div class="group">
+    <h2>Layers</h2>
+    <label class="row"><span>Walls</span><input id="toggleWalls" type="checkbox" checked></label>
+    <label class="row"><span>Furniture</span><input id="toggleFurniture" type="checkbox" checked></label>
+    <label class="row"><span>Fixtures / appliances</span><input id="toggleFixtures" type="checkbox" checked></label>
+    <label class="row"><span>Grid</span><input id="toggleGrid" type="checkbox" checked></label>
+    <label class="row"><span>Labels</span><input id="toggleLabels" type="checkbox" checked></label>
+  </div>
+
+  <div class="group">
+    <h2>Selected component</h2>
+    <div id="selected">Nothing selected</div>
+  </div>
+
+  <div class="group buttons">
+    <button id="resetBtn">Reset layout</button>
+    <button id="exportBtn">Export JSON</button>
+  </div>
+
+  <div class="group">
+    <h2>Legend</h2>
+    <p class="legend">
+      <span><i class="swatch" style="background:#111"></i>Wall</span>
+      <span><i class="swatch" style="background:#dbeafe"></i>Furniture</span>
+      <span><i class="swatch" style="background:#dcfce7"></i>Fixture</span>
+    </p>
+  </div>
+</aside>
+
+<main>
+  <div class="toolbar">
+    Drag any component. Coordinates and dimensions are shown in feet.
+  </div>
+  <div class="canvas-wrap"><canvas id="plan"></canvas></div>
+</main>
+
+<script>
+const canvas = document.getElementById('plan');
+const ctx = canvas.getContext('2d');
+const PLAN_W = 40, PLAN_H = 30;
+const PAD = 1.4;
+let transform = {s:1, ox:0, oy:0};
+let selected = null, drag = null;
+
+const C = {
+  wall:'#111111', furniture:'#dbeafe', fixture:'#dcfce7', selected:'#7c3aed'
+};
+
+function obj(id,name,type,x,y,w,h,opts={}) { return {id,name,type,x,y,w,h,...opts}; }
+
+// Coordinates were reconstructed from the drawing itself, using the outer 40′ × 30′ footprint as scale.
+const initial = [
+  // OUTER WALLS — outer wall segments defining the footprint
+  obj('w_top_1','Top wall 1','wall',0,0,14.8,.55),
+  obj('w_top_2','Top wall 2','wall',19.6,0,10.2,.55),
+  obj('w_top_3','Top wall 3','wall',36.7,0,3.3,.55),
+  obj('w_left_1','Left wall 1','wall',0,0,.55,1.9),
+  obj('w_left_2','Left wall 2','wall',0,11.2,.55,5.2),
+  obj('w_left_3','Left wall 3','wall',0,26.4,.55,3.6),
+  obj('w_right_1','Right wall 1','wall',39.45,0,.55,11.4),
+  obj('w_right_2','Right wall 2','wall',39.45,18.5,.55,5.2),
+  obj('w_right_3','Right wall 3','wall',39.45,27.0,.55,3.0),
+  obj('w_bottom_1','Bottom wall 1','wall',0,29.45,5.6,.55),
+  obj('w_bottom_2','Bottom wall 2','wall',9.0,29.45,4.2,.55),
+  obj('w_bottom_3','Bottom wall 3','wall',17.6,29.45,4.0,.55),
+  obj('w_bottom_4','Bottom wall 4','wall',27.5,29.45,5.5,.55),
+  obj('w_bottom_5','Bottom wall 5','wall',39.1,29.45,.9,.55),
+
+  // INTERNAL WALLS
+  obj('w_b2_right','Bedroom 2 right wall','wall',9.1,.3,.5,12.7),
+  obj('w_b2_bottom','Bedroom 2 bottom wall','wall',.3,12.55,6.3,.5),
+  obj('w_b2_bottom2','Bedroom 2 bottom wall 2','wall',9.0,12.55,3.7,.5),
+  obj('w_b2_closet_top','Bedroom 2 closet top','wall',9.3,5.8,2.7,.45),
+  obj('w_b2_closet_r','Bedroom 2 closet side','wall',11.75,.3,.45,7.4),
+
+  obj('w_b3_left','Bedroom 3 left wall','wall',12.0,.3,.5,12.7),
+  obj('w_b3_right','Bedroom 3 right wall','wall',21.4,.3,.5,12.7),
+  obj('w_b3_bottom1','Bedroom 3 bottom wall 1','wall',12.2,12.55,5.7,.5),
+  obj('w_b3_bottom2','Bedroom 3 bottom wall 2','wall',20.4,12.55,2.0,.5),
+  obj('w_b3_closet','Bedroom 3 closet wall','wall',12.0,7.7,.45,4.9),
+
+  obj('w_bath_left','Bath left wall','wall',21.6,.3,.5,12.8),
+  obj('w_bath_right','Bath right wall','wall',26.9,.3,.5,12.8),
+  obj('w_bath_bottom','Bath bottom wall','wall',21.8,12.55,2.4,.5),
+
+  obj('w_master_left','Master left wall','wall',27.0,.3,.5,12.7),
+  obj('w_master_bottom1','Master bottom wall 1','wall',27.2,12.55,2.8,.5),
+  obj('w_master_bottom2','Master bottom wall 2','wall',33.5,12.55,2.1,.5),
+  obj('w_master_bottom3','Master bottom wall 3','wall',38.0,12.55,1.8,.5),
+
+  obj('w_closet_left','Closet left wall','wall',33.0,12.8,.5,7.2),
+  obj('w_closet_right','Closet right wall','wall',39.45,12.8,.55,7.2),
+  obj('w_closet_bottom','Closet bottom wall','wall',33.2,19.85,6.4,.5),
+
+  obj('w_laundry_left','Laundry left wall','wall',33.0,19.9,.5,4.0),
+  obj('w_laundry_bottom1','Laundry bottom wall 1','wall',33.2,23.7,1.8,.5),
+  obj('w_laundry_bottom2','Laundry bottom wall 2','wall',38.4,23.7,1.2,.5),
+
+  obj('w_entry_left','Entry / washroom left wall','wall',33.0,23.8,.5,5.7),
+  obj('w_entry_top','Washroom upper wall','wall',33.0,23.7,6.6,.5),
+  obj('w_entry_right','Washroom right wall','wall',39.45,26.3,.55,3.6),
+
+  // BEDROOM FURNITURE
+  obj('bed_b2','Bed — Bedroom 2','furniture',2.4,.8,5.0,5.6),
+  obj('ns_b2','Nightstand — Bedroom 2','furniture',.75,.7,1.35,1.65),
+  obj('bed_b3','Bed — Bedroom 3','furniture',14.6,.8,5.0,5.6),
+  obj('ns_b3','Nightstand — Bedroom 3','furniture',12.7,.7,1.35,1.65),
+  obj('bed_master','Bed — Master','furniture',29.9,.75,6.55,7.2),
+  obj('ns_master_l','Nightstand — Master L','furniture',27.8,.65,1.45,1.75),
+  obj('ns_master_r','Nightstand — Master R','furniture',37.35,.65,1.45,1.75),
+
+  // FAMILY / DINING
+  obj('sofa','Sofa','furniture',1.5,16.8,3.2,8.2),
+  obj('coffee_table','Coffee table','furniture',7.0,18.6,2.1,4.2),
+  obj('armchair_1','Armchair 1','furniture',5.6,25.0,2.7,2.9),
+  obj('armchair_2','Armchair 2','furniture',8.7,25.0,2.7,2.9),
+  obj('dining_table','Dining table','furniture',15.0,18.4,5.9,3.0),
+
+  // KITCHEN / STORAGE
+  obj('kitchen_island','Kitchen island','furniture',24.2,16.8,2.8,6.0),
+  obj('closet_storage','Master bedroom closet storage','furniture',34.0,14.0,2.2,5.6,{furnitureType:'wardrobe',subtype:'closet_storage'}),
+  obj('counter_vertical','Kitchen tall counter','fixture',30.9,13.5,2.0,9.4),
+  obj('stove','Stove / cooktop','fixture',31.1,18.0,1.55,3.5),
+  obj('sink_counter','Kitchen sink counter','fixture',24.2,27.3,8.5,2.0),
+  obj('kitchen_sink','Kitchen sink','fixture',27.2,27.55,2.4,1.25),
+
+  // BATHROOM
+  obj('bathtub','Bathtub','fixture',22.0,.5,4.6,2.4),
+  obj('toilet','Toilet','fixture',22.0,3.9,3.1,2.2),
+  obj('bath_sink','Bathroom sink','fixture',22.2,8.7,1.35,1.9),
+
+  // LAUNDRY / WASHROOM
+  obj('washer','Washer','fixture',33.65,20.55,2.1,2.25),
+  obj('dryer','Dryer','fixture',36.2,20.55,2.1,2.25),
+];
+
+let objects = initial.map(o=>({...o}));
+
+const visible = { wall:true, furniture:true, fixture:true, grid:true, labels:true };
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(rect.width*dpr));
+  canvas.height = Math.max(1, Math.round(rect.height*dpr));
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const usableW = rect.width - 48, usableH = rect.height - 48;
+  const s = Math.min(usableW/(PLAN_W+2*PAD), usableH/(PLAN_H+2*PAD));
+  transform = {s, ox:(rect.width-PLAN_W*s)/2, oy:(rect.height-PLAN_H*s)/2};
+  draw();
+}
+
+function toScreen(x,y) { return {x:transform.ox+x*transform.s, y:transform.oy+y*transform.s}; }
+function toWorld(x,y) { return {x:(x-transform.ox)/transform.s, y:(y-transform.oy)/transform.s}; }
+
+function roundRect(x,y,w,h,r=5,fill=true,stroke=true){
+  ctx.beginPath(); ctx.roundRect(x,y,w,h,Math.min(r,w/2,h/2));
+  if(fill) ctx.fill(); if(stroke) ctx.stroke();
+}
+
+function drawGrid(){
+  if(!visible.grid) return;
+  ctx.save();
+  ctx.strokeStyle='#f0f0f2'; ctx.lineWidth=1;
+  for(let x=0;x<=PLAN_W;x++){ const p=toScreen(x,0); ctx.beginPath(); ctx.moveTo(p.x,transform.oy); ctx.lineTo(p.x,transform.oy+PLAN_H*transform.s); ctx.stroke(); }
+  for(let y=0;y<=PLAN_H;y++){ const p=toScreen(0,y); ctx.beginPath(); ctx.moveTo(transform.ox,p.y); ctx.lineTo(transform.ox+PLAN_W*transform.s,p.y); ctx.stroke(); }
+  ctx.strokeStyle='#d4d4d8'; ctx.lineWidth=1.5;
+  ctx.strokeRect(transform.ox,transform.oy,PLAN_W*transform.s,PLAN_H*transform.s);
+  ctx.restore();
+}
+
+function labelText(o){
+  const dims = `${o.w.toFixed(1)}′ × ${o.h.toFixed(1)}′`;
+  return `${o.name}\n${dims}`;
+}
+
+function drawObject(o){
+  if(!visible[o.type]) return;
+  const p=toScreen(o.x,o.y), w=o.w*transform.s, h=o.h*transform.s;
+  const isSel = selected && selected.id===o.id;
+  ctx.save();
+
+  if(o.type==='wall'){
+    ctx.fillStyle=C.wall; ctx.fillRect(p.x,p.y,w,h);
+    if(isSel){ ctx.strokeStyle=C.selected; ctx.lineWidth=3; ctx.strokeRect(p.x-2,p.y-2,w+4,h+4); }
+    ctx.restore(); return;
+  }
+
+  const oName = (o.name || '').toLowerCase();
+  const isCloset = o.id.includes('closet') || o.subtype === 'closet_storage' || oName.includes('closet') || oName.includes('storage') || oName.includes('wardrobe');
+  const isBed = !isCloset && (o.id.startsWith('bed_') || /\bbeds?\b/i.test(oName));
+
+  ctx.fillStyle = isCloset ? '#fef3c7' : (C[o.type] || '#eee');
+  ctx.strokeStyle = isSel ? C.selected : (isCloset ? '#d97706' : '#444');
+  ctx.lineWidth = isSel ? 2.5 : 1.1;
+  roundRect(p.x,p.y,w,h,Math.min(5,Math.max(1,Math.min(w,h)/8)),true,true);
+
+  // Minimal visual hints while retaining rectangular interaction bounds.
+  ctx.strokeStyle = isCloset ? 'rgba(217, 119, 6, 0.45)' : 'rgba(0,0,0,.18)';
+  ctx.lineWidth = 1;
+  if(isCloset){
+    // Closet storage organizer: 4 divided shelving/drawer bays with drawer pulls
+    const pad = 2;
+    ctx.strokeRect(p.x + pad, p.y + pad, w - pad * 2, h - pad * 2);
+    const numBays = 4;
+    for (let i = 1; i < numBays; i++) {
+      const sy = p.y + (h * i) / numBays;
+      ctx.beginPath();
+      ctx.moveTo(p.x + pad, sy);
+      ctx.lineTo(p.x + w - pad, sy);
+      ctx.stroke();
+
+      const bayMidY = p.y + (h * (i - 0.5)) / numBays;
+      ctx.beginPath();
+      ctx.moveTo(p.x + w / 2 - Math.min(8, w * 0.22), bayMidY);
+      ctx.lineTo(p.x + w / 2 + Math.min(8, w * 0.22), bayMidY);
+      ctx.stroke();
+    }
+    const lastBayMidY = p.y + (h * (numBays - 0.5)) / numBays;
+    ctx.beginPath();
+    ctx.moveTo(p.x + w / 2 - Math.min(8, w * 0.22), lastBayMidY);
+    ctx.lineTo(p.x + w / 2 + Math.min(8, w * 0.22), lastBayMidY);
+    ctx.stroke();
+  } else if(isBed){
+    ctx.strokeRect(p.x+w*.12,p.y+h*.08,w*.76,h*.2);
+  } else if(o.id==='sofa'){
+    ctx.strokeRect(p.x+w*.18,p.y+h*.08,w*.64,h*.84);
+    ctx.beginPath(); ctx.moveTo(p.x+w*.18,p.y+h*.35); ctx.lineTo(p.x+w*.82,p.y+h*.35); ctx.stroke();
+  }
+
+  if(visible.labels && w>28 && h>16){
+    ctx.fillStyle = isCloset ? '#92400e' : '#111';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    const fs = Math.max(8, Math.min(12, Math.min(w/8,h/3.2)));
+    ctx.font=`600 ${fs}px Inter, sans-serif`;
+    const lines = o.name.replace(' — ','\n').split('\n');
+    lines.forEach((t,i)=>ctx.fillText(t,p.x+w/2,p.y+h/2+(i-(lines.length-1)/2)*(fs+2),Math.max(20,w-8)));
+  }
+  ctx.restore();
+}
+
+function drawDimensions(){
+  ctx.save();
+  ctx.fillStyle='#7c3aed'; ctx.strokeStyle='#a855f7'; ctx.lineWidth=1;
+  ctx.font='12px Inter, sans-serif'; ctx.textAlign='center';
+  const x1=transform.ox, x2=transform.ox+PLAN_W*transform.s, y=transform.oy-16;
+  ctx.beginPath(); ctx.moveTo(x1,y); ctx.lineTo(x2,y); ctx.stroke();
+  ctx.fillText("40′",(x1+x2)/2,y-5);
+  ctx.save(); ctx.translate(transform.ox-20,transform.oy+PLAN_H*transform.s/2); ctx.rotate(-Math.PI/2); ctx.fillText("30′",0,-4); ctx.restore();
+  ctx.restore();
+}
+
+function draw(){
+  const rect=canvas.getBoundingClientRect();
+  ctx.clearRect(0,0,rect.width,rect.height);
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,rect.width,rect.height);
+  drawGrid();
+  objects.filter(o=>o.type==='wall').forEach(drawObject);
+  objects.filter(o=>o.type==='furniture').forEach(drawObject);
+  objects.filter(o=>o.type==='fixture').forEach(drawObject);
+  drawDimensions();
+}
+
+function hitTest(wx,wy){
+  for(let i=objects.length-1;i>=0;i--){
+    const o=objects[i]; if(!visible[o.type]) continue;
+    if(wx>=o.x && wx<=o.x+o.w && wy>=o.y && wy<=o.y+o.h) return o;
+  }
+  return null;
+}
+
+function pointerPos(e){ const r=canvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+
+canvas.addEventListener('pointerdown',e=>{
+  const p=pointerPos(e), w=toWorld(p.x,p.y), o=hitTest(w.x,w.y);
+  selected=o;
+  if(o){
+    drag={id:o.id, dx:w.x-o.x, dy:w.y-o.y}; canvas.setPointerCapture(e.pointerId);
+    document.getElementById('selected').textContent=`${o.name}\nType: ${o.type}\nPosition: ${o.x.toFixed(2)}′, ${o.y.toFixed(2)}′\nSize: ${o.w.toFixed(2)}′ × ${o.h.toFixed(2)}′`;
+  } else document.getElementById('selected').textContent='Nothing selected';
+  draw();
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!drag) return;
+  const p=pointerPos(e), w=toWorld(p.x,p.y), o=objects.find(x=>x.id===drag.id); if(!o) return;
+  o.x=Math.max(0,Math.min(PLAN_W-o.w,w.x-drag.dx));
+  o.y=Math.max(0,Math.min(PLAN_H-o.h,w.y-drag.dy));
+  document.getElementById('selected').textContent=`${o.name}\nType: ${o.type}\nPosition: ${o.x.toFixed(2)}′, ${o.y.toFixed(2)}′\nSize: ${o.w.toFixed(2)}′ × ${o.h.toFixed(2)}′`;
+  draw();
+});
+canvas.addEventListener('pointerup',e=>{ drag=null; try{canvas.releasePointerCapture(e.pointerId)}catch{} });
+canvas.addEventListener('pointercancel',()=>drag=null);
+
+function bind(id,key){ document.getElementById(id).addEventListener('change',e=>{visible[key]=e.target.checked; draw();}); }
+bind('toggleWalls','wall'); bind('toggleFurniture','furniture'); bind('toggleFixtures','fixture'); bind('toggleGrid','grid'); bind('toggleLabels','labels');
+
+document.getElementById('resetBtn').onclick=()=>{ objects=initial.map(o=>({...o})); selected=null; drag=null; document.getElementById('selected').textContent='Nothing selected'; draw(); };
+document.getElementById('exportBtn').onclick=()=>{
+  const data = {units:'feet', footprint:{width:PLAN_W,height:PLAN_H}, objects};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='floorplan-layout.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+
+window.addEventListener('resize',resize);
+new ResizeObserver(resize).observe(canvas);
+resize();
+</script>
+</body>
+</html>

@@ -122,3 +122,44 @@ async def delete_project(
 ):
     project_service.delete_project(project_id=project_id, user_uid=current_user.uid)
     return None
+
+
+@router.post(
+    "/{project_id}/parse-plan",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger floor plan AI parsing",
+    description="Initiates asynchronous processing task using Cloud Tasks / worker with gpt-6-sol.",
+)
+async def trigger_parse_plan(
+    project_id: str,
+    current_user: UserProfile = Depends(get_current_user),
+    project_service: ProjectService = Depends(get_project_service),
+):
+    return project_service.trigger_plan_parsing(project_id=project_id, user_uid=current_user.uid)
+
+
+@router.post(
+    "/{project_id}/plan:parse",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger floor plan AI parsing (alias)",
+)
+async def trigger_parse_plan_alias(
+    project_id: str,
+    current_user: UserProfile = Depends(get_current_user),
+    project_service: ProjectService = Depends(get_project_service),
+):
+    return project_service.trigger_plan_parsing(project_id=project_id, user_uid=current_user.uid)
+
+
+@router.get(
+    "/{project_id}/plan",
+    summary="Get parsed floor plan scene",
+    description="Retrieve structured 2D floor plan geometry once analysis is completed.",
+)
+async def get_project_plan(
+    project_id: str,
+    current_user: UserProfile = Depends(get_current_user),
+    project_service: ProjectService = Depends(get_project_service),
+):
+    return project_service.get_project_plan(project_id=project_id, user_uid=current_user.uid)
+

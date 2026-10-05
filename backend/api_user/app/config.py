@@ -5,11 +5,16 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+import os
+
+_base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_env_file = os.path.join(_base_dir, ".env")
+
 class Settings(BaseSettings):
     """Application settings and configuration parameters."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(_env_file, ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -57,6 +62,16 @@ class Settings(BaseSettings):
             "application/pdf",
         ],
         description="Permitted MIME types for sketch, PDF, and screenshot uploads",
+    )
+
+    # Plan Parser Worker & Cloud Tasks configuration
+    PLAN_PARSER_WORKER_URL: str = Field(
+        default="http://localhost:8001",
+        description="URL of Cloud Run plan parser worker service",
+    )
+    CLOUD_TASKS_QUEUE: Optional[str] = Field(
+        default=None,
+        description="Optional full Cloud Tasks queue path: projects/{p}/locations/{l}/queues/{q}",
     )
 
     # CORS configuration

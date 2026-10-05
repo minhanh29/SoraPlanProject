@@ -28,9 +28,12 @@ class Project(BaseSchema):
     owner_uid: str = Field(..., description="Owner Firebase UID")
     name: str = Field(..., description="User-assigned project name")
     description: Optional[str] = Field(default=None, description="Project description")
-    status: str = Field(default="created", description="Project status: created | uploaded | processing | completed")
+    status: str = Field(default="created", description="Project status: created | uploaded | processing | completed | failed")
     has_plan: bool = Field(default=False, description="True if a plan sketch/PDF/screenshot has already been uploaded")
     plan_image: Optional[PlanImage] = Field(default=None, description="Uploaded floor plan metadata and signed display URL")
+    current_job_id: Optional[str] = Field(default=None, description="Current or latest plan parse job ID")
+    has_plan_parsed: bool = Field(default=False, description="True if floor plan has been parsed into structured geometry")
+    floor_plan: Optional[dict] = Field(default=None, description="Parsed structured 2D floor plan scene data")
     created_at: Optional[datetime] = Field(default=None, description="Creation timestamp")
     updated_at: Optional[datetime] = Field(default=None, description="Last update timestamp")
 
