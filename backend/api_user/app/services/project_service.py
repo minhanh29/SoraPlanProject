@@ -542,6 +542,153 @@ class ProjectService:
                 pass
         return datetime.datetime.now(datetime.timezone.utc)
 
+    def trigger_plan_parsing(self, project_id: str, user_uid: str) -> dict:
+        """Trigger floor plan parsing worker via Cloud Tasks or async dispatch."""
+        import json
+        import threading
+        import requests
+
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        if project_data.get("ownerUid") != user_uid:
+            raise ForbiddenException(
+                detail="You do not have permission to modify this project",
+                code="PROJECT_ACCESS_DENIED",
+            )
+
+        if not project_data.get("hasPlan") or not project_data.get("planImage"):
+            raise AppException(
+                status_code=400,
+                code="NO_PLAN_UPLOADED",
+                detail="Please upload a floor plan image, sketch, or PDF first before starting parsing.",
+            )
+
+        plan_image = project_data["planImage"]
+        # Ensure signed display URL is fresh
+        plan_image = self._refresh_plan_signed_url(plan_image)
+
+        # 1. Create Job in Firestore jobs/{jobId}
+        job_ref = self.db.collection("jobs").document()
+        job_id = job_ref.id
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        task_payload = {
+            "jobId": job_id,
+            "projectId": project_id,
+            "ownerUid": user_uid,
+            "gcsPath": plan_image.get("storagePath"),
+            "signedUrl": plan_image.get("signedUrl"),
+            "uploadId": plan_image.get("id"),
+            "fileName": plan_image.get("fileName"),
+            "contentType": plan_image.get("contentType", "image/png"),
+        }
+
+        job_data = {
+            "id": job_id,
+            "type": "plan_parse",
+            "projectId": project_id,
+            "ownerUid": user_uid,
+            "status": "queued",
+            "stage": "queued",
+            "progress": 0,
+            "input": task_payload,
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        job_ref.set(job_data)
+
+        # 2. Update Project document state
+        project_ref.update({
+            "status": "processing",
+            "currentJobId": job_id,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+
+        logger.info(
+            "Created plan parsing job %s for project %s (owner: %s)",
+            job_id,
+            project_id,
+            user_uid,
+        )
+
+        # 3. Trigger worker via Cloud Tasks if configured, else async HTTP dispatch
+        dispatched_cloud_task = False
+        if self.settings.CLOUD_TASKS_QUEUE:
+            try:
+                from google.cloud import tasks_v2
+
+                tasks_client = tasks_v2.CloudTasksClient()
+                worker_url = f"{self.settings.PLAN_PARSER_WORKER_URL.rstrip('/')}/tasks/parse-plan"
+                task = {
+                    "http_request": {
+                        "http_method": tasks_v2.HttpMethod.POST,
+                        "url": worker_url,
+                        "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps(task_payload).encode("utf-8"),
+                    }
+                }
+                tasks_client.create_task(parent=self.settings.CLOUD_TASKS_QUEUE, task=task)
+                logger.info("Successfully enqueued Cloud Task for job %s", job_id)
+                dispatched_cloud_task = True
+            except Exception as e:
+                logger.warning(
+                    "Cloud Tasks enqueue failed: %s. Falling back to direct worker dispatch.",
+                    e,
+                )
+
+        if not dispatched_cloud_task:
+            # Direct async HTTP trigger in background thread
+            worker_endpoint = f"{self.settings.PLAN_PARSER_WORKER_URL.rstrip('/')}/tasks/parse-plan"
+
+            def _trigger_worker():
+                try:
+                    logger.info("Dispatching task to worker endpoint: %s", worker_endpoint)
+                    resp = requests.post(worker_endpoint, json=task_payload, timeout=180)
+                    logger.info("Worker response for job %s: status %d", job_id, resp.status_code)
+                except Exception as err:
+                    logger.error("Failed to trigger plan parser worker for job %s: %s", job_id, err)
+
+            thread = threading.Thread(target=_trigger_worker, daemon=True)
+            thread.start()
+
+        return {
+            "jobId": job_id,
+            "projectId": project_id,
+            "status": "queued",
+            "progress": 0,
+            "createdAt": now.isoformat(),
+        }
+
+    def get_job(self, job_id: str, user_uid: str) -> dict:
+        """Retrieve job status, progress and result from Firestore jobs/{jobId}."""
+        doc = self.db.collection("jobs").document(job_id).get()
+        if not doc.exists:
+            raise NotFoundException(detail="Job not found", code="JOB_NOT_FOUND")
+
+        data = doc.to_dict() or {}
+        if data.get("ownerUid") and data.get("ownerUid") != user_uid:
+            raise ForbiddenException(detail="Access denied to job", code="JOB_ACCESS_DENIED")
+
+        return data
+
+    def get_project_plan(self, project_id: str, user_uid: str) -> dict:
+        """Retrieve parsed floor plan data for a project."""
+        project = self.get_project(project_id, user_uid)
+        doc = self.db.collection("projects").document(project_id).get()
+        data = doc.to_dict() or {}
+        floor_plan = data.get("floorPlan")
+        if not floor_plan:
+            raise NotFoundException(
+                detail="Floor plan has not been parsed yet for this project.",
+                code="FLOOR_PLAN_NOT_PARSED",
+            )
+        return floor_plan
+
     def _dict_to_project(self, data: dict) -> Project:
         """Safely convert Firestore document dictionary to Project Pydantic model."""
         created_at = self._normalize_datetime(data.get("createdAt"))
@@ -573,6 +720,9 @@ class ProjectService:
             status=data.get("status", "created"),
             has_plan=bool(data.get("hasPlan", False)),
             plan_image=plan_image,
+            current_job_id=data.get("currentJobId"),
+            has_plan_parsed=bool(data.get("hasPlanParsed", False) or data.get("floorPlan")),
+            floor_plan=data.get("floorPlan"),
             created_at=created_at,
             updated_at=updated_at,
         )
