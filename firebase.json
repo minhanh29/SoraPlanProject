@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "public": "build/frontend",
+    "ignore": ["**/.*", "**/README.md"],
+    "headers": [
+      {
+        "source": "**/@(config|app).js",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "**/*.@(css|png|jpg|jpeg|svg|webp)",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+      }
+    ]
+  }
+}

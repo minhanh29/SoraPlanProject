@@ -3,13 +3,22 @@
  * Direct Google Cloud Storage V4 Signed PUT upload and Scene Graph synchronization.
  */
 
-const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-  ? "http://localhost:8000/v1"
-  : "/v1";
+// Runtime config comes from config.js (generated per environment by deploy/deploy.sh)
+const APP_CONFIG = window.SORAPLAN_CONFIG || {};
+const API_BASE_URL = APP_CONFIG.API_BASE_URL || "http://localhost:8000/v1";
+const CATALOG_BASE_URL = (APP_CONFIG.CATALOG_BASE_URL || "https://storage.googleapis.com/soraplan-catalog").replace(/\/$/, "");
 
-const WORKER_API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-  ? "http://localhost:8001/api"
-  : "/worker/api";
+// Preset catalog files are referenced by logical paths ("assets/{Style}/{file}")
+// and served from the public catalog bucket.
+function resolveAssetUrl(path) {
+  if (!path || typeof path !== "string") return path;
+  if (path.startsWith("assets/")) return `${CATALOG_BASE_URL}/${path}`;
+  return path;
+}
+
+document.querySelectorAll("img[data-catalog-src]").forEach((img) => {
+  img.src = resolveAssetUrl(img.dataset.catalogSrc);
+});
 
 // Global App State
 let authMode = "login"; // "login" | "signup"
@@ -219,7 +228,7 @@ const furnitureSystemWrapper = document.getElementById("furniture-system-wrapper
 const furnitureSystemCheckbox = document.getElementById("furniture-system-checkbox");
 
 function isCurrentUserAdmin() {
-  return Boolean(currentUser && (currentUser.role === "admin" || currentUser.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2"));
+  return Boolean(currentUser && currentUser.role === "admin");
 }
 
 let activeFurnitureProject = null;
@@ -424,9 +433,6 @@ async function handleAuthSubmit(e) {
       return;
     }
 
-    if (data.user && data.user.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2") {
-      data.user.role = "admin";
-    }
     // Persist session
     localStorage.setItem("soraplan_token", data.idToken);
     if (data.refreshToken) {
@@ -460,9 +466,6 @@ async function checkExistingSession() {
   if (storedUser) {
     try {
       currentUser = JSON.parse(storedUser);
-      if (currentUser && currentUser.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2") {
-        currentUser.role = "admin";
-      }
       enterStudioView(currentUser);
     } catch (_) { }
   }
@@ -475,9 +478,6 @@ async function checkExistingSession() {
 
     if (res.ok) {
       const user = await res.json();
-      if (user.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2") {
-        user.role = "admin";
-      }
       currentUser = user;
       localStorage.setItem("soraplan_user", JSON.stringify(user));
       enterStudioView(user);
@@ -495,7 +495,7 @@ function enterStudioView(user) {
   studioView.style.display = "flex";
   userNavChip.style.display = "flex";
 
-  const isAdmin = user.role === "admin" || user.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2";
+  const isAdmin = user.role === "admin";
   if (isAdmin) {
     user.role = "admin";
   }
@@ -4483,27 +4483,14 @@ async function applyFurnitureTransparentBackground() {
     formData.append("file", fileToProcess);
     formData.append("furniture_name", furnitureName);
 
-    let res;
-    // 1. Try plan parser worker directly on port 8001
-    try {
-      res = await fetch(`${WORKER_API_BASE_URL}/furniture/transparent-background`, {
-        method: "POST",
-        body: formData,
-      });
-    } catch (workerErr) {
-      console.warn("Direct worker call failed, attempting API user proxy:", workerErr);
-    }
-
-    // 2. If direct worker call failed or was not reachable, fallback to api_user proxy
-    if (!res || !res.ok) {
-      const token = localStorage.getItem("soraplan_token");
-      const projId = activeFurnitureProject?.id || "default";
-      res = await fetch(`${API_BASE_URL}/projects/${projId}/furniture/transparent-background`, {
-        method: "POST",
-        headers: token ? { "Authorization": `Bearer ${token}` } : {},
-        body: formData,
-      });
-    }
+    // The worker is private; the API authenticates the user and proxies the call
+    const token = localStorage.getItem("soraplan_token");
+    const projId = activeFurnitureProject?.id || "default";
+    const res = await fetch(`${API_BASE_URL}/projects/${projId}/furniture/transparent-background`, {
+      method: "POST",
+      headers: token ? { "Authorization": `Bearer ${token}` } : {},
+      body: formData,
+    });
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
@@ -4809,7 +4796,7 @@ function renderProjectFurnitureList(items) {
       const card = document.createElement("div");
       card.className = "furniture-item-card";
 
-      const imgSrc = item.signedUrl || "floorplan_1.png";
+      const imgSrc = resolveAssetUrl(item.signedUrl || item.storagePath) || "floorplan_1.png";
       const name = escapeHtml(item.furnitureName || item.fileName || "Custom Furniture");
       const category = escapeHtml(item.furnitureType || "unknown");
       const linkedComp = item.componentId ? escapeHtml(item.componentId) : null;
@@ -4841,9 +4828,7 @@ function renderProjectFurnitureList(items) {
           glbUrl = pathForGlb.replace(/\.png$/i, ".glb");
         }
       }
-      if (!glbUrl) {
-        glbUrl = streamGlbUrl;
-      }
+      glbUrl = resolveAssetUrl(glbUrl) || streamGlbUrl;
 
       let statusBadge = "";
       let action3dBtn = "";
@@ -5147,16 +5132,17 @@ async function handleGenerate3d(furnitureId) {
       s.fileName === furnItem.fileName ||
       (s.name && s.name.toLowerCase() === (furnItem.furnitureName || "").toLowerCase())
     );
-    const glbUrl = (sysMatch && (sysMatch.glbUrl || sysMatch.glbPath || (sysMatch.modelUrls && sysMatch.modelUrls.glb))) ||
-      (furnItem.storagePath && furnItem.storagePath.replace(/\.png$/i, ".glb")) ||
-      `${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/${furnitureId}/glb`;
+    const glbUrl = resolveAssetUrl(
+      (sysMatch && (sysMatch.glbUrl || sysMatch.glbPath || (sysMatch.modelUrls && sysMatch.modelUrls.glb))) ||
+      (furnItem.storagePath && furnItem.storagePath.replace(/\.png$/i, ".glb"))
+    ) || `${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/${furnitureId}/glb`;
 
     open3dReviewModal({
       name: furnItem.furnitureName || furnItem.fileName || "System Furniture",
       category: furnItem.furnitureType || "unknown",
       glbUrl: glbUrl,
       modelUrls: (sysMatch && sysMatch.modelUrls) || { glb: glbUrl },
-      imgSrc: furnItem.signedUrl || "assets/sofa.jpg",
+      imgSrc: resolveAssetUrl(furnItem.signedUrl || furnItem.storagePath) || "sofa.jpg",
       furnitureId: furnItem.id,
       projectId: activeFurnitureProject.id,
       linkedComp: furnItem.componentId,
@@ -5306,10 +5292,10 @@ function open3dReviewModal(data) {
 
   // Prefer direct glbUrl if available (e.g. assets/... local static or direct meshy URL), then streamEndpoint
   const candidateUrls = [];
-  if (data.glbUrl) candidateUrls.push(data.glbUrl);
-  if (data.modelUrls && data.modelUrls.glb && !candidateUrls.includes(data.modelUrls.glb)) {
-    candidateUrls.push(data.modelUrls.glb);
-  }
+  const directGlb = resolveAssetUrl(data.glbUrl);
+  const modelGlb = resolveAssetUrl(data.modelUrls && data.modelUrls.glb);
+  if (directGlb) candidateUrls.push(directGlb);
+  if (modelGlb && !candidateUrls.includes(modelGlb)) candidateUrls.push(modelGlb);
   if (streamEndpoint && !candidateUrls.includes(streamEndpoint)) candidateUrls.push(streamEndpoint);
 
   const initialDownloadUrl = streamEndpoint || data.glbUrl || "#";
@@ -5853,7 +5839,12 @@ const EMBEDDED_SYSTEM_ASSETS = [
 // STEP ③ ASSETS MODULE: SYSTEM ASSETS & YOUR ASSETS
 // =============================================================
 
-let systemAssetsList = [...EMBEDDED_SYSTEM_ASSETS];
+let systemAssetsList = EMBEDDED_SYSTEM_ASSETS.map((item) => ({
+  ...item,
+  imagePath: resolveAssetUrl(item.imagePath),
+  glbUrl: resolveAssetUrl(item.glbUrl || item.imagePath.replace(/\.png$/i, ".glb")),
+  status: item.status || "3d_ready",
+}));
 let userAssetsList = [];
 let currentSystemStyle = "all";
 let currentSystemCategory = "all";
@@ -5864,20 +5855,7 @@ let assetTargetForProject = null;
 let selectedProjectIdForAsset = null;
 
 async function initAssetsCatalog() {
-  // 1. Fetch system_assets_data.json
-  try {
-    const res = await fetch("system_assets_data.json");
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        systemAssetsList = data;
-      }
-    }
-  } catch (err) {
-    console.warn("Could not load system_assets_data.json:", err);
-  }
-
-  // 2. Sub-items Switcher: System Assets vs Your Assets
+  // Sub-items Switcher: System Assets vs Your Assets
   const tabSystem = document.getElementById("tab-system-assets");
   const tabYour = document.getElementById("tab-your-assets");
   const viewSystem = document.getElementById("view-system-assets");

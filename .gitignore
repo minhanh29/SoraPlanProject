@@ -15,9 +15,8 @@ Thumbs.db
 *service-account*.json
 credentials*.json
 .secrets/
-*.json
-!frontend/package.json
-!packages/*/package.json
+serviceAccountKey*.json
+*-key.json
 
 # Node / Next.js
 node_modules/
@@ -68,11 +67,18 @@ playwright-report/
 test-results/
 .vercel/
 
-# Local generated / large 3D assets (stored in GCS, not git)
+# Large 3D assets live in gs://soraplan-catalog, never in git
 tmp/
 *.log
 /catalog/out/
 /services/asset-worker/tmp/
+*.glb
 *.glb.tmp
-
+*.gltf
+*.usdz
+*.fbx
+*.obj
 /assets/
+
+# Deploy build output (frontend staged with generated config.js)
+/build/

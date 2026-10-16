@@ -1,0 +1,18 @@
+# Never bake credentials or local state into the image.
+.env
+.env.*
+!.env.example
+.secrets/
+*.json
+!package.json
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+tests/
+test_*.py
+uploads/
+.DS_Store
+.gcloudignore
+.dockerignore
