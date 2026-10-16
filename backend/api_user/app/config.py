@@ -74,6 +74,16 @@ class Settings(BaseSettings):
         description="Optional full Cloud Tasks queue path: projects/{p}/locations/{l}/queues/{q}",
     )
 
+    # Meshy 3D Generation configuration
+    MESHY_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Meshy AI REST API key for generating 3D models from furniture photos",
+    )
+    MESHY_API_BASE_URL: str = Field(
+        default="https://api.meshy.ai/openapi/v1",
+        description="Meshy AI REST API base URL",
+    )
+
     # CORS configuration
     CORS_ORIGINS: Union[List[str], str] = Field(
         default=["http://localhost:3000", "http://localhost:5173", "*"],

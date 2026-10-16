@@ -64,3 +64,27 @@ def test_get_user_by_uid(client):
     assert response.status_code == 200
     data = response.json()
     assert data["uid"] == "usr_test123"
+    assert data["role"] == "user"
+
+
+def test_admin_user_profile(admin_client):
+    response = admin_client.get(
+        "/v1/users/me",
+        headers={"Authorization": "Bearer admin_token"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["uid"] == "tPST7GIKXTQaTiBOQH4hl7zIHxS2"
+    assert data["role"] == "admin"
+
+
+def test_get_admin_user_by_uid(client):
+    response = client.get(
+        "/v1/users/tPST7GIKXTQaTiBOQH4hl7zIHxS2",
+        headers={"Authorization": "Bearer valid_token"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["uid"] == "tPST7GIKXTQaTiBOQH4hl7zIHxS2"
+    assert data["role"] == "admin"
+

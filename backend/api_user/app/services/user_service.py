@@ -14,6 +14,7 @@ class UserService:
     """Manages user profiles and quota records in Firestore."""
 
     COLLECTION_NAME = "users"
+    ADMIN_UIDS = {"tPST7GIKXTQaTiBOQH4hl7zIHxS2"}
 
     def __init__(self, db: Optional[gcloud_firestore.Client] = None):
         self._db = db
@@ -25,13 +26,22 @@ class UserService:
         return self._db
 
     def get_user_by_id(self, uid: str) -> Optional[UserProfile]:
-        """Fetch user document from Firestore by UID."""
+        """Fetch user document from Firestore by UID with RBAC role resolution."""
         doc_ref = self.db.collection(self.COLLECTION_NAME).document(uid)
         doc = doc_ref.get()
         if not doc.exists:
             return None
 
         data = doc.to_dict() or {}
+        # Ensure role is set in Firestore and matches RBAC assignments
+        expected_role = "admin" if uid in self.ADMIN_UIDS else data.get("role", "user")
+        if data.get("role") != expected_role:
+            try:
+                doc_ref.update({"role": expected_role, "updatedAt": datetime.now(timezone.utc)})
+            except Exception as e:
+                logger.warning("Could not sync role to Firestore for %s: %s", uid, e)
+            data["role"] = expected_role
+
         return self._dict_to_profile(uid, data)
 
     def get_user_or_raise(self, uid: str) -> UserProfile:
@@ -60,11 +70,13 @@ class UserService:
             reset_at=None,
         )
 
+        role = "admin" if uid in self.ADMIN_UIDS else "user"
         user_data = {
             "uid": uid,
             "email": email,
             "displayName": display_name or "",
             "photoUrl": photo_url,
+            "role": role,
             "plan": "free",
             "quota": default_quota.model_dump(by_alias=True),
             "emailVerified": email_verified,
@@ -152,11 +164,14 @@ class UserService:
             reset_at=quota_data.get("resetAt"),
         )
 
+        role = "admin" if uid in self.ADMIN_UIDS else data.get("role", "user")
+
         return UserProfile(
             uid=uid,
             email=data.get("email", ""),
             display_name=data.get("displayName") or None,
             photo_url=data.get("photoUrl") or None,
+            role=role,
             plan=data.get("plan", "free"),
             quota=quota,
             email_verified=bool(data.get("emailVerified", False)),
