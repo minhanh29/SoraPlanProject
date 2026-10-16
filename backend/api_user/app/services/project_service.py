@@ -1,8 +1,11 @@
+import base64
 import datetime
 import logging
 import mimetypes
 import os
-from typing import List, Optional
+import requests
+import uuid
+from typing import Any, Dict, List, Optional
 from firebase_admin import firestore
 from google.cloud import firestore as gcloud_firestore
 from google.cloud.firestore import FieldFilter
@@ -16,11 +19,17 @@ from ..errors import (
     QuotaExceededException,
 )
 from ..models.project import (
+    ChooseAssetRequest,
+    FurnitureImage,
     PlanImage,
     Project,
+    UpdateFurnitureRequest,
+    UpdateFurnitureSystemRequest,
     UploadUrlResponse,
 )
+from ..models.user import UserProfile
 from .storage_service import StorageService
+from .meshy_service import MeshyService
 
 logger = logging.getLogger("api_user.project_service")
 
@@ -32,15 +41,41 @@ class ProjectService:
         self,
         db: gcloud_firestore.Client,
         storage_service: Optional[StorageService] = None,
+        meshy_service: Optional[MeshyService] = None,
     ):
         self.db = db
         self.storage_service = storage_service or StorageService()
+        self.meshy_service = meshy_service or MeshyService()
         self.settings = get_settings()
+
+    @staticmethod
+    def _get_system_asset_metadata(file_name: str, style: Optional[str] = None) -> Optional[dict]:
+        """Look up metadata for a system catalog asset from system_assets_data.json."""
+        try:
+            workspace_root = Path(__file__).resolve().parents[4]
+            data_file = workspace_root / "frontend" / "system_assets_data.json"
+            if data_file.exists():
+                import json
+                with open(data_file, "r", encoding="utf-8") as f:
+                    assets = json.load(f)
+                for item in assets:
+                    if item.get("fileName") == file_name:
+                        return item
+                    if style and str(item.get("style", "")).lower() == style.lower() and item.get("fileName") == file_name:
+                        return item
+        except Exception as e:
+            logger.warning("Could not read system_assets_data.json: %s", e)
+        return None
 
     @staticmethod
     def build_storage_path(user_uid: str, project_id: str, file_id: str, ext: str) -> str:
         """Build storage object path following structure: {user_id}/{project_id}/{files}."""
         return f"{user_uid}/{project_id}/{file_id}{ext}"
+
+    @staticmethod
+    def build_furniture_storage_path(user_uid: str, project_id: str, file_id: str, ext: str) -> str:
+        """Build storage object path for furniture uploads: {user_id}/{project_id}/furniture/{file_id}{ext}."""
+        return f"{user_uid}/{project_id}/furniture/{file_id}{ext}"
 
     def create_project(
         self,
@@ -420,6 +455,853 @@ class ProjectService:
         })
         return self._dict_to_project(project_data)
 
+    def _validate_furniture_content_type(self, content_type: str, file_name: str):
+        """Ensure file is an accepted furniture photo format (PNG, JPEG, WebP)."""
+        normalized_type = (content_type or "").lower().strip()
+        if not normalized_type or normalized_type == "application/octet-stream":
+            guessed, _ = mimetypes.guess_type(file_name)
+            if guessed:
+                normalized_type = guessed.lower()
+
+        allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
+        if normalized_type not in allowed:
+            raise AppException(
+                status_code=400,
+                code="UNSUPPORTED_FILE_TYPE",
+                detail=(
+                    f"Unsupported furniture photo format '{content_type}'. "
+                    "Please upload a photo of your furniture (PNG, JPEG, or WebP)."
+                ),
+            )
+
+    def create_furniture_upload_url(
+        self,
+        project_id: str,
+        user_uid: str,
+        file_name: str,
+        content_type: str,
+        size_bytes: Optional[int] = None,
+        furniture_name: Optional[str] = None,
+        furniture_type: Optional[str] = None,
+        component_id: Optional[str] = None,
+    ) -> UploadUrlResponse:
+        """Generate signed upload and display URLs for direct furniture photo uploads."""
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        if project_data.get("ownerUid") != user_uid:
+            raise ForbiddenException(
+                detail="You do not have permission to modify this project",
+                code="PROJECT_ACCESS_DENIED",
+            )
+
+        self._validate_furniture_content_type(content_type, file_name)
+
+        if size_bytes and size_bytes > self.settings.MAX_UPLOAD_SIZE_BYTES:
+            max_mb = self.settings.MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)
+            raise AppException(
+                status_code=400,
+                code="FILE_TOO_LARGE",
+                detail=f"File exceeds maximum allowed size of {max_mb}MB",
+            )
+
+        furn_ref = project_ref.collection("furnitureImages").document()
+        content_id = furn_ref.id
+
+        ext = self._get_extension(file_name, content_type)
+        blob_path = self.build_furniture_storage_path(user_uid, project_id, content_id, ext)
+
+        signed_upload_url = self.storage_service.generate_signed_upload_url(
+            blob_path=blob_path,
+            content_type=content_type,
+            expiration_seconds=900,
+        )
+        signed_display_url = self.storage_service.generate_signed_read_url(
+            blob_path=blob_path,
+            expiration_seconds=self.settings.GCS_SIGNED_URL_EXPIRATION_SECONDS,
+        )
+
+        return UploadUrlResponse(
+            upload_id=content_id,
+            project_id=project_id,
+            bucket=self.storage_service.bucket_name,
+            storage_path=blob_path,
+            gcs_uri=f"gs://{self.storage_service.bucket_name}/{blob_path}",
+            signed_upload_url=signed_upload_url,
+            signed_display_url=signed_display_url,
+            expires_in=900,
+        )
+
+    def confirm_furniture_upload(
+        self,
+        project_id: str,
+        user_uid: str,
+        upload_id: str,
+        file_name: str,
+        content_type: str,
+        size_bytes: Optional[int] = None,
+        furniture_name: Optional[str] = None,
+        furniture_type: Optional[str] = None,
+        component_id: Optional[str] = None,
+        is_system: bool = False,
+        current_user: Optional[UserProfile] = None,
+    ) -> FurnitureImage:
+        """Confirm direct furniture photo upload to Storage and register in Firestore."""
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        if project_data.get("ownerUid") != user_uid:
+            raise ForbiddenException(
+                detail="You do not have permission to modify this project",
+                code="PROJECT_ACCESS_DENIED",
+            )
+
+        ext = self._get_extension(file_name, content_type)
+        blob_path = self.build_furniture_storage_path(user_uid, project_id, upload_id, ext)
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        expires_at = now + datetime.timedelta(seconds=self.settings.GCS_SIGNED_URL_EXPIRATION_SECONDS)
+        signed_display_url = self.storage_service.generate_signed_read_url(
+            blob_path=blob_path,
+            expiration_seconds=self.settings.GCS_SIGNED_URL_EXPIRATION_SECONDS,
+        )
+
+        derived_name = (
+            furniture_name.strip()
+            if furniture_name and furniture_name.strip()
+            else file_name.rsplit(".", 1)[0].replace("-", " ").replace("_", " ").title()
+        )
+
+        furniture_dict = {
+            "id": upload_id,
+            "projectId": project_id,
+            "ownerUid": user_uid,
+            "fileName": file_name,
+            "furnitureName": derived_name,
+            "furnitureType": (furniture_type or "unknown").strip().lower(),
+            "componentId": component_id,
+            "contentType": content_type,
+            "sizeBytes": size_bytes or 0,
+            "bucket": self.storage_service.bucket_name,
+            "storagePath": blob_path,
+            "gcsUri": f"gs://{self.storage_service.bucket_name}/{blob_path}",
+            "signedUrl": signed_display_url,
+            "signedUrlExpiresAt": expires_at.isoformat(),
+            "status": "uploaded",
+            "uploadedAt": now.isoformat(),
+        }
+
+        # Trigger Meshy 3D generation if configured
+        meshy_task_id = None
+        meshy_status = None
+        current_status = "uploaded"
+        try:
+            if self.meshy_service.is_configured:
+                # Prepare image URL for Meshy: convert uploaded image blob to data URI so Meshy gets exact image
+                image_target_url = None
+                try:
+                    blob = self.storage_service.bucket.blob(blob_path)
+                    blob_bytes = blob.download_as_bytes()
+                    if blob_bytes and len(blob_bytes) <= 25 * 1024 * 1024:
+                        mime = content_type or "image/jpeg"
+                        b64_data = base64.b64encode(blob_bytes).decode("utf-8")
+                        image_target_url = f"data:{mime};base64,{b64_data}"
+                except Exception as ex:
+                    logger.warning("Could not convert uploaded furniture to data URI: %s", ex)
+
+                if not image_target_url:
+                    image_target_url = signed_display_url
+
+                meshy_task_id = self.meshy_service.create_image_to_3d_task(
+                    image_url=image_target_url,
+                    resolution="standard",
+                    texture_allowed=True,
+                    enhancement_allowed=True,
+                )
+                meshy_status = "PENDING"
+                current_status = "generating_3d"
+        except Exception as e:
+            logger.warning("Meshy 3D generation trigger failed for upload %s: %s", upload_id, e)
+            meshy_status = "FAILED"
+
+        final_is_system = False
+        if is_system:
+            if (current_user and current_user.role == "admin") or user_uid in {"tPST7GIKXTQaTiBOQH4hl7zIHxS2"}:
+                final_is_system = True
+
+        furniture_dict = {
+            "id": upload_id,
+            "projectId": project_id,
+            "ownerUid": user_uid,
+            "fileName": file_name,
+            "furnitureName": derived_name,
+            "furnitureType": (furniture_type or "unknown").strip().lower(),
+            "componentId": component_id,
+            "contentType": content_type,
+            "sizeBytes": size_bytes or 0,
+            "bucket": self.storage_service.bucket_name,
+            "storagePath": blob_path,
+            "gcsUri": f"gs://{self.storage_service.bucket_name}/{blob_path}",
+            "signedUrl": signed_display_url,
+            "signedUrlExpiresAt": expires_at.isoformat(),
+            "status": current_status,
+            "meshyTaskId": meshy_task_id,
+            "meshyStatus": meshy_status,
+            "meshyProgress": 0,
+            "is_system": final_is_system,
+            "isSystem": final_is_system,
+            "uploadedAt": now.isoformat(),
+        }
+
+        # Save in subcollection projects/{project_id}/furnitureImages/{upload_id}
+        project_ref.collection("furnitureImages").document(upload_id).set({
+            **furniture_dict,
+            "uploadedAt": firestore.SERVER_TIMESTAMP,
+        })
+
+        current_count = int(project_data.get("furnitureCount") or 0) + 1
+        project_ref.update({
+            "hasFurniture": True,
+            "furnitureCount": current_count,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+
+        logger.info(
+            "Furniture uploaded successfully for project %s (uploadId: %s, path: %s, meshyTaskId: %s)",
+            project_id,
+            upload_id,
+            blob_path,
+            meshy_task_id,
+        )
+
+        return self._dict_to_furniture_image(furniture_dict, project_id, user_uid, upload_id)
+
+    def _dict_to_furniture_image(
+        self,
+        f_data: dict,
+        project_id: str,
+        user_uid: str,
+        furniture_id: str,
+    ) -> FurnitureImage:
+        """Helper to convert a Firestore dictionary into a FurnitureImage Pydantic model."""
+        glb_stream_url = f"{self.settings.API_V1_STR}/projects/{project_id}/furniture/{furniture_id}/glb"
+        is_system = bool(f_data.get("is_system", f_data.get("isSystem", False)))
+        return FurnitureImage(
+            id=f_data.get("id") or furniture_id,
+            project_id=f_data.get("projectId") or project_id,
+            owner_uid=f_data.get("ownerUid") or user_uid,
+            file_name=f_data.get("fileName") or "",
+            furniture_name=f_data.get("furnitureName"),
+            furniture_type=f_data.get("furnitureType") or "unknown",
+            component_id=f_data.get("componentId"),
+            content_type=f_data.get("contentType") or "image/png",
+            size_bytes=f_data.get("sizeBytes") or 0,
+            bucket=f_data.get("bucket") or self.storage_service.bucket_name,
+            storage_path=f_data.get("storagePath") or "",
+            gcs_uri=f_data.get("gcsUri") or "",
+            signed_url=f_data.get("signedUrl") or "",
+            signed_url_expires_at=self._normalize_datetime(f_data.get("signedUrlExpiresAt")),
+            status=f_data.get("status") or "uploaded",
+            meshy_task_id=f_data.get("meshyTaskId"),
+            meshy_status=f_data.get("meshyStatus"),
+            meshy_progress=f_data.get("meshyProgress") or 0,
+            model_urls=f_data.get("modelUrls"),
+            thumbnail_3d_url=f_data.get("thumbnail3dUrl"),
+            glb_storage_path=f_data.get("glbStoragePath"),
+            glb_stream_url=glb_stream_url,
+            is_system=is_system,
+            uploaded_at=self._normalize_datetime(f_data.get("uploadedAt")),
+        )
+
+    def list_project_furniture(self, project_id: str, user_uid: str) -> List[FurnitureImage]:
+        """List all uploaded furniture photos for a project with refreshed signed display URLs."""
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        if project_data.get("ownerUid") != user_uid:
+            raise ForbiddenException(
+                detail="You do not have permission to access this project",
+                code="PROJECT_ACCESS_DENIED",
+            )
+
+        furniture_docs = project_ref.collection("furnitureImages").stream()
+        items: List[FurnitureImage] = []
+        for f_doc in furniture_docs:
+            f_data = f_doc.to_dict() or {}
+            f_data = self._refresh_furniture_signed_url(f_data)
+            try:
+                items.append(self._dict_to_furniture_image(f_data, project_id, user_uid, f_doc.id))
+            except Exception as e:
+                logger.warning("Failed to validate furniture record %s: %s", f_doc.id, e)
+
+        # Sort latest uploaded first
+        items.sort(
+            key=lambda x: x.uploaded_at or datetime.datetime.min.replace(tzinfo=datetime.timezone.utc),
+            reverse=True,
+        )
+        return items
+
+    def list_all_user_furniture(self, user_uid: str) -> List[FurnitureImage]:
+        """List all uploaded furniture photos across all projects belonging to user with refreshed signed URLs. Excludes system assets."""
+        user_projects = self.list_projects(user_uid)
+        all_items: List[FurnitureImage] = []
+        for p in user_projects:
+            furn_docs = self.db.collection("projects").document(p.id).collection("furnitureImages").stream()
+            for f_doc in furn_docs:
+                f_data = f_doc.to_dict() or {}
+                # Exclude system assets — "Your assets" is strictly user-uploaded furniture
+                if f_data.get("is_system") or f_data.get("isSystem"):
+                    continue
+                gcs_uri = str(f_data.get("gcsUri") or "")
+                storage_path = str(f_data.get("storagePath") or "")
+                signed_url = str(f_data.get("signedUrl") or "")
+                if gcs_uri.startswith("system://") or storage_path.startswith("assets/") or signed_url.startswith("assets/"):
+                    continue
+
+                f_data = self._refresh_furniture_signed_url(f_data)
+                try:
+                    all_items.append(self._dict_to_furniture_image(f_data, p.id, user_uid, f_doc.id))
+                except Exception as e:
+                    logger.warning("Failed to validate furniture record %s: %s", f_doc.id, e)
+
+        all_items.sort(
+            key=lambda x: x.uploaded_at or datetime.datetime.min.replace(tzinfo=datetime.timezone.utc),
+            reverse=True,
+        )
+        return all_items
+
+    def choose_asset_for_project(
+        self,
+        project_id: str,
+        user_uid: str,
+        request: ChooseAssetRequest,
+    ) -> FurnitureImage:
+        """Add or assign a System Asset or existing User Asset to the target project."""
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        if project_data.get("ownerUid") != user_uid:
+            raise ForbiddenException(
+                detail="You do not have permission to modify this project",
+                code="PROJECT_ACCESS_DENIED",
+            )
+
+        asset_id = f"asst_{uuid.uuid4().hex[:12]}"
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        derived_name = (
+            request.furniture_name.strip()
+            if request.furniture_name and request.furniture_name.strip()
+            else request.asset_file_name.rsplit(".", 1)[0].replace("-", " ").replace("_", " ").title()
+        )
+
+        if request.source_type == "user" and request.source_project_id and request.source_furniture_id:
+            src_proj_ref = self.db.collection("projects").document(request.source_project_id)
+            src_furn_doc = src_proj_ref.collection("furnitureImages").document(request.source_furniture_id).get()
+            src_data = src_furn_doc.to_dict() if src_furn_doc.exists else {}
+
+            furniture_dict = {
+                "id": asset_id,
+                "projectId": project_id,
+                "ownerUid": user_uid,
+                "fileName": src_data.get("fileName", request.asset_file_name),
+                "furnitureName": request.furniture_name or src_data.get("furnitureName", derived_name),
+                "furnitureType": request.furniture_type or src_data.get("furnitureType", "unknown"),
+                "componentId": request.component_id,
+                "contentType": src_data.get("contentType", "image/png"),
+                "sizeBytes": src_data.get("sizeBytes", 0),
+                "bucket": src_data.get("bucket", self.storage_service.bucket_name),
+                "storagePath": src_data.get("storagePath", ""),
+                "gcsUri": src_data.get("gcsUri", ""),
+                "signedUrl": src_data.get("signedUrl", ""),
+                "signedUrlExpiresAt": src_data.get("signedUrlExpiresAt"),
+                "status": src_data.get("status", "uploaded"),
+                "meshyTaskId": src_data.get("meshyTaskId"),
+                "meshyStatus": src_data.get("meshyStatus"),
+                "meshyProgress": src_data.get("meshyProgress", 0),
+                "modelUrls": src_data.get("modelUrls"),
+                "thumbnail3dUrl": src_data.get("thumbnail3dUrl"),
+                "glbStoragePath": src_data.get("glbStoragePath"),
+                "glbStreamUrl": src_data.get("glbStreamUrl"),
+                "is_system": False,
+                "uploadedAt": now.isoformat(),
+            }
+        else:
+            # System Asset — already has high-fidelity 3D model generated!
+            style_subpath = (
+                f"assets/{request.style}/{request.asset_file_name}"
+                if request.style
+                else f"assets/{request.asset_file_name}"
+            )
+            glb_filename = request.asset_file_name.rsplit(".", 1)[0] + ".glb"
+            glb_style_subpath = (
+                f"assets/{request.style}/{glb_filename}"
+                if request.style
+                else f"assets/{glb_filename}"
+            )
+            sys_meta = self._get_system_asset_metadata(request.asset_file_name, request.style)
+            model_urls = (sys_meta and sys_meta.get("modelUrls")) or {"glb": glb_style_subpath}
+            thumbnail_url = sys_meta.get("thumbnail3dUrl") if sys_meta else None
+
+            furniture_dict = {
+                "id": asset_id,
+                "projectId": project_id,
+                "ownerUid": user_uid,
+                "fileName": request.asset_file_name,
+                "furnitureName": derived_name,
+                "furnitureType": (request.furniture_type or "unknown").strip().lower(),
+                "componentId": request.component_id,
+                "contentType": "image/png",
+                "sizeBytes": 0,
+                "bucket": self.storage_service.bucket_name,
+                "storagePath": style_subpath,
+                "gcsUri": f"system://{style_subpath}",
+                "signedUrl": style_subpath,
+                "signedUrlExpiresAt": None,
+                "status": "3d_ready",
+                "meshyTaskId": "system_catalog_preset",
+                "meshyStatus": "SUCCEEDED",
+                "meshyProgress": 100,
+                "modelUrls": model_urls,
+                "thumbnail3dUrl": thumbnail_url,
+                "glbStoragePath": glb_style_subpath,
+                "is_system": True,
+                "uploadedAt": now.isoformat(),
+            }
+
+        project_ref.collection("furnitureImages").document(asset_id).set(furniture_dict)
+
+        current_count = project_data.get("furnitureCount", 0)
+        project_ref.update({
+            "hasFurniture": True,
+            "furnitureCount": current_count + 1,
+            "updatedAt": now.isoformat(),
+        })
+
+        return self._dict_to_furniture_image(furniture_dict, project_id, user_uid, asset_id)
+
+
+    def get_furniture_3d_status(self, project_id: str, user_uid: str, furniture_id: str) -> FurnitureImage:
+        """Poll and synchronize Meshy 3D generation status for a project furniture item."""
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        if project_data.get("ownerUid") != user_uid:
+            raise ForbiddenException(
+                detail="You do not have permission to access this project",
+                code="PROJECT_ACCESS_DENIED",
+            )
+
+        furn_ref = project_ref.collection("furnitureImages").document(furniture_id)
+        f_doc = furn_ref.get()
+        if not f_doc.exists:
+            raise NotFoundException(detail="Furniture item not found", code="FURNITURE_NOT_FOUND")
+
+        f_data = f_doc.to_dict() or {}
+        task_id = f_data.get("meshyTaskId")
+
+        if task_id and self.meshy_service.is_configured:
+            try:
+                task_result = self.meshy_service.get_task_status(task_id)
+                meshy_status = task_result.get("status")
+                meshy_progress = task_result.get("progress", 0)
+                model_urls = task_result.get("model_urls")
+                thumbnail_3d = task_result.get("thumbnail_url")
+
+                update_fields = {
+                    "meshyStatus": meshy_status,
+                    "meshyProgress": meshy_progress,
+                }
+                if thumbnail_3d:
+                    update_fields["thumbnail3dUrl"] = thumbnail_3d
+                if meshy_status == "SUCCEEDED":
+                    update_fields["status"] = "3d_ready"
+                elif meshy_status == "FAILED":
+                    update_fields["status"] = "failed_3d"
+
+                # If Meshy generated 3D model succeeded, auto-cache the GLB file to GCS
+                # This bypasses Meshy's CDN CORS restrictions and provides high-speed WebGL loading
+                glb_storage_path = f_data.get("glbStoragePath") or f"{user_uid}/{project_id}/furniture/{furniture_id}.glb"
+                raw_glb_url = model_urls.get("glb") if (isinstance(model_urls, dict)) else None
+
+                if raw_glb_url and meshy_status == "SUCCEEDED":
+                    try:
+                        if not self.storage_service.blob_exists(glb_storage_path):
+                            logger.info("Downloading generated GLB from Meshy to cache in GCS at %s...", glb_storage_path)
+                            import requests
+                            glb_resp = requests.get(raw_glb_url, timeout=60)
+                            if glb_resp.status_code == 200:
+                                self.storage_service.upload_bytes(
+                                    data=glb_resp.content,
+                                    blob_path=glb_storage_path,
+                                    content_type="model/gltf-binary",
+                                )
+                                logger.info("Successfully cached Meshy GLB to GCS (%d bytes)", len(glb_resp.content))
+
+                        if self.storage_service.blob_exists(glb_storage_path):
+                            fresh_glb_url = self.storage_service.generate_signed_read_url(glb_storage_path)
+                            model_urls["meshyGlb"] = raw_glb_url
+                            model_urls["glb"] = fresh_glb_url
+                            update_fields["glbStoragePath"] = glb_storage_path
+                    except Exception as ge:
+                        logger.warning("Could not auto-cache Meshy GLB to GCS: %s", ge)
+
+                if model_urls:
+                    update_fields["modelUrls"] = model_urls
+
+                furn_ref.update(update_fields)
+                f_data.update(update_fields)
+            except Exception as e:
+                logger.warning("Failed to refresh Meshy 3D task status for %s: %s", task_id, e)
+
+        f_data = self._refresh_furniture_signed_url(f_data)
+        return self._dict_to_furniture_image(f_data, project_id, user_uid, furniture_id)
+
+    def generate_furniture_3d(self, project_id: str, user_uid: str, furniture_id: str) -> FurnitureImage:
+        """Trigger or re-trigger Meshy 3D generation for an existing furniture image."""
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        if project_data.get("ownerUid") != user_uid:
+            raise ForbiddenException(
+                detail="You do not have permission to access this project",
+                code="PROJECT_ACCESS_DENIED",
+            )
+
+        furn_ref = project_ref.collection("furnitureImages").document(furniture_id)
+        f_doc = furn_ref.get()
+        if not f_doc.exists:
+            raise NotFoundException(detail="Furniture item not found", code="FURNITURE_NOT_FOUND")
+
+        f_data = f_doc.to_dict() or {}
+        f_data = self._refresh_furniture_signed_url(f_data)
+
+        # If system asset, 3D is already generated — never call Meshy or generate again
+        if f_data.get("is_system") or f_data.get("isSystem") or str(f_data.get("gcsUri") or "").startswith("system://") or str(f_data.get("storagePath") or "").startswith("assets/"):
+            update_fields = {
+                "meshyStatus": "SUCCEEDED",
+                "meshyProgress": 100,
+                "status": "3d_ready",
+            }
+            furn_ref.update(update_fields)
+            f_data.update(update_fields)
+            return self._dict_to_furniture_image(f_data, project_id, user_uid, furniture_id)
+
+        image_url = None
+        storage_path = f_data.get("storagePath")
+        if storage_path:
+            try:
+                blob = self.storage_service.bucket.blob(storage_path)
+                blob_bytes = blob.download_as_bytes()
+                if blob_bytes and len(blob_bytes) <= 25 * 1024 * 1024:
+                    mime = f_data.get("contentType") or "image/jpeg"
+                    b64_data = base64.b64encode(blob_bytes).decode("utf-8")
+                    image_url = f"data:{mime};base64,{b64_data}"
+            except Exception as ex:
+                logger.warning("Could not convert stored furniture to data URI: %s", ex)
+
+        if not image_url:
+            image_url = f_data.get("signedUrl")
+
+        task_id = self.meshy_service.create_image_to_3d_task(
+            image_url=image_url,
+            resolution="standard",
+            texture_allowed=True,
+            enhancement_allowed=True,
+        )
+
+        update_fields = {
+            "meshyTaskId": task_id,
+            "meshyStatus": "PENDING",
+            "meshyProgress": 0,
+            "status": "generating_3d",
+        }
+        furn_ref.update(update_fields)
+        f_data.update(update_fields)
+        return self._dict_to_furniture_image(f_data, project_id, user_uid, furniture_id)
+
+    def delete_project_furniture(self, project_id: str, user_uid: str, furniture_id: str) -> bool:
+        """Delete a specific furniture photo from Storage and Firestore."""
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        if project_data.get("ownerUid") != user_uid:
+            raise ForbiddenException(
+                detail="You do not have permission to modify this project",
+                code="PROJECT_ACCESS_DENIED",
+            )
+
+        furn_ref = project_ref.collection("furnitureImages").document(furniture_id)
+        furn_doc = furn_ref.get()
+
+        if not furn_doc.exists:
+            raise NotFoundException(detail="Furniture item not found", code="FURNITURE_NOT_FOUND")
+
+        furn_data = furn_doc.to_dict() or {}
+        storage_path = furn_data.get("storagePath")
+        if storage_path:
+            self.storage_service.delete_blob(storage_path)
+
+        furn_ref.delete()
+
+        current_count = max(0, int(project_data.get("furnitureCount") or 1) - 1)
+        project_ref.update({
+            "furnitureCount": current_count,
+            "hasFurniture": current_count > 0,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+        logger.info("Deleted furniture %s from project %s", furniture_id, project_id)
+        return True
+
+    def delete_user_furniture_by_id(self, user_uid: str, furniture_id: str) -> bool:
+        """Find and delete a user's uploaded furniture item across any of their projects."""
+        user_projects = self.list_projects(user_uid)
+        for p in user_projects:
+            furn_ref = self.db.collection("projects").document(p.id).collection("furnitureImages").document(furniture_id)
+            if furn_ref.get().exists:
+                return self.delete_project_furniture(project_id=p.id, user_uid=user_uid, furniture_id=furniture_id)
+        raise NotFoundException(detail="Furniture item not found", code="FURNITURE_NOT_FOUND")
+
+    def update_furniture_system(
+        self,
+        project_id: str,
+        furniture_id: str,
+        is_system: bool,
+        current_user: UserProfile,
+    ) -> FurnitureImage:
+        """Update the is_system field for a furniture image. Only Admin users can adjust this field."""
+        if current_user.role != "admin":
+            raise ForbiddenException(
+                detail="Only Admin can adjust the is_system field.",
+                code="ADMIN_REQUIRED",
+            )
+
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        furn_ref = project_ref.collection("furnitureImages").document(furniture_id)
+        f_doc = furn_ref.get()
+        if not f_doc.exists:
+            raise NotFoundException(detail="Furniture item not found", code="FURNITURE_NOT_FOUND")
+
+        f_data = f_doc.to_dict() or {}
+        now = datetime.datetime.now(datetime.timezone.utc)
+        updates = {
+            "is_system": is_system,
+            "isSystem": is_system,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        furn_ref.update(updates)
+        f_data.update(updates)
+        f_data["updatedAt"] = now.isoformat()
+
+        f_data = self._refresh_furniture_signed_url(f_data)
+        logger.info(
+            "Admin %s successfully updated furniture %s in project %s: is_system=%s",
+            current_user.uid,
+            furniture_id,
+            project_id,
+            is_system,
+        )
+        return self._dict_to_furniture_image(
+            f_data,
+            project_id,
+            project_data.get("ownerUid", current_user.uid),
+            furniture_id,
+        )
+
+    def update_furniture(
+        self,
+        project_id: str,
+        furniture_id: str,
+        request: UpdateFurnitureRequest,
+        current_user: UserProfile,
+    ) -> FurnitureImage:
+        """Update mutable furniture fields. Only Admin can adjust is_system."""
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        project_data = doc.to_dict() or {}
+        is_owner = project_data.get("ownerUid") == current_user.uid
+        is_admin = current_user.role == "admin"
+
+        if not is_owner and not is_admin:
+            raise ForbiddenException(
+                detail="You do not have permission to modify this project's furniture",
+                code="PROJECT_ACCESS_DENIED",
+            )
+
+        furn_ref = project_ref.collection("furnitureImages").document(furniture_id)
+        f_doc = furn_ref.get()
+        if not f_doc.exists:
+            raise NotFoundException(detail="Furniture item not found", code="FURNITURE_NOT_FOUND")
+
+        f_data = f_doc.to_dict() or {}
+        now = datetime.datetime.now(datetime.timezone.utc)
+        updates = {"updatedAt": firestore.SERVER_TIMESTAMP}
+
+        if request.is_system is not None:
+            if not is_admin:
+                raise ForbiddenException(
+                    detail="Only Admin can adjust the is_system field.",
+                    code="ADMIN_REQUIRED",
+                )
+            updates["is_system"] = request.is_system
+            updates["isSystem"] = request.is_system
+
+        if request.furniture_name is not None:
+            updates["furnitureName"] = request.furniture_name
+        if request.furniture_type is not None:
+            updates["furnitureType"] = (request.furniture_type or "unknown").strip().lower()
+        if request.component_id is not None:
+            updates["componentId"] = request.component_id
+
+        furn_ref.update(updates)
+        f_data.update(updates)
+        f_data["updatedAt"] = now.isoformat()
+        f_data = self._refresh_furniture_signed_url(f_data)
+        return self._dict_to_furniture_image(
+            f_data,
+            project_id,
+            project_data.get("ownerUid", current_user.uid),
+            furniture_id,
+        )
+
+    def _refresh_furniture_signed_url(self, item: dict) -> dict:
+        """Refresh signed display URL for a furniture item."""
+        if item.get("is_system") or item.get("isSystem") or str(item.get("gcsUri") or "").startswith("system://"):
+            storage_path = item.get("storagePath") or item.get("signedUrl")
+            if storage_path:
+                item["signedUrl"] = storage_path
+            # Ensure system assets are 3D ready
+            if item.get("status") != "3d_ready" or item.get("meshyStatus") != "SUCCEEDED":
+                item["status"] = "3d_ready"
+                item["meshyStatus"] = "SUCCEEDED"
+                item["meshyProgress"] = 100
+            if not item.get("modelUrls"):
+                file_name = item.get("fileName") or ""
+                glb_file = file_name.rsplit(".", 1)[0] + ".glb"
+                style = ""
+                if storage_path and storage_path.startswith("assets/"):
+                    parts = storage_path.split("/")
+                    if len(parts) >= 2:
+                        style = parts[1]
+                sys_meta = self._get_system_asset_metadata(file_name, style)
+                if sys_meta and sys_meta.get("modelUrls"):
+                    item["modelUrls"] = sys_meta.get("modelUrls")
+                else:
+                    item["modelUrls"] = {"glb": storage_path.rsplit(".", 1)[0] + ".glb" if storage_path else f"assets/{glb_file}"}
+            return item
+
+        storage_path = item.get("storagePath")
+        if storage_path and not storage_path.startswith("assets/"):
+            fresh_url = self.storage_service.generate_signed_read_url(storage_path)
+            item["signedUrl"] = fresh_url
+            expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+                seconds=self.settings.GCS_SIGNED_URL_EXPIRATION_SECONDS
+            )
+            item["signedUrlExpiresAt"] = expires_at.isoformat()
+        elif storage_path:
+            item["signedUrl"] = storage_path
+
+        # Refresh GLB signed URL if cached in GCS
+        glb_storage_path = item.get("glbStoragePath")
+        if glb_storage_path:
+            try:
+                fresh_glb_url = self.storage_service.generate_signed_read_url(glb_storage_path)
+                model_urls = item.get("modelUrls")
+                if not isinstance(model_urls, dict):
+                    model_urls = {}
+                model_urls["glb"] = fresh_glb_url
+                item["modelUrls"] = model_urls
+            except Exception as e:
+                logger.warning("Could not refresh GLB signed URL for %s: %s", glb_storage_path, e)
+        return item
+
+    def get_furniture_glb_bytes(self, project_id: str, furniture_id: str) -> tuple[bytes, str]:
+        """Fetch raw bytes of the 3D GLB model for a furniture item, serving directly with CORS."""
+        project_ref = self.db.collection("projects").document(project_id)
+        doc = project_ref.get()
+        if not doc.exists:
+            raise NotFoundException(detail="Project not found", code="PROJECT_NOT_FOUND")
+
+        furn_ref = project_ref.collection("furnitureImages").document(furniture_id)
+        f_doc = furn_ref.get()
+        if not f_doc.exists:
+            raise NotFoundException(detail="Furniture item not found", code="FURNITURE_NOT_FOUND")
+
+        f_data = f_doc.to_dict() or {}
+        furn_name = f_data.get("furnitureName") or f_data.get("fileName") or "furniture"
+        clean_name = "".join(c for c in furn_name if c.isalnum() or c in ("-", "_")).rstrip()
+        filename = f"{clean_name or 'furniture'}.glb"
+
+        # Check local disk for system assets or assets/ models
+        if f_data.get("is_system") or str(f_data.get("gcsUri", "")).startswith("system://") or str(f_data.get("storagePath", "")).startswith("assets/"):
+            workspace_root = Path(__file__).resolve().parents[4]
+            storage_path = f_data.get("glbStoragePath") or f_data.get("storagePath", "")
+            glb_candidate = storage_path.rsplit(".", 1)[0] + ".glb"
+            local_path = workspace_root / glb_candidate
+            if local_path.exists():
+                return local_path.read_bytes(), filename
+
+        glb_storage_path = f_data.get("glbStoragePath")
+        if glb_storage_path and self.storage_service.blob_exists(glb_storage_path):
+            blob = self.storage_service.bucket.blob(glb_storage_path)
+            content = blob.download_as_bytes()
+            return content, filename
+
+        # Fallback: if not yet cached in GCS, check if modelUrls has a GLB to fetch and cache
+        model_urls = f_data.get("modelUrls") or {}
+        remote_url = model_urls.get("meshyGlb") or model_urls.get("glb")
+        if remote_url:
+            import requests
+            resp = requests.get(remote_url, timeout=60)
+            if resp.status_code == 200:
+                owner_uid = f_data.get("ownerUid", "unknown")
+                cache_path = f"{owner_uid}/{project_id}/furniture/{furniture_id}.glb"
+                try:
+                    self.storage_service.upload_bytes(
+                        data=resp.content,
+                        blob_path=cache_path,
+                        content_type="model/gltf-binary",
+                    )
+                    furn_ref.update({"glbStoragePath": cache_path})
+                except Exception as ce:
+                    logger.warning("Could not cache fetched GLB: %s", ce)
+                return resp.content, filename
+
+        raise NotFoundException(detail="3D GLB model is not available yet", code="GLB_NOT_READY")
+
     def delete_project(self, project_id: str, user_uid: str) -> bool:
         """Delete project and any associated plan image in Storage."""
         project_ref = self.db.collection("projects").document(project_id)
@@ -446,6 +1328,10 @@ class ProjectService:
         plan_images = project_ref.collection("planImages").stream()
         for p_doc in plan_images:
             p_doc.reference.delete()
+
+        furniture_images = project_ref.collection("furnitureImages").stream()
+        for f_doc in furniture_images:
+            f_doc.reference.delete()
 
         project_ref.delete()
         logger.info("Deleted project %s for user %s", project_id, user_uid)
@@ -723,6 +1609,26 @@ class ProjectService:
             current_job_id=data.get("currentJobId"),
             has_plan_parsed=bool(data.get("hasPlanParsed", False) or data.get("floorPlan")),
             floor_plan=data.get("floorPlan"),
+            has_furniture=bool(data.get("hasFurniture", False)),
+            furniture_count=int(data.get("furnitureCount", 0)),
             created_at=created_at,
             updated_at=updated_at,
         )
+
+    def remove_furniture_background(
+        self,
+        image_bytes: bytes,
+        filename: str,
+        content_type: str,
+        furniture_name: str,
+    ) -> Dict[str, Any]:
+        """Forward furniture image to plan parser worker gpt-6-sol for transparent background."""
+        worker_url = f"{self.settings.PLAN_PARSER_WORKER_URL.rstrip('/')}/api/furniture/transparent-background"
+        files = {"file": (filename, image_bytes, content_type)}
+        data = {"furniture_name": furniture_name}
+        logger.info("Forwarding furniture transparent background request to worker: %s", worker_url)
+        resp = requests.post(worker_url, files=files, data=data, timeout=120)
+        if resp.status_code != 200:
+            logger.error("Worker transparent background failed (%d): %s", resp.status_code, resp.text)
+            raise RuntimeError(f"Worker transparent background error: {resp.text}")
+        return resp.json()

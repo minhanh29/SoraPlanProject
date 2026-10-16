@@ -3,9 +3,13 @@
  * Direct Google Cloud Storage V4 Signed PUT upload and Scene Graph synchronization.
  */
 
-const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
-  ? "http://localhost:8000/v1" 
+const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:8000/v1"
   : "/v1";
+
+const WORKER_API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:8001/api"
+  : "/worker/api";
 
 // Global App State
 let authMode = "login"; // "login" | "signup"
@@ -166,6 +170,66 @@ const parsingStatusText = document.getElementById("parsing-status-text");
 const parsingPollTimer = document.getElementById("parsing-poll-timer");
 const btnCancelPoll = document.getElementById("btn-cancel-poll");
 
+// DOM Elements - Furniture Ingestion (Step 2)
+const btnNextFurniture = document.getElementById("btn-next-furniture");
+const btnSidebarFurniture = document.getElementById("btn-sidebar-furniture");
+const btnCanvasFurniture = document.getElementById("btn-canvas-furniture");
+const topbarFurniturePill = document.getElementById("topbar-furniture-pill");
+const sidebarFurnitureBadge = document.getElementById("sidebar-furniture-badge");
+const btnAssignFurniturePhoto = document.getElementById("btn-assign-furniture-photo");
+const inspectorFurnitureAction = document.getElementById("inspector-furniture-action");
+
+const furnitureModal = document.getElementById("furniture-modal");
+const btnCloseFurnitureModal = document.getElementById("btn-close-furniture-modal");
+const furnitureProjectBadge = document.getElementById("furniture-project-badge");
+const furnitureGcsPathPreview = document.getElementById("furniture-gcs-path-preview");
+const furnitureUploadForm = document.getElementById("furniture-upload-form");
+const furnitureNameInput = document.getElementById("furniture-name-input");
+const furnitureTypeSelect = document.getElementById("furniture-type-select");
+const furnitureLinkSelect = document.getElementById("furniture-link-select");
+const furnitureFileInput = document.getElementById("furniture-file-input");
+const furnitureDropzone = document.getElementById("furniture-dropzone");
+const furnitureDropzoneIdle = document.getElementById("furniture-dropzone-idle");
+const furniturePreviewCard = document.getElementById("furniture-preview-card");
+const furnitureMediaContainer = document.getElementById("furniture-media-container");
+const furnitureFilename = document.getElementById("furniture-filename");
+const furnitureTypeBadge = document.getElementById("furniture-type-badge");
+const furnitureFilesize = document.getElementById("furniture-filesize");
+const btnRemoveFurnitureFile = document.getElementById("btn-remove-furniture-file");
+const btnLoadSampleFurniture = document.getElementById("btn-load-sample-furniture");
+const furnitureProgressWrapper = document.getElementById("furniture-progress-wrapper");
+const furnStepUrl = document.getElementById("furn-step-url");
+const furnStepPut = document.getElementById("furn-step-put");
+const furnStepConfirm = document.getElementById("furn-step-confirm");
+const furnitureBarFill = document.getElementById("furniture-bar-fill");
+const furnitureStatusMsg = document.getElementById("furniture-status-msg");
+const furnitureStatusPct = document.getElementById("furniture-status-pct");
+const btnSubmitFurniture = document.getElementById("btn-submit-furniture");
+const furnitureSpinner = document.getElementById("furniture-spinner");
+const furnitureBtnText = document.getElementById("furniture-btn-text");
+const furnitureCountPill = document.getElementById("furniture-count-pill");
+const btnRefreshFurniture = document.getElementById("btn-refresh-furniture");
+const furnitureEmptyState = document.getElementById("furniture-empty-state");
+const furnitureItemsGrid = document.getElementById("furniture-items-grid");
+const btnBackToEditor = document.getElementById("btn-back-to-editor");
+const btnProceed3dWorld = document.getElementById("btn-proceed-3d-world");
+
+const furnitureTransparentBgCheckbox = document.getElementById("furniture-transparent-bg-checkbox");
+const furnitureSystemWrapper = document.getElementById("furniture-system-wrapper");
+const furnitureSystemCheckbox = document.getElementById("furniture-system-checkbox");
+
+function isCurrentUserAdmin() {
+  return Boolean(currentUser && (currentUser.role === "admin" || currentUser.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2"));
+}
+
+let activeFurnitureProject = null;
+let selectedFurnitureFile = null;
+let originalFurnitureFile = null;
+let isUploadingFurniture = false;
+let isProcessingTransparentBg = false;
+let hasTransparentBgApplied = false;
+let projectFurnitureList = [];
+
 // Active parsing jobs polling map { projectId: { intervalId, jobId } }
 const activePollingJobs = {};
 
@@ -190,7 +254,8 @@ function setupEventListeners() {
   // Project Creation & Dropzone
   createProjectForm.addEventListener("submit", handleCreateAndUploadProject);
   btnLoadSample.addEventListener("click", handleLoadSampleBlueprint);
-  btnRefreshProjects.addEventListener("click", loadProjects);
+  btnRefreshProjects.addEventListener("click", () => { loadProjects(); loadUserAssets(); });
+  initAssetsCatalog();
 
   // Drag & Drop
   setupDropzone();
@@ -205,10 +270,84 @@ function setupEventListeners() {
     parsingModal.style.display = "none";
   });
 
+  // Furniture Modal (Step 2) Controls
+  if (btnCloseFurnitureModal) {
+    btnCloseFurnitureModal.addEventListener("click", closeFurnitureUploadModal);
+  }
+  if (furnitureModal) {
+    furnitureModal.addEventListener("click", (e) => {
+      if (e.target === furnitureModal) closeFurnitureUploadModal();
+    });
+  }
+  // Step 2: Open Furniture Upload Modal / Page triggers from 2D Plan
+  [btnNextFurniture, btnSidebarFurniture, btnCanvasFurniture].forEach((btn) => {
+    if (btn) {
+      btn.addEventListener("click", () => {
+        if (activeEditorProject) {
+          openFurnitureUploadModal(activeEditorProject);
+        } else {
+          showToast("Please open a project first", "info");
+        }
+      });
+    }
+  });
+  if (btnAssignFurniturePhoto) {
+    btnAssignFurniturePhoto.addEventListener("click", () => {
+      if (activeEditorProject && selectedObj) {
+        openFurnitureUploadModal(activeEditorProject, selectedObj.id);
+      }
+    });
+  }
+  if (btnBackToEditor) {
+    btnBackToEditor.addEventListener("click", () => {
+      closeFurnitureUploadModal();
+      if (activeFurnitureProject) {
+        openFloorPlanEditor(activeFurnitureProject);
+      }
+    });
+  }
+  if (btnProceed3dWorld) {
+    btnProceed3dWorld.addEventListener("click", () => {
+      showToast("🚀 Step 2 complete! All custom furniture saved. Building metric 3D home scene...", "success");
+    });
+  }
+  if (btnRefreshFurniture) {
+    btnRefreshFurniture.addEventListener("click", () => {
+      if (activeFurnitureProject) loadProjectFurniture(activeFurnitureProject.id);
+    });
+  }
+  if (furnitureUploadForm) {
+    furnitureUploadForm.addEventListener("submit", handleFurnitureUploadSubmit);
+  }
+  if (btnLoadSampleFurniture) {
+    btnLoadSampleFurniture.addEventListener("click", handleLoadSampleFurniture);
+  }
+  if (furnitureTransparentBgCheckbox) {
+    furnitureTransparentBgCheckbox.addEventListener("change", async () => {
+      if (furnitureTransparentBgCheckbox.checked) {
+        if (selectedFurnitureFile && !hasTransparentBgApplied) {
+          await applyFurnitureTransparentBackground();
+        }
+      } else {
+        if (originalFurnitureFile && hasTransparentBgApplied) {
+          revertToOriginalFurniturePhoto();
+        }
+      }
+    });
+  }
+  setupFurnitureDropzone();
+  setup3dReviewListeners();
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      const review3dModal = document.getElementById("modal-3d-review");
+      if (review3dModal && review3dModal.style.display !== "none") {
+        close3dReviewModal();
+        return;
+      }
       if (planModal.style.display !== "none") closePlanModal();
       if (parsingModal.style.display !== "none") parsingModal.style.display = "none";
+      if (furnitureModal && furnitureModal.style.display !== "none") closeFurnitureUploadModal();
       if (editorModal.style.display !== "none") closeFloorPlanEditor();
     }
   });
@@ -267,7 +406,7 @@ async function handleAuthSubmit(e) {
 
   try {
     const endpoint = authMode === "login" ? `${API_BASE_URL}/auth/login` : `${API_BASE_URL}/auth/signup`;
-    const payload = authMode === "login" 
+    const payload = authMode === "login"
       ? { email, password }
       : { email, password, displayName: displayName || undefined };
 
@@ -285,6 +424,9 @@ async function handleAuthSubmit(e) {
       return;
     }
 
+    if (data.user && data.user.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2") {
+      data.user.role = "admin";
+    }
     // Persist session
     localStorage.setItem("soraplan_token", data.idToken);
     if (data.refreshToken) {
@@ -294,7 +436,7 @@ async function handleAuthSubmit(e) {
 
     currentUser = data.user;
     showToast(authMode === "login" ? "Successfully signed in!" : "Account created successfully!", "success");
-    
+
     enterStudioView(data.user);
     loadProjects();
 
@@ -318,8 +460,11 @@ async function checkExistingSession() {
   if (storedUser) {
     try {
       currentUser = JSON.parse(storedUser);
+      if (currentUser && currentUser.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2") {
+        currentUser.role = "admin";
+      }
       enterStudioView(currentUser);
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // Validate session with backend
@@ -330,6 +475,9 @@ async function checkExistingSession() {
 
     if (res.ok) {
       const user = await res.json();
+      if (user.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2") {
+        user.role = "admin";
+      }
       currentUser = user;
       localStorage.setItem("soraplan_user", JSON.stringify(user));
       enterStudioView(user);
@@ -347,15 +495,27 @@ function enterStudioView(user) {
   studioView.style.display = "flex";
   userNavChip.style.display = "flex";
 
+  const isAdmin = user.role === "admin" || user.uid === "tPST7GIKXTQaTiBOQH4hl7zIHxS2";
+  if (isAdmin) {
+    user.role = "admin";
+  }
+
   // Populate user data
-  navUserName.textContent = user.displayName || user.email.split("@")[0] || "Architect";
-  navUserPlan.textContent = (user.plan || "Free").toUpperCase();
+  navUserName.textContent = user.displayName || user.email.split("@")[0] || (isAdmin ? "Admin" : "Architect");
+  if (isAdmin) {
+    navUserPlan.textContent = "ADMIN";
+    navUserPlan.className = "nav-user-plan badge-role-admin";
+  } else {
+    navUserPlan.textContent = (user.plan || "Free").toUpperCase();
+    navUserPlan.className = "nav-user-plan";
+  }
+
   if (user.photoUrl) {
     navUserAvatar.src = user.photoUrl;
   }
 
-  studioWelcome.textContent = `Welcome back, ${user.displayName || "Architect"}`;
-  quotaTierVal.textContent = (user.plan || "Free").toUpperCase();
+  studioWelcome.textContent = `Welcome back, ${user.displayName || (isAdmin ? "Admin" : "Architect")}`;
+  quotaTierVal.textContent = isAdmin ? "ADMIN" : (user.plan || "Free").toUpperCase();
 
   if (user.quota) {
     quotaProjectsVal.textContent = `0 / ${user.quota.projects || 5}`;
@@ -379,7 +539,7 @@ async function handleLogout(notify = true) {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` },
       });
-    } catch (_) {}
+    } catch (_) { }
   }
 
   localStorage.removeItem("soraplan_token");
@@ -974,7 +1134,7 @@ function setupCropperCanvasEvents() {
     if (cropperDrag) {
       try {
         cropperCanvas.releasePointerCapture(e.pointerId);
-      } catch (_) {}
+      } catch (_) { }
       cropperDrag = null;
       updateCropperDimReadout();
       renderCropper();
@@ -1288,7 +1448,7 @@ async function handleCreateAndUploadProject(e) {
     // STEP 1: Create Project Record in Backend
     // -------------------------------------------------------------
     setProgressStep(stepCreate, "active", 15, "Step 1/4: Creating project record in Firestore...");
-    
+
     const createRes = await fetch(`${API_BASE_URL}/projects`, {
       method: "POST",
       headers: {
@@ -1416,7 +1576,7 @@ function uploadDirectToGCS(signedUrl, file, contentType, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", signedUrl, true);
-    
+
     // GCS V4 Signed PUT requires strict Content-Type matching
     xhr.setRequestHeader("Content-Type", contentType);
 
@@ -1650,6 +1810,12 @@ function renderProjectsGrid(projects) {
             <span class="meta-label">Created:</span>
             <span class="meta-val">${createdDate}</span>
           </div>
+          ${proj.furnitureCount && proj.furnitureCount > 0 ? `
+            <div class="card-meta-item">
+              <span class="meta-label">Furniture:</span>
+              <span class="meta-val" style="color: var(--accent); font-weight: 600;">🪑 ${proj.furnitureCount} custom photo${proj.furnitureCount > 1 ? "s" : ""}</span>
+            </div>
+          ` : ""}
         </div>
       </div>
 
@@ -1677,9 +1843,17 @@ function renderProjectsGrid(projects) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
               </svg>
-              <span>⚡ Parse with AI</span>
+              <span> Parse with AI</span>
             </button>
           `}
+          <button type="button" class="card-action-btn btn-card-upload-furniture" data-project-id="${escapeHtml(proj.id)}" title="Upload Custom Furniture Photo (Step 2)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <span>Furniture</span>
+          </button>
           <button type="button" class="card-action-btn btn-view-plan" data-project-id="${escapeHtml(proj.id)}" title="View Original Upload">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -1723,6 +1897,11 @@ function renderProjectsGrid(projects) {
     const openEditorBtn = card.querySelector(".btn-open-editor");
     if (openEditorBtn) {
       openEditorBtn.addEventListener("click", () => openFloorPlanEditor(proj));
+    }
+
+    const furnCardBtn = card.querySelector(".btn-card-upload-furniture");
+    if (furnCardBtn) {
+      furnCardBtn.addEventListener("click", () => openFurnitureUploadModal(proj));
     }
 
     const viewParsingBtn = card.querySelector(".btn-view-parsing");
@@ -1901,8 +2080,8 @@ function togglePasswordVisibility() {
   const isPassword = passwordInput.type === "password";
   passwordInput.type = isPassword ? "text" : "password";
   togglePasswordBtn.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
-  
-  eyeIcon.innerHTML = isPassword 
+
+  eyeIcon.innerHTML = isPassword
     ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>`
     : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
 }
@@ -2272,6 +2451,12 @@ async function openFloorPlanEditor(proj) {
 
   editorTitle.textContent = `${proj.name} — Interactive 2D Plan`;
 
+  // Update furniture badges in 2D plan editor
+  const currentFurnCount = proj.furnitureCount || 0;
+  if (topbarFurniturePill) topbarFurniturePill.textContent = currentFurnCount;
+  if (sidebarFurnitureBadge) sidebarFurnitureBadge.textContent = `${currentFurnCount} item${currentFurnCount === 1 ? "" : "s"}`;
+  loadProjectFurniture(proj.id);
+
   // Check if project has floorPlan stored, or fetch from /projects/{id}/plan
   let planData = proj.floorPlan;
   if (!planData) {
@@ -2284,7 +2469,7 @@ async function openFloorPlanEditor(proj) {
       if (res.ok) {
         planData = await res.json();
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // Fallback to initial sample geometry if no plan was stored yet
@@ -2459,7 +2644,7 @@ function createFallbackFloorPlan() {
       { id: "tub_1", type: "fixture", fixtureType: "bathtub", label: "Bathtub", x: 22, y: 1, width: 4.5, height: 2.5, rotation: 0 },
       { id: "sink_1", type: "fixture", fixtureType: "sink", label: "Kitchen Sink", x: 26, y: 27, width: 4.0, height: 2.0, rotation: 0 },
     ],
-    rooms: [{ id: "rom_main", name: "Main Area", polygon: [{x:0, y:0}, {x:40, y:0}, {x:40, y:30}, {x:0, y:30}] }],
+    rooms: [{ id: "rom_main", name: "Main Area", polygon: [{ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 40, y: 30 }, { x: 0, y: 30 }] }],
     sourceImage: {
       originalWidth: 2732,
       originalHeight: 1908,
@@ -3541,7 +3726,7 @@ function handleCanvasPointerUp(e) {
     }
     try {
       floorplanCanvas.releasePointerCapture(e.pointerId);
-    } catch (_) {}
+    } catch (_) { }
     editorDrag = null;
   }
 }
@@ -3568,6 +3753,7 @@ function updateInspector(obj) {
   if (!obj) {
     inspectorEmpty.style.display = "flex";
     inspectorFields.style.display = "none";
+    if (inspectorFurnitureAction) inspectorFurnitureAction.style.display = "none";
     return;
   }
 
@@ -3581,6 +3767,7 @@ function updateInspector(obj) {
   if (obj.type === "wall") {
     inspectorBoxFields.style.display = "none";
     inspectorWallFields.style.display = "block";
+    if (inspectorFurnitureAction) inspectorFurnitureAction.style.display = "none";
 
     propX1.value = obj.x1 !== undefined ? obj.x1.toFixed(2) : "";
     propY1.value = obj.y1 !== undefined ? obj.y1.toFixed(2) : "";
@@ -3599,6 +3786,23 @@ function updateInspector(obj) {
     propH.value = obj.h !== undefined ? obj.h.toFixed(2) : "";
     propRot.value = Math.round(obj.rotation || 0);
     propConf.value = `${Math.round((obj.confidence || 0.9) * 100)}%`;
+
+    if (obj.type === "furniture") {
+      if (inspectorFurnitureAction) {
+        inspectorFurnitureAction.style.display = "block";
+        if (btnAssignFurniturePhoto) {
+          btnAssignFurniturePhoto.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+            <span>📸 Photo for ${escapeHtml(obj.name || obj.id)}</span>
+          `;
+        }
+      }
+    } else {
+      if (inspectorFurnitureAction) inspectorFurnitureAction.style.display = "none";
+    }
   }
 }
 
@@ -4006,4 +4210,2521 @@ function drawRoomCornerPins(ctx, s) {
   ctx.restore();
 }
 
+// =============================================================
+// STEP ②: CUSTOM FURNITURE INGESTION & UPLOAD LOGIC
+// =============================================================
 
+async function openFurnitureUploadModal(proj, preselectedComponentId = null) {
+  if (!proj) return;
+  activeFurnitureProject = proj;
+  furnitureModal.style.display = "flex";
+  furnitureModal.scrollTop = 0;
+  const furnBody = furnitureModal.querySelector(".furniture-modal-body");
+  if (furnBody) furnBody.scrollTop = 0;
+
+  const isAdmin = isCurrentUserAdmin();
+  if (furnitureSystemWrapper) {
+    furnitureSystemWrapper.style.display = isAdmin ? "block" : "none";
+  }
+  if (furnitureSystemCheckbox) {
+    furnitureSystemCheckbox.checked = false;
+  }
+
+  if (furnitureProjectBadge) {
+    furnitureProjectBadge.textContent = `Project: ${proj.name}`;
+  }
+  if (furnitureGcsPathPreview) {
+    const userUid = currentUser?.uid || "usr_current";
+    furnitureGcsPathPreview.textContent = `soraplan-assest-dev/${userUid}/${proj.id}/furniture/...`;
+  }
+
+  // Populate Linked 2D Item dropdown from floor plan furniture
+  if (furnitureLinkSelect) {
+    furnitureLinkSelect.innerHTML = `<option value="">-- None (Add to Project Library) --</option>`;
+
+    const furnitureList = (editorObjects || []).filter((o) => o.type === "furniture") ||
+      (currentFloorPlan && currentFloorPlan.furniture) ||
+      (proj.floorPlan && proj.floorPlan.furniture) || [];
+
+    furnitureList.forEach((item) => {
+      const opt = document.createElement("option");
+      opt.value = item.id;
+      opt.textContent = `${item.name || item.id} (${item.subtype || item.furnitureType || "furniture"})`;
+      if (preselectedComponentId && item.id === preselectedComponentId) {
+        opt.selected = true;
+      }
+      furnitureLinkSelect.appendChild(opt);
+    });
+
+    if (preselectedComponentId) {
+      const matched = furnitureList.find((i) => i.id === preselectedComponentId);
+      if (matched) {
+        if (furnitureNameInput) furnitureNameInput.value = matched.name || matched.id;
+        if (furnitureTypeSelect) {
+          const matchedType = (matched.subtype || matched.furnitureType || "sofa").toLowerCase();
+          for (let option of furnitureTypeSelect.options) {
+            if (option.value === matchedType || matchedType.includes(option.value)) {
+              furnitureTypeSelect.value = option.value;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Load and display existing uploaded furniture for this project
+  await loadProjectFurniture(proj.id);
+}
+
+function closeFurnitureUploadModal() {
+  furnitureModal.style.display = "none";
+  clearFurnitureSelectedFile();
+  if (furnitureProgressWrapper) furnitureProgressWrapper.style.display = "none";
+}
+
+function setupFurnitureDropzone() {
+  if (!furnitureDropzone || !furnitureFileInput) return;
+
+  furnitureDropzone.addEventListener("click", () => {
+    if (!isUploadingFurniture) furnitureFileInput.click();
+  });
+
+  furnitureFileInput.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFurnitureFileSelected(e.target.files[0]);
+    }
+  });
+
+  ["dragenter", "dragover"].forEach((eventName) => {
+    furnitureDropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      furnitureDropzone.classList.add("drag-active");
+    });
+  });
+
+  ["dragleave", "drop"].forEach((eventName) => {
+    furnitureDropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      furnitureDropzone.classList.remove("drag-active");
+    });
+  });
+
+  furnitureDropzone.addEventListener("drop", (e) => {
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files.length > 0) {
+      handleFurnitureFileSelected(dt.files[0]);
+    }
+  });
+
+  if (btnRemoveFurnitureFile) {
+    btnRemoveFurnitureFile.addEventListener("click", (e) => {
+      e.stopPropagation();
+      clearFurnitureSelectedFile();
+    });
+  }
+}
+
+async function handleLoadSampleFurniture() {
+  try {
+    showToast("Loading sample modern sofa photo...", "info");
+    const res = await fetch("sofa.jpg");
+    if (!res.ok) throw new Error("Could not fetch sample sofa.jpg");
+    const blob = await res.blob();
+    const file = new File([blob], "mid_century_sofa.jpg", { type: "image/jpeg" });
+    handleFurnitureFileSelected(file);
+    if (furnitureNameInput) furnitureNameInput.value = "Mid-Century Modern Camel Sofa";
+    if (furnitureTypeSelect) furnitureTypeSelect.value = "sofa";
+    showToast("⚡ Sample sofa loaded! Ready to upload to Cloud Storage.", "success");
+  } catch (err) {
+    showToast(`Could not load sample sofa: ${err.message}`, "error");
+  }
+}
+
+function handleFurnitureFileSelected(file) {
+  const allowedExtensions = [".png", ".jpg", ".jpeg", ".webp"];
+  const fileExt = "." + file.name.split(".").pop().toLowerCase();
+  const isImage = file.type.startsWith("image/") || allowedExtensions.includes(fileExt);
+
+  if (!isImage) {
+    showToast("Unsupported format. Please upload a PNG, JPG, or WebP photo.", "error");
+    return;
+  }
+
+  const MAX_BYTES = 25 * 1024 * 1024;
+  if (file.size > MAX_BYTES) {
+    showToast("File size exceeds 25 MB limit.", "error");
+    return;
+  }
+
+  originalFurnitureFile = file;
+  selectedFurnitureFile = file;
+  hasTransparentBgApplied = false;
+
+  const activeBadge = document.getElementById("furniture-trans-active-badge");
+  if (activeBadge) activeBadge.style.display = "none";
+  if (furnitureMediaContainer) furnitureMediaContainer.classList.remove("is-transparent");
+
+  // Auto-fill furniture name if currently blank
+  if (furnitureNameInput && !furnitureNameInput.value.trim()) {
+    const rawName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
+    furnitureNameInput.value = rawName.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  if (furnitureFilename) furnitureFilename.textContent = file.name;
+  if (furnitureFilesize) furnitureFilesize.textContent = formatBytes(file.size);
+  if (furnitureTypeBadge) furnitureTypeBadge.textContent = fileExt.replace(".", "").toUpperCase();
+
+  // Thumbnail preview
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    if (furnitureMediaContainer) {
+      furnitureMediaContainer.innerHTML = `<img src="${e.target.result}" alt="Furniture preview" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">`;
+    }
+  };
+  reader.readAsDataURL(file);
+
+  if (furnitureDropzoneIdle) furnitureDropzoneIdle.style.display = "none";
+  if (furniturePreviewCard) furniturePreviewCard.style.display = "flex";
+
+  // If transparent background tick box is active, trigger gpt-6-sol
+  if (furnitureTransparentBgCheckbox && furnitureTransparentBgCheckbox.checked) {
+    applyFurnitureTransparentBackground();
+  }
+}
+
+function clearFurnitureSelectedFile() {
+  selectedFurnitureFile = null;
+  originalFurnitureFile = null;
+  hasTransparentBgApplied = false;
+  if (furnitureFileInput) furnitureFileInput.value = "";
+  if (furnitureDropzoneIdle) furnitureDropzoneIdle.style.display = "flex";
+  if (furniturePreviewCard) furniturePreviewCard.style.display = "none";
+  if (furnitureMediaContainer) {
+    furnitureMediaContainer.innerHTML = "";
+    furnitureMediaContainer.classList.remove("is-transparent");
+  }
+  const activeBadge = document.getElementById("furniture-trans-active-badge");
+  if (activeBadge) activeBadge.style.display = "none";
+}
+
+function dataUriToBlob(dataUri) {
+  const parts = dataUri.split(",");
+  const byteString = atob(parts[1]);
+  const mimeString = parts[0].split(":")[1].split(";")[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], { type: mimeString });
+}
+
+function revertToOriginalFurniturePhoto() {
+  if (!originalFurnitureFile) return;
+  selectedFurnitureFile = originalFurnitureFile;
+  hasTransparentBgApplied = false;
+
+  const activeBadge = document.getElementById("furniture-trans-active-badge");
+  if (activeBadge) activeBadge.style.display = "none";
+  if (furnitureMediaContainer) furnitureMediaContainer.classList.remove("is-transparent");
+
+  const fileExt = originalFurnitureFile.name.substring(originalFurnitureFile.name.lastIndexOf(".")).toLowerCase();
+  if (furnitureFilename) furnitureFilename.textContent = originalFurnitureFile.name;
+  if (furnitureFilesize) furnitureFilesize.textContent = formatBytes(originalFurnitureFile.size);
+  if (furnitureTypeBadge) furnitureTypeBadge.textContent = fileExt.replace(".", "").toUpperCase();
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    if (furnitureMediaContainer) {
+      furnitureMediaContainer.innerHTML = `<img src="${e.target.result}" alt="Furniture preview" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">`;
+    }
+  };
+  reader.readAsDataURL(originalFurnitureFile);
+
+  showToast("Reverted to original photo.", "info");
+}
+
+async function applyFurnitureTransparentBackground() {
+  if (isProcessingTransparentBg) return;
+  const fileToProcess = originalFurnitureFile || selectedFurnitureFile;
+  if (!fileToProcess) {
+    showToast("Please select a furniture image first.", "warning");
+    return;
+  }
+
+  const furnitureName = (furnitureNameInput?.value || "").trim() || fileToProcess.name.replace(/\.[^/.]+$/, "");
+  const promptText = `${furnitureName} transparent background`;
+
+  isProcessingTransparentBg = true;
+  if (btnSubmitFurniture) btnSubmitFurniture.disabled = true;
+
+  // Show processing overlay on preview card
+  let overlay = document.getElementById("furniture-processing-overlay");
+  if (!overlay && furnitureMediaContainer) {
+    overlay = document.createElement("div");
+    overlay.id = "furniture-processing-overlay";
+    overlay.className = "media-processing-overlay";
+    overlay.innerHTML = `
+      <div class="spinner" style="display: inline-block; width: 18px; height: 18px; border-width: 2px;"></div>
+      <span class="media-processing-text">gpt-6-sol isolating background...</span>
+    `;
+    furnitureMediaContainer.appendChild(overlay);
+  } else if (overlay) {
+    overlay.style.display = "flex";
+  }
+
+  showToast(`Calling gpt-6-sol: "${promptText}"...`, "info");
+
+  try {
+    const formData = new FormData();
+    formData.append("file", fileToProcess);
+    formData.append("furniture_name", furnitureName);
+
+    let res;
+    // 1. Try plan parser worker directly on port 8001
+    try {
+      res = await fetch(`${WORKER_API_BASE_URL}/furniture/transparent-background`, {
+        method: "POST",
+        body: formData,
+      });
+    } catch (workerErr) {
+      console.warn("Direct worker call failed, attempting API user proxy:", workerErr);
+    }
+
+    // 2. If direct worker call failed or was not reachable, fallback to api_user proxy
+    if (!res || !res.ok) {
+      const token = localStorage.getItem("soraplan_token");
+      const projId = activeFurnitureProject?.id || "default";
+      res = await fetch(`${API_BASE_URL}/projects/${projId}/furniture/transparent-background`, {
+        method: "POST",
+        headers: token ? { "Authorization": `Bearer ${token}` } : {},
+        body: formData,
+      });
+    }
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || errJson.title || `Server returned ${res.status}`);
+    }
+
+    const data = await res.json();
+    const dataUri = data.dataUri;
+    if (!dataUri) {
+      throw new Error("No image dataUri returned by transparent background agent.");
+    }
+
+    // Convert dataUri to Blob & File
+    const blob = dataUriToBlob(dataUri);
+    const baseName = (originalFurnitureFile?.name || "furniture").replace(/\.[^/.]+$/, "");
+    const newFileName = `${baseName}-transparent.png`;
+    const processedFile = new File([blob], newFileName, { type: "image/png" });
+
+    selectedFurnitureFile = processedFile;
+    hasTransparentBgApplied = true;
+
+    // Update preview card UI
+    if (furnitureMediaContainer) {
+      furnitureMediaContainer.classList.add("is-transparent");
+      furnitureMediaContainer.innerHTML = `
+        <img src="${dataUri}" alt="Furniture with transparent background" style="width: 100%; height: 100%; object-fit: contain; border-radius: var(--radius-sm);">
+      `;
+    }
+
+    if (furnitureFilename) {
+      furnitureFilename.textContent = newFileName;
+    }
+    if (furnitureFilesize) {
+      furnitureFilesize.textContent = formatBytes(processedFile.size);
+    }
+    if (furnitureTypeBadge) {
+      furnitureTypeBadge.textContent = "PNG";
+    }
+
+    // Add/show active badge
+    let activeBadge = document.getElementById("furniture-trans-active-badge");
+    if (!activeBadge && furniturePreviewCard) {
+      const previewMeta = furniturePreviewCard.querySelector(".preview-meta");
+      if (previewMeta) {
+        activeBadge = document.createElement("span");
+        activeBadge.id = "furniture-trans-active-badge";
+        activeBadge.className = "transparent-active-badge";
+        activeBadge.innerHTML = `✓ transparent background (gpt-6-sol)`;
+        previewMeta.appendChild(activeBadge);
+      }
+    } else if (activeBadge) {
+      activeBadge.style.display = "inline-flex";
+    }
+
+    showToast("🎉 Furniture transparent background generated using gpt-6-sol!", "success");
+
+  } catch (err) {
+    console.error("Transparent background failed:", err);
+    showToast(`AI Background Removal failed: ${err.message}`, "error");
+    if (furnitureTransparentBgCheckbox) {
+      furnitureTransparentBgCheckbox.checked = false;
+    }
+  } finally {
+    isProcessingTransparentBg = false;
+    if (btnSubmitFurniture) btnSubmitFurniture.disabled = false;
+    const overlay = document.getElementById("furniture-processing-overlay");
+    if (overlay) overlay.style.display = "none";
+  }
+}
+
+function setFurnitureProgressStep(stepEl, status, percent, message) {
+  if (stepEl) {
+    stepEl.classList.remove("active", "done");
+    if (status === "active") stepEl.classList.add("active");
+    if (status === "done") stepEl.classList.add("done");
+  }
+  if (furnitureBarFill) furnitureBarFill.style.width = `${percent}%`;
+  if (furnitureStatusPct) furnitureStatusPct.textContent = `${percent}%`;
+  if (furnitureStatusMsg) furnitureStatusMsg.textContent = message;
+}
+
+function resetFurnitureProgressSteps() {
+  [furnStepUrl, furnStepPut, furnStepConfirm].forEach((el) => {
+    if (el) el.classList.remove("active", "done");
+  });
+  if (furnitureBarFill) furnitureBarFill.style.width = "0%";
+  if (furnitureStatusPct) furnitureStatusPct.textContent = "0%";
+  if (furnitureStatusMsg) {
+    furnitureStatusMsg.textContent = "Initializing upload...";
+    furnitureStatusMsg.style.color = "var(--ink-muted)";
+  }
+}
+
+async function handleFurnitureUploadSubmit(e) {
+  e.preventDefault();
+  if (isUploadingFurniture) return;
+  if (!activeFurnitureProject) {
+    showToast("No active project selected.", "error");
+    return;
+  }
+  if (!selectedFurnitureFile) {
+    showToast("Please select a furniture photo image to upload.", "warning");
+    return;
+  }
+
+  // If transparent background is ticked but hasn't run yet, run it before uploading
+  if (furnitureTransparentBgCheckbox && furnitureTransparentBgCheckbox.checked && !hasTransparentBgApplied) {
+    await applyFurnitureTransparentBackground();
+    if (!hasTransparentBgApplied) {
+      return;
+    }
+  }
+
+  const token = localStorage.getItem("soraplan_token");
+  if (!token) {
+    showToast("Authentication session expired. Please sign in again.", "error");
+    return;
+  }
+
+  const furnitureName = (furnitureNameInput?.value || "").trim() || selectedFurnitureFile.name;
+  const furnitureType = furnitureTypeSelect?.value || "unknown";
+  const componentId = furnitureLinkSelect?.value || undefined;
+  const contentType = getNormalizedContentType(selectedFurnitureFile) || "image/jpeg";
+  const sizeBytes = selectedFurnitureFile.size;
+
+  isUploadingFurniture = true;
+  if (btnSubmitFurniture) btnSubmitFurniture.disabled = true;
+  if (furnitureSpinner) furnitureSpinner.style.display = "inline-block";
+  if (furnitureBtnText) furnitureBtnText.textContent = "Uploading to Cloud Storage...";
+  if (furnitureProgressWrapper) furnitureProgressWrapper.style.display = "block";
+  resetFurnitureProgressSteps();
+
+  try {
+    // -------------------------------------------------------------
+    // STEP 1: Request V4 Signed Upload URL
+    // -------------------------------------------------------------
+    setFurnitureProgressStep(furnStepUrl, "active", 25, "Step 1/3: Requesting V4 signed upload URL from Google Cloud Storage...");
+
+    const urlRes = await fetch(`${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/upload-url`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        fileName: selectedFurnitureFile.name,
+        contentType: contentType,
+        sizeBytes: sizeBytes,
+        furnitureName: furnitureName,
+        furnitureType: furnitureType,
+        componentId: componentId,
+      }),
+    });
+
+    const uploadInfo = await urlRes.json();
+    if (!urlRes.ok) {
+      throw new Error(uploadInfo.detail || uploadInfo.title || "Failed to get signed upload URL");
+    }
+
+    const { signedUploadUrl, uploadId } = uploadInfo;
+    if (!signedUploadUrl) {
+      throw new Error("No signedUploadUrl returned by server");
+    }
+
+    setFurnitureProgressStep(furnStepUrl, "done", 40, `✓ Signed URL obtained (Target: ${uploadInfo.bucket})`);
+
+    // -------------------------------------------------------------
+    // STEP 2: Direct PUT to Google Cloud Storage
+    // -------------------------------------------------------------
+    setFurnitureProgressStep(furnStepPut, "active", 45, "Step 2/3: Uploading photo directly to Google Cloud Storage (0%)...");
+
+    await uploadDirectToGCS(signedUploadUrl, selectedFurnitureFile, contentType, (percent) => {
+      const scaledPct = Math.round(45 + (percent * 0.40));
+      if (furnitureStatusPct) furnitureStatusPct.textContent = `${percent}%`;
+      if (furnitureBarFill) furnitureBarFill.style.width = `${scaledPct}%`;
+      if (furnitureStatusMsg) {
+        furnitureStatusMsg.textContent = `Step 2/3: Uploading directly to Cloud Storage (${percent}% of ${formatBytes(sizeBytes)})...`;
+      }
+    });
+
+    setFurnitureProgressStep(furnStepPut, "done", 85, "✓ Photo successfully stored in Google Cloud Storage!");
+
+    // -------------------------------------------------------------
+    // STEP 3: Confirm Upload with Backend & Register in Firestore
+    // -------------------------------------------------------------
+    setFurnitureProgressStep(furnStepConfirm, "active", 90, "Step 3/3: Registering furniture asset in metric scene graph...");
+
+    const isSystemFlag = Boolean(isCurrentUserAdmin() && furnitureSystemCheckbox && furnitureSystemCheckbox.checked);
+
+    const confirmRes = await fetch(`${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/confirm-upload`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        uploadId: uploadId,
+        fileName: selectedFurnitureFile.name,
+        contentType: contentType,
+        sizeBytes: sizeBytes,
+        furnitureName: furnitureName,
+        furnitureType: furnitureType,
+        componentId: componentId,
+        is_system: isSystemFlag,
+      }),
+    });
+
+    const confirmedItem = await confirmRes.json();
+    if (!confirmRes.ok) {
+      throw new Error(confirmedItem.detail || confirmedItem.title || "Failed to confirm furniture upload");
+    }
+
+    const meshyId = confirmedItem.meshyTaskId || confirmedItem.meshy_task_id;
+    if (meshyId) {
+      setFurnitureProgressStep(furnStepConfirm, "done", 100, `✓ Complete! 3D generation started with Meshy (Task: ${meshyId.slice(0, 12)}...).`);
+      showToast(`🎉 "${furnitureName}" uploaded! Meshy 3D generation started (Task: ${meshyId.slice(0, 8)}...)`, "success");
+    } else {
+      setFurnitureProgressStep(furnStepConfirm, "done", 100, "✓ Complete! Furniture photo linked and ready for 3D generation.");
+      showToast(`🎉 "${furnitureName}" uploaded and saved to Cloud Storage!`, "success");
+    }
+
+    // Reset Form fields
+    clearFurnitureSelectedFile();
+    if (furnitureNameInput) furnitureNameInput.value = "";
+    if (furnitureLinkSelect) furnitureLinkSelect.value = "";
+    if (furnitureSystemCheckbox) furnitureSystemCheckbox.checked = false;
+
+    // Refresh furniture gallery
+    await loadProjectFurniture(activeFurnitureProject.id);
+
+    // Refresh projects list in background to update furnitureCount
+    loadProjects();
+
+    setTimeout(() => {
+      if (furnitureProgressWrapper) furnitureProgressWrapper.style.display = "none";
+    }, 3000);
+
+  } catch (err) {
+    console.error("Furniture upload failed:", err);
+    showToast(`Upload failed: ${err.message}`, "error");
+    if (furnitureStatusMsg) {
+      furnitureStatusMsg.textContent = `Error: ${err.message}`;
+      furnitureStatusMsg.style.color = "var(--error)";
+    }
+  } finally {
+    isUploadingFurniture = false;
+    if (btnSubmitFurniture) btnSubmitFurniture.disabled = false;
+    if (furnitureSpinner) furnitureSpinner.style.display = "none";
+    if (furnitureBtnText) furnitureBtnText.textContent = "Upload Furniture Photo to Cloud Storage";
+  }
+}
+
+async function loadProjectFurniture(projectId) {
+  if (!projectId) return;
+  const token = localStorage.getItem("soraplan_token");
+  if (!token) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/furniture`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to load project furniture");
+    }
+
+    projectFurnitureList = await res.json();
+    renderProjectFurnitureList(projectFurnitureList);
+  } catch (err) {
+    console.warn("Could not load furniture list:", err);
+  }
+}
+
+function renderProjectFurnitureList(items) {
+  const count = items ? items.length : 0;
+  if (furnitureCountPill) {
+    furnitureCountPill.textContent = `${count} item${count === 1 ? "" : "s"}`;
+  }
+  if (topbarFurniturePill) {
+    topbarFurniturePill.textContent = count;
+  }
+  if (sidebarFurnitureBadge) {
+    sidebarFurnitureBadge.textContent = `${count} item${count === 1 ? "" : "s"}`;
+  }
+
+  if (!items || items.length === 0) {
+    if (furnitureEmptyState) furnitureEmptyState.style.display = "flex";
+    if (furnitureItemsGrid) {
+      furnitureItemsGrid.style.display = "none";
+      furnitureItemsGrid.innerHTML = "";
+    }
+    return;
+  }
+
+  if (furnitureEmptyState) furnitureEmptyState.style.display = "none";
+  if (furnitureItemsGrid) {
+    furnitureItemsGrid.style.display = "flex";
+    furnitureItemsGrid.innerHTML = "";
+
+    const isAdmin = isCurrentUserAdmin();
+
+    items.forEach((item) => {
+      const card = document.createElement("div");
+      card.className = "furniture-item-card";
+
+      const imgSrc = item.signedUrl || "floorplan_1.png";
+      const name = escapeHtml(item.furnitureName || item.fileName || "Custom Furniture");
+      const category = escapeHtml(item.furnitureType || "unknown");
+      const linkedComp = item.componentId ? escapeHtml(item.componentId) : null;
+      const gcsUri = escapeHtml(item.gcsUri || "");
+      const isSystem = Boolean(
+        item.is_system || 
+        item.isSystem || 
+        (item.gcsUri && item.gcsUri.startsWith("system://")) ||
+        (item.storagePath && item.storagePath.startsWith("assets/")) ||
+        (item.signedUrl && item.signedUrl.startsWith("assets/"))
+      );
+
+      // Find matching system catalog asset for pre-generated 3D GLB model
+      const sysMatch = isSystem ? systemAssetsList.find((s) =>
+        s.fileName === item.fileName ||
+        (s.name && s.name.toLowerCase() === (item.furnitureName || "").toLowerCase()) ||
+        (item.gcsUri && item.gcsUri.includes(s.fileName))
+      ) : null;
+
+      const meshyStatus = item.meshyStatus || item.meshy_status;
+      const meshyProgress = item.meshyProgress || item.meshy_progress || 0;
+      const modelUrls = item.modelUrls || item.model_urls;
+      const streamGlbUrl = activeFurnitureProject ? `${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/${item.id}/glb` : null;
+
+      let glbUrl = (modelUrls && modelUrls.glb) || (sysMatch && (sysMatch.glbUrl || sysMatch.glbPath || (sysMatch.modelUrls && sysMatch.modelUrls.glb)));
+      if (!glbUrl && isSystem) {
+        const pathForGlb = item.storagePath || (item.gcsUri ? item.gcsUri.replace(/^system:\/\//, "") : null) || item.signedUrl;
+        if (pathForGlb && pathForGlb.endsWith(".png")) {
+          glbUrl = pathForGlb.replace(/\.png$/i, ".glb");
+        }
+      }
+      if (!glbUrl) {
+        glbUrl = streamGlbUrl;
+      }
+
+      let statusBadge = "";
+      let action3dBtn = "";
+
+      // If system asset, 3D model is ALREADY generated — never generate again, show '3D View'
+      if (isSystem) {
+        statusBadge = `<span class="furniture-tag badge-3d-ready" style="color: #10b981; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1); cursor: pointer;" title="System 3D Model Ready (Click to View 3D)">✓ 3D Ready</span>`;
+        action3dBtn = `
+          <button type="button" class="btn-review-3d-furn btn-view-3d-furn" data-furn-id="${escapeHtml(item.id)}" data-glb-url="${escapeHtml(glbUrl || '')}" data-furn-name="${name}" title="Interactive 3D View">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            <span>3D View</span>
+          </button>
+        `;
+      } else if (meshyStatus === "SUCCEEDED" || item.status === "3d_ready") {
+        statusBadge = `<span class="furniture-tag badge-3d-ready" style="color: #10b981; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1); cursor: pointer;" title="Click to launch interactive 3D View">✓ 3D Ready</span>`;
+        if (glbUrl) {
+          action3dBtn = `
+            <button type="button" class="btn-review-3d-furn btn-view-3d-furn" data-furn-id="${escapeHtml(item.id)}" data-glb-url="${escapeHtml(glbUrl)}" data-furn-name="${name}" title="Interactive 3D View">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+              <span>3D View</span>
+            </button>
+          `;
+        }
+      } else if (meshyStatus === "PENDING" || meshyStatus === "IN_PROGRESS" || item.status === "generating_3d") {
+        statusBadge = `<span class="furniture-tag" style="color: #0ea5e9; border-color: rgba(14,165,233,0.3); background: rgba(14,165,233,0.1);">🔄 3D Generating (${meshyProgress}%)</span>`;
+        action3dBtn = `
+          <button type="button" class="btn-check-3d-status" data-furn-id="${escapeHtml(item.id)}" title="Check Meshy 3D generation progress">
+            <span>🔄 Check 3D</span>
+          </button>
+        `;
+      } else if (meshyStatus === "FAILED" || item.status === "failed_3d") {
+        statusBadge = `<span class="furniture-tag" style="color: #ef4444; border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.1);">⚠️ 3D Failed</span>`;
+        action3dBtn = `
+          <button type="button" class="btn-retry-3d" data-furn-id="${escapeHtml(item.id)}" title="Retry Meshy 3D generation">
+            <span>⚡ Retry 3D</span>
+          </button>
+        `;
+      } else {
+        statusBadge = `<span class="furniture-tag" style="color: var(--ink-subtle); border-color: var(--border);">Uploaded</span>`;
+        action3dBtn = `
+          <button type="button" class="btn-generate-3d" data-furn-id="${escapeHtml(item.id)}" title="Generate 3D Model with Meshy">
+            <span>⚡ Generate 3D</span>
+          </button>
+        `;
+      }
+
+      card.innerHTML = `
+        <img src="${imgSrc}" alt="${name}" class="furniture-item-thumb" title="Click to view original photo">
+        <div class="furniture-item-info">
+          <div>
+            <div class="furniture-item-title" title="${name}">${name}</div>
+            <div class="furniture-item-badges">
+              <span class="furniture-tag">${category}</span>
+              ${linkedComp ? `<span class="furniture-link-tag">📍 Plan: ${linkedComp}</span>` : ""}
+              ${statusBadge}
+              <span class="furniture-tag badge-system-item" id="furn-sys-badge-${escapeHtml(item.id)}" style="${isSystem ? '' : 'display: none;'}" title="Belongs to System Catalog">★ System Asset</span>
+            </div>
+            <div class="furniture-gcs-badge" title="${gcsUri}">${gcsUri}</div>
+          </div>
+          ${isAdmin ? `
+            <div class="furniture-admin-row">
+              <label class="furniture-admin-system-label" for="furn-sys-cb-${escapeHtml(item.id)}" title="Tick which furniture belongs to system">
+                <input 
+                  type="checkbox" 
+                  class="furniture-admin-system-cb" 
+                  id="furn-sys-cb-${escapeHtml(item.id)}" 
+                  data-furn-id="${escapeHtml(item.id)}" 
+                  data-furn-name="${name}"
+                  ${isSystem ? "checked" : ""}
+                >
+                <span class="admin-cb-text">Belongs to System</span>
+                <span class="admin-role-pill">Admin Only</span>
+              </label>
+            </div>
+          ` : ""}
+          <div class="furniture-item-actions">
+            <a href="${imgSrc}" target="_blank" rel="noopener noreferrer" class="btn-view-furn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+              <span>View</span>
+            </a>
+            ${action3dBtn}
+            <button type="button" class="btn-delete-furn" data-furn-id="${escapeHtml(item.id)}" data-furn-name="${name}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              <span>Delete</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      const thumb = card.querySelector(".furniture-item-thumb");
+      thumb.addEventListener("click", () => {
+        window.open(imgSrc, "_blank");
+      });
+
+      const review3dBtn = card.querySelector(".btn-review-3d-furn");
+      if (review3dBtn) {
+        review3dBtn.addEventListener("click", () => {
+          open3dReviewModal({
+            name: item.furnitureName || item.fileName || "Custom Furniture",
+            category: item.furnitureType || "unknown",
+            glbUrl: glbUrl,
+            modelUrls: (sysMatch && sysMatch.modelUrls) || modelUrls || { glb: glbUrl },
+            imgSrc: imgSrc,
+            furnitureId: item.id,
+            projectId: activeFurnitureProject ? activeFurnitureProject.id : null,
+            linkedComp: linkedComp,
+            gcsUri: gcsUri,
+          });
+        });
+      }
+
+      const readyBadge = card.querySelector(".badge-3d-ready");
+      if (readyBadge && glbUrl) {
+        readyBadge.addEventListener("click", () => {
+          open3dReviewModal({
+            name: item.furnitureName || item.fileName || "Custom Furniture",
+            category: item.furnitureType || "unknown",
+            glbUrl: glbUrl,
+            modelUrls: (sysMatch && sysMatch.modelUrls) || modelUrls || { glb: glbUrl },
+            imgSrc: imgSrc,
+            furnitureId: item.id,
+            projectId: activeFurnitureProject ? activeFurnitureProject.id : null,
+            linkedComp: linkedComp,
+            gcsUri: gcsUri,
+          });
+        });
+      }
+
+      const check3dBtn = card.querySelector(".btn-check-3d-status");
+      if (check3dBtn) {
+        check3dBtn.addEventListener("click", () => {
+          handleCheck3dStatus(item.id);
+        });
+      }
+
+      const retry3dBtn = card.querySelector(".btn-retry-3d");
+      if (retry3dBtn) {
+        retry3dBtn.addEventListener("click", () => {
+          handleGenerate3d(item.id);
+        });
+      }
+
+      const gen3dBtn = card.querySelector(".btn-generate-3d");
+      if (gen3dBtn) {
+        gen3dBtn.addEventListener("click", () => {
+          handleGenerate3d(item.id);
+        });
+      }
+
+      const delBtn = card.querySelector(".btn-delete-furn");
+      delBtn.addEventListener("click", () => {
+        handleDeleteFurniture(item.id, name);
+      });
+
+      if (isAdmin) {
+        const sysCheckbox = card.querySelector(".furniture-admin-system-cb");
+        if (sysCheckbox) {
+          sysCheckbox.addEventListener("change", async (e) => {
+            const isChecked = e.target.checked;
+            const furnId = sysCheckbox.dataset.furnId;
+            const furnName = sysCheckbox.dataset.furnName;
+            await handleToggleFurnitureSystem(furnId, furnName, isChecked, sysCheckbox, card, item);
+          });
+        }
+      }
+
+      furnitureItemsGrid.appendChild(card);
+    });
+  }
+}
+
+async function handleToggleFurnitureSystem(furnitureId, furnitureName, isSystem, checkbox, card, item) {
+  if (!activeFurnitureProject) return;
+  const token = localStorage.getItem("soraplan_token");
+  if (!token) {
+    showToast("Authentication session expired. Please sign in again.", "error");
+    checkbox.checked = !isSystem;
+    return;
+  }
+
+  checkbox.disabled = true;
+  try {
+    showToast(`Updating system status for "${furnitureName}"...`, "info");
+    const res = await fetch(`${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/${furnitureId}/system`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ is_system: isSystem }),
+    });
+
+    const resData = await res.json();
+    if (!res.ok) {
+      throw new Error(resData.detail || resData.title || "Failed to update system status");
+    }
+
+    item.is_system = isSystem;
+    item.isSystem = isSystem;
+
+    // Dynamically show or hide the system badge
+    const badge = card.querySelector(`#furn-sys-badge-${furnitureId}`);
+    if (badge) {
+      badge.style.display = isSystem ? "inline-flex" : "none";
+    }
+
+    showToast(
+      isSystem
+        ? `✓ "${furnitureName}" marked as belonging to system.`
+        : `✓ "${furnitureName}" unmarked from system.`,
+      "success"
+    );
+  } catch (err) {
+    console.error("Failed to update furniture system status:", err);
+    checkbox.checked = !isSystem;
+    showToast(`Could not update system status: ${err.message}`, "error");
+  } finally {
+    checkbox.disabled = false;
+  }
+}
+
+async function handleDeleteFurniture(furnitureId, furnitureName) {
+  if (!activeFurnitureProject) return;
+  const confirmDel = window.confirm(`Are you sure you want to delete "${furnitureName}" from Cloud Storage?`);
+  if (!confirmDel) return;
+
+  const token = localStorage.getItem("soraplan_token");
+  try {
+    showToast(`Deleting "${furnitureName}"...`, "info");
+    const res = await fetch(`${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/${furnitureId}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to delete furniture from server");
+    }
+
+    showToast(`"${furnitureName}" deleted from Cloud Storage.`, "success");
+    await loadProjectFurniture(activeFurnitureProject.id);
+    loadProjects();
+    loadUserAssets();
+  } catch (err) {
+    showToast(`Error deleting furniture: ${err.message}`, "error");
+  }
+}
+
+async function handleCheck3dStatus(furnitureId) {
+  if (!activeFurnitureProject) return;
+  const token = localStorage.getItem("soraplan_token");
+  try {
+    showToast("Checking 3D status with Meshy...", "info");
+    const res = await fetch(`${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/${furnitureId}/3d-status`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Failed to check 3D status");
+    const updated = await res.json();
+    const st = updated.meshyStatus || updated.meshy_status;
+    if (st === "SUCCEEDED" || updated.status === "3d_ready") {
+      showToast("🎉 Meshy 3D model generation complete! GLB asset is ready.", "success");
+    } else if (st === "FAILED") {
+      showToast("Meshy 3D generation failed.", "error");
+    } else {
+      showToast(`Meshy 3D generation in progress (${updated.meshyProgress || updated.meshy_progress || 0}%).`, "info");
+    }
+    await loadProjectFurniture(activeFurnitureProject.id);
+  } catch (err) {
+    showToast(`Error checking 3D status: ${err.message}`, "error");
+  }
+}
+
+async function handleGenerate3d(furnitureId) {
+  if (!activeFurnitureProject) return;
+
+  // System asset already has pre-generated 3D model — do not generate again
+  const furnItem = (projectFurnitureList || []).find((f) => f.id === furnitureId);
+  const isSystem = furnItem && Boolean(
+    furnItem.is_system ||
+    furnItem.isSystem ||
+    (furnItem.gcsUri && furnItem.gcsUri.startsWith("system://")) ||
+    (furnItem.storagePath && furnItem.storagePath.startsWith("assets/"))
+  );
+  if (isSystem) {
+    showToast("✨ This system asset already has an optimized 3D model ready.", "info");
+    const sysMatch = systemAssetsList.find((s) =>
+      s.fileName === furnItem.fileName ||
+      (s.name && s.name.toLowerCase() === (furnItem.furnitureName || "").toLowerCase())
+    );
+    const glbUrl = (sysMatch && (sysMatch.glbUrl || sysMatch.glbPath || (sysMatch.modelUrls && sysMatch.modelUrls.glb))) ||
+      (furnItem.storagePath && furnItem.storagePath.replace(/\.png$/i, ".glb")) ||
+      `${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/${furnitureId}/glb`;
+
+    open3dReviewModal({
+      name: furnItem.furnitureName || furnItem.fileName || "System Furniture",
+      category: furnItem.furnitureType || "unknown",
+      glbUrl: glbUrl,
+      modelUrls: (sysMatch && sysMatch.modelUrls) || { glb: glbUrl },
+      imgSrc: furnItem.signedUrl || "assets/sofa.jpg",
+      furnitureId: furnItem.id,
+      projectId: activeFurnitureProject.id,
+      linkedComp: furnItem.componentId,
+      gcsUri: furnItem.gcsUri,
+    });
+    return;
+  }
+
+  const token = localStorage.getItem("soraplan_token");
+  try {
+    showToast("Submitting Image-to-3D task to Meshy...", "info");
+    const res = await fetch(`${API_BASE_URL}/projects/${activeFurnitureProject.id}/furniture/${furnitureId}/generate-3d`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || errData.title || "Failed to trigger 3D generation");
+    }
+    const updated = await res.json();
+    const taskId = updated.meshyTaskId || updated.meshy_task_id;
+    showToast(`🚀 Meshy 3D task created: ${taskId ? taskId.slice(0, 10) + "..." : "in progress"}`, "success");
+    await loadProjectFurniture(activeFurnitureProject.id);
+  } catch (err) {
+    showToast(`Error triggering 3D: ${err.message}`, "error");
+  }
+}
+
+// -------------------------------------------------------------
+// 14. 3D GLB INTERACTIVE REVIEW MODAL (Google model-viewer)
+// -------------------------------------------------------------
+
+let current3dReviewData = null;
+let currentBgThemeIdx = 0;
+
+const REVIEW_BG_THEMES = [
+  { name: "Studio Dark", bg: "radial-gradient(circle at 50% 35%, #182632 0%, #0a0f14 100%)" },
+  { name: "Blueprint Grid", bg: "radial-gradient(circle at 50% 50%, rgba(59, 164, 227, 0.08) 0%, #070c10 100%), repeating-linear-gradient(0deg, rgba(79, 165, 216, 0.06) 0px, rgba(79, 165, 216, 0.06) 1px, transparent 1px, transparent 24px), repeating-linear-gradient(90deg, rgba(79, 165, 216, 0.06) 0px, rgba(79, 165, 216, 0.06) 1px, transparent 1px, transparent 24px)" },
+  { name: "Neutral Gray", bg: "#1f2937" },
+  { name: "Studio Light", bg: "#e2e8f0" },
+];
+
+function setup3dReviewListeners() {
+  const modal = document.getElementById("modal-3d-review");
+  const btnClose = document.getElementById("btn-close-3d-review");
+  const btnDone = document.getElementById("btn-review-3d-done");
+  const btnToggleRotate = document.getElementById("btn-3d-toggle-rotate");
+  const btnResetCam = document.getElementById("btn-3d-reset-cam");
+  const btnToggleBg = document.getElementById("btn-3d-toggle-bg");
+  const btnRetry = document.getElementById("btn-review-3d-retry");
+  const modelViewer = document.getElementById("review-3d-model-viewer");
+  const viewportContainer = document.getElementById("review-3d-viewport-container");
+  const labelRotate = document.getElementById("label-toggle-rotate");
+  const labelBg = document.getElementById("label-bg-mode");
+
+  if (btnClose) btnClose.addEventListener("click", close3dReviewModal);
+  if (btnDone) btnDone.addEventListener("click", close3dReviewModal);
+
+  if (modal) {
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        close3dReviewModal();
+      }
+    });
+  }
+
+  if (btnToggleRotate && modelViewer) {
+    btnToggleRotate.addEventListener("click", () => {
+      const isRotating = modelViewer.hasAttribute("auto-rotate");
+      if (isRotating) {
+        modelViewer.removeAttribute("auto-rotate");
+        btnToggleRotate.classList.remove("active");
+        if (labelRotate) labelRotate.textContent = "Rotate Paused";
+      } else {
+        modelViewer.setAttribute("auto-rotate", "");
+        btnToggleRotate.classList.add("active");
+        if (labelRotate) labelRotate.textContent = "Auto-Rotate";
+      }
+    });
+  }
+
+  if (btnResetCam && modelViewer) {
+    btnResetCam.addEventListener("click", () => {
+      modelViewer.cameraOrbit = "40deg 75deg auto";
+      modelViewer.cameraTarget = "auto auto auto";
+      modelViewer.fieldOfView = "auto";
+    });
+  }
+
+  if (btnToggleBg && viewportContainer) {
+    btnToggleBg.addEventListener("click", () => {
+      currentBgThemeIdx = (currentBgThemeIdx + 1) % REVIEW_BG_THEMES.length;
+      const theme = REVIEW_BG_THEMES[currentBgThemeIdx];
+      viewportContainer.style.background = theme.bg;
+      if (labelBg) labelBg.textContent = theme.name;
+    });
+  }
+
+  if (btnRetry) {
+    btnRetry.addEventListener("click", () => {
+      if (current3dReviewData) {
+        open3dReviewModal(current3dReviewData);
+      }
+    });
+  }
+}
+
+open3dReviewModal._loadCounter = 0;
+
+function open3dReviewModal(data) {
+  current3dReviewData = data;
+  const modal = document.getElementById("modal-3d-review");
+  const titleEl = document.getElementById("review-3d-title-text");
+  const subtitleEl = document.getElementById("modal-3d-subtitle");
+  const catBadge = document.getElementById("review-3d-category-badge");
+  const modelViewer = document.getElementById("review-3d-model-viewer");
+  const loadingOverlay = document.getElementById("review-3d-loading-overlay");
+  const progressFill = document.getElementById("review-3d-progress-fill");
+  const errorOverlay = document.getElementById("review-3d-error-overlay");
+  const errorDesc = document.getElementById("review-3d-error-desc");
+  const fallbackLink = document.getElementById("btn-review-3d-fallback-link");
+  const downloadGlbBtn = document.getElementById("btn-review-3d-download-glb");
+
+  if (!modal || !modelViewer) return;
+
+  const furnName = data.name || "3D Furniture Model";
+  const category = (data.category || "furniture").replace(/_/g, " ");
+
+  if (titleEl) titleEl.textContent = `${furnName} (3D Review)`;
+  if (subtitleEl) {
+    subtitleEl.textContent = `Interactive real-world 3D model generated by Meshy AI${data.linkedComp ? ` • Linked to plan: ${data.linkedComp}` : ""}. Ready for SoraPlan 3D home scene graph.`;
+  }
+  if (catBadge) {
+    catBadge.textContent = `Category: ${category}`;
+  }
+
+  // Clear previous blob URL if any
+  if (modelViewer._currentBlobUrl) {
+    try {
+      URL.revokeObjectURL(modelViewer._currentBlobUrl);
+    } catch (_) {}
+    modelViewer._currentBlobUrl = null;
+  }
+
+  const projId = data.projectId || (activeFurnitureProject ? activeFurnitureProject.id : null);
+  const streamEndpoint = projId && data.furnitureId ? `${API_BASE_URL}/projects/${projId}/furniture/${data.furnitureId}/glb` : null;
+
+  // Prefer direct glbUrl if available (e.g. assets/... local static or direct meshy URL), then streamEndpoint
+  const candidateUrls = [];
+  if (data.glbUrl) candidateUrls.push(data.glbUrl);
+  if (data.modelUrls && data.modelUrls.glb && !candidateUrls.includes(data.modelUrls.glb)) {
+    candidateUrls.push(data.modelUrls.glb);
+  }
+  if (streamEndpoint && !candidateUrls.includes(streamEndpoint)) candidateUrls.push(streamEndpoint);
+
+  const initialDownloadUrl = streamEndpoint || data.glbUrl || "#";
+  if (downloadGlbBtn) {
+    downloadGlbBtn.href = initialDownloadUrl;
+    downloadGlbBtn.download = `${furnName.replace(/\s+/g, "_")}.glb`;
+  }
+  if (fallbackLink) {
+    fallbackLink.href = initialDownloadUrl;
+  }
+
+  // Reset overlays
+  if (loadingOverlay) {
+    loadingOverlay.style.display = "flex";
+    loadingOverlay.style.opacity = "1";
+    loadingOverlay.style.visibility = "visible";
+  }
+  if (progressFill) progressFill.style.width = "15%";
+  if (errorOverlay) errorOverlay.style.display = "none";
+
+  if (candidateUrls.length === 0) {
+    if (loadingOverlay) loadingOverlay.style.display = "none";
+    if (errorOverlay) {
+      errorOverlay.style.display = "flex";
+      if (errorDesc) {
+        errorDesc.textContent = "3D GLB model URL is not available. Please check 3D status or retry generation.";
+      }
+    }
+    return;
+  }
+
+  modal.style.display = "flex";
+  document.body.classList.add("modal-open");
+
+  const activeLoadId = ++open3dReviewModal._loadCounter;
+
+  async function loadGlbWithStreaming() {
+    let response = null;
+
+    for (const url of candidateUrls) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          response = res;
+          break;
+        }
+      } catch (err) {
+        console.warn("Failed fetching GLB from candidate URL:", url, err);
+      }
+    }
+
+    if (!response || activeLoadId !== open3dReviewModal._loadCounter) {
+      if (activeLoadId === open3dReviewModal._loadCounter) {
+        console.error("Could not fetch GLB from any candidate URL:", candidateUrls);
+        if (loadingOverlay) loadingOverlay.style.display = "none";
+        if (errorOverlay) {
+          errorOverlay.style.display = "flex";
+          if (errorDesc) {
+            errorDesc.textContent = "Could not download 3D model asset from server. Please retry or download directly.";
+          }
+        }
+      }
+      return;
+    }
+
+    const contentLength = response.headers.get("content-length");
+    const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+    const reader = response.body.getReader();
+    let receivedBytes = 0;
+    const chunks = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (activeLoadId !== open3dReviewModal._loadCounter) return;
+      chunks.push(value);
+      receivedBytes += value.length;
+
+      if (totalBytes > 0 && progressFill) {
+        const pct = Math.min(95, Math.max(15, Math.round((receivedBytes / totalBytes) * 100)));
+        progressFill.style.width = `${pct}%`;
+      }
+    }
+
+    if (activeLoadId !== open3dReviewModal._loadCounter) return;
+
+    const blob = new Blob(chunks, { type: "model/gltf-binary" });
+    const blobUrl = URL.createObjectURL(blob);
+    modelViewer._currentBlobUrl = blobUrl;
+
+    // Both the 3D Review window and the Download GLB button use the EXACT same file
+    if (downloadGlbBtn) {
+      downloadGlbBtn.href = blobUrl;
+      downloadGlbBtn.download = `${furnName.replace(/\s+/g, "_")}.glb`;
+    }
+    if (fallbackLink) {
+      fallbackLink.href = blobUrl;
+    }
+
+    const onLoad = () => {
+      if (progressFill) progressFill.style.width = "100%";
+      setTimeout(() => {
+        if (loadingOverlay) {
+          loadingOverlay.style.opacity = "0";
+          setTimeout(() => {
+            loadingOverlay.style.display = "none";
+          }, 250);
+        }
+      }, 150);
+    };
+
+    const onError = (e) => {
+      console.error("model-viewer failed to render GLB blob:", e);
+      if (loadingOverlay) loadingOverlay.style.display = "none";
+      if (errorOverlay) {
+        errorOverlay.style.display = "flex";
+        if (errorDesc) {
+          errorDesc.textContent = "Could not render the generated 3D asset in the viewport. You can open or download the GLB directly.";
+        }
+      }
+    };
+
+    if (modelViewer._reviewLoadHandler) {
+      modelViewer.removeEventListener("load", modelViewer._reviewLoadHandler);
+    }
+    if (modelViewer._reviewErrorHandler) {
+      modelViewer.removeEventListener("error", modelViewer._reviewErrorHandler);
+    }
+
+    modelViewer._reviewLoadHandler = onLoad;
+    modelViewer._reviewErrorHandler = onError;
+    modelViewer.addEventListener("load", onLoad, { once: true });
+    modelViewer.addEventListener("error", onError, { once: true });
+
+    // Set src to the local blob URL: zero CORS restrictions, 100% reliable
+    modelViewer.src = blobUrl;
+  }
+
+  loadGlbWithStreaming();
+}
+
+function close3dReviewModal() {
+  open3dReviewModal._loadCounter = (open3dReviewModal._loadCounter || 0) + 1;
+  const modal = document.getElementById("modal-3d-review");
+  const modelViewer = document.getElementById("review-3d-model-viewer");
+  if (modal) {
+    modal.style.display = "none";
+  }
+  if (modelViewer) {
+    try {
+      if (modelViewer.pause) modelViewer.pause();
+    } catch (_) {}
+    if (modelViewer._currentBlobUrl) {
+      try {
+        URL.revokeObjectURL(modelViewer._currentBlobUrl);
+      } catch (_) {}
+      modelViewer._currentBlobUrl = null;
+    }
+    modelViewer.src = "";
+  }
+
+  const furnModal = document.getElementById("furniture-modal");
+  if (!furnModal || furnModal.style.display === "none") {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+const EMBEDDED_SYSTEM_ASSETS = [
+  {
+    "id": "sys_industrial_In_TV_stand",
+    "style": "Industrial",
+    "fileName": "In_TV_stand.png",
+    "name": "Industrial Tv Stand",
+    "category": "TV Stand",
+    "imagePath": "assets/Industrial/In_TV_stand.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_bath",
+    "style": "Industrial",
+    "fileName": "In_bath.png",
+    "name": "Industrial Bath",
+    "category": "Bathtub",
+    "imagePath": "assets/Industrial/In_bath.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_bed_1",
+    "style": "Industrial",
+    "fileName": "In_bed_1.png",
+    "name": "Industrial Bed 1",
+    "category": "Bed",
+    "imagePath": "assets/Industrial/In_bed_1.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_bed_2",
+    "style": "Industrial",
+    "fileName": "In_bed_2.png",
+    "name": "Industrial Bed 2",
+    "category": "Bed",
+    "imagePath": "assets/Industrial/In_bed_2.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_bed_master",
+    "style": "Industrial",
+    "fileName": "In_bed_master.png",
+    "name": "Industrial Bed Master",
+    "category": "Bed",
+    "imagePath": "assets/Industrial/In_bed_master.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_closet_storage",
+    "style": "Industrial",
+    "fileName": "In_closet_storage.png",
+    "name": "Industrial Closet Storage",
+    "category": "Wardrobe & Storage",
+    "imagePath": "assets/Industrial/In_closet_storage.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_fridge",
+    "style": "Industrial",
+    "fileName": "In_fridge.png",
+    "name": "Industrial Fridge",
+    "category": "Kitchen Appliance",
+    "imagePath": "assets/Industrial/In_fridge.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_kitchen_chair_1",
+    "style": "Industrial",
+    "fileName": "In_kitchen_chair_1.png",
+    "name": "Industrial Kitchen Chair 1",
+    "category": "Dining Chair",
+    "imagePath": "assets/Industrial/In_kitchen_chair_1.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_kitchen_chair_2",
+    "style": "Industrial",
+    "fileName": "In_kitchen_chair_2.png",
+    "name": "Industrial Kitchen Chair 2",
+    "category": "Dining Chair",
+    "imagePath": "assets/Industrial/In_kitchen_chair_2.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_kitchen_counter",
+    "style": "Industrial",
+    "fileName": "In_kitchen_counter.png",
+    "name": "Industrial Kitchen Counter",
+    "category": "Kitchen Counter",
+    "imagePath": "assets/Industrial/In_kitchen_counter.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_kitchen_sink",
+    "style": "Industrial",
+    "fileName": "In_kitchen_sink.png",
+    "name": "Industrial Kitchen Sink",
+    "category": "Kitchen Sink",
+    "imagePath": "assets/Industrial/In_kitchen_sink.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_kitchen_table_1",
+    "style": "Industrial",
+    "fileName": "In_kitchen_table_1.png",
+    "name": "Industrial Kitchen Table 1",
+    "category": "Dining Table",
+    "imagePath": "assets/Industrial/In_kitchen_table_1.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_kitchen_table_2",
+    "style": "Industrial",
+    "fileName": "In_kitchen_table_2.png",
+    "name": "Industrial Kitchen Table 2",
+    "category": "Dining Table",
+    "imagePath": "assets/Industrial/In_kitchen_table_2.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_lightstand",
+    "style": "Industrial",
+    "fileName": "In_lightstand.png",
+    "name": "Industrial Lightstand",
+    "category": "Lighting",
+    "imagePath": "assets/Industrial/In_lightstand.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_living_chair",
+    "style": "Industrial",
+    "fileName": "In_living_chair.png",
+    "name": "Industrial Living Chair",
+    "category": "Armchair",
+    "imagePath": "assets/Industrial/In_living_chair.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_living_table",
+    "style": "Industrial",
+    "fileName": "In_living_table.png",
+    "name": "Industrial Living Table",
+    "category": "Coffee Table",
+    "imagePath": "assets/Industrial/In_living_table.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_sofa",
+    "style": "Industrial",
+    "fileName": "In_sofa.png",
+    "name": "Industrial Sofa",
+    "category": "Sofa",
+    "imagePath": "assets/Industrial/In_sofa.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_stool",
+    "style": "Industrial",
+    "fileName": "In_stool.png",
+    "name": "Industrial Stool",
+    "category": "Stool",
+    "imagePath": "assets/Industrial/In_stool.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_toilet",
+    "style": "Industrial",
+    "fileName": "In_toilet.png",
+    "name": "Industrial Toilet",
+    "category": "Toilet",
+    "imagePath": "assets/Industrial/In_toilet.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_toilet_sink",
+    "style": "Industrial",
+    "fileName": "In_toilet_sink.png",
+    "name": "Industrial Toilet Sink",
+    "category": "Bathroom Vanity",
+    "imagePath": "assets/Industrial/In_toilet_sink.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_industrial_In_washing_dryer",
+    "style": "Industrial",
+    "fileName": "In_washing_dryer.png",
+    "name": "Industrial Washing Dryer",
+    "category": "Appliance",
+    "imagePath": "assets/Industrial/In_washing_dryer.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_TV_stand",
+    "style": "Japandi",
+    "fileName": "Ja_TV_stand.png",
+    "name": "Japandi Tv Stand",
+    "category": "TV Stand",
+    "imagePath": "assets/Japandi/Ja_TV_stand.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_bath",
+    "style": "Japandi",
+    "fileName": "Ja_bath.png",
+    "name": "Japandi Bath",
+    "category": "Bathtub",
+    "imagePath": "assets/Japandi/Ja_bath.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_bed_1",
+    "style": "Japandi",
+    "fileName": "Ja_bed_1.png",
+    "name": "Japandi Bed 1",
+    "category": "Bed",
+    "imagePath": "assets/Japandi/Ja_bed_1.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_bed_2",
+    "style": "Japandi",
+    "fileName": "Ja_bed_2.png",
+    "name": "Japandi Bed 2",
+    "category": "Bed",
+    "imagePath": "assets/Japandi/Ja_bed_2.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_closet_storage",
+    "style": "Japandi",
+    "fileName": "Ja_closet_storage.png",
+    "name": "Japandi Closet Storage",
+    "category": "Wardrobe & Storage",
+    "imagePath": "assets/Japandi/Ja_closet_storage.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_fridge",
+    "style": "Japandi",
+    "fileName": "Ja_fridge.png",
+    "name": "Japandi Fridge",
+    "category": "Kitchen Appliance",
+    "imagePath": "assets/Japandi/Ja_fridge.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_bench",
+    "style": "Japandi",
+    "fileName": "Ja_kitchen_bench.png",
+    "name": "Japandi Kitchen Bench",
+    "category": "Dining Bench",
+    "imagePath": "assets/Japandi/Ja_kitchen_bench.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_chair",
+    "style": "Japandi",
+    "fileName": "Ja_kitchen_chair.png",
+    "name": "Japandi Kitchen Chair",
+    "category": "Dining Chair",
+    "imagePath": "assets/Japandi/Ja_kitchen_chair.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_counter",
+    "style": "Japandi",
+    "fileName": "Ja_kitchen_counter.png",
+    "name": "Japandi Kitchen Counter",
+    "category": "Kitchen Counter",
+    "imagePath": "assets/Japandi/Ja_kitchen_counter.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_sink",
+    "style": "Japandi",
+    "fileName": "Ja_kitchen_sink.png",
+    "name": "Japandi Kitchen Sink",
+    "category": "Kitchen Sink",
+    "imagePath": "assets/Japandi/Ja_kitchen_sink.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_table",
+    "style": "Japandi",
+    "fileName": "Ja_kitchen_table.png",
+    "name": "Japandi Kitchen Table",
+    "category": "Dining Table",
+    "imagePath": "assets/Japandi/Ja_kitchen_table.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_table_2",
+    "style": "Japandi",
+    "fileName": "Ja_kitchen_table_2.png",
+    "name": "Japandi Kitchen Table 2",
+    "category": "Dining Table",
+    "imagePath": "assets/Japandi/Ja_kitchen_table_2.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_living_chair",
+    "style": "Japandi",
+    "fileName": "Ja_living_chair.png",
+    "name": "Japandi Living Chair",
+    "category": "Armchair",
+    "imagePath": "assets/Japandi/Ja_living_chair.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_living_table",
+    "style": "Japandi",
+    "fileName": "Ja_living_table.png",
+    "name": "Japandi Living Table",
+    "category": "Coffee Table",
+    "imagePath": "assets/Japandi/Ja_living_table.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_master_bed",
+    "style": "Japandi",
+    "fileName": "Ja_master_bed.png",
+    "name": "Japandi Master Bed",
+    "category": "Bed",
+    "imagePath": "assets/Japandi/Ja_master_bed.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_nightstand",
+    "style": "Japandi",
+    "fileName": "Ja_nightstand.png",
+    "name": "Japandi Nightstand",
+    "category": "Nightstand",
+    "imagePath": "assets/Japandi/Ja_nightstand.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_sink",
+    "style": "Japandi",
+    "fileName": "Ja_sink.png",
+    "name": "Japandi Sink",
+    "category": "Sink",
+    "imagePath": "assets/Japandi/Ja_sink.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_sofa",
+    "style": "Japandi",
+    "fileName": "Ja_sofa.png",
+    "name": "Japandi Sofa",
+    "category": "Sofa",
+    "imagePath": "assets/Japandi/Ja_sofa.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_toilet",
+    "style": "Japandi",
+    "fileName": "Ja_toilet.png",
+    "name": "Japandi Toilet",
+    "category": "Toilet",
+    "imagePath": "assets/Japandi/Ja_toilet.png",
+    "isSystem": true
+  },
+  {
+    "id": "sys_japandi_Ja_washing_dryer",
+    "style": "Japandi",
+    "fileName": "Ja_washing_dryer.png",
+    "name": "Japandi Washing Dryer",
+    "category": "Appliance",
+    "imagePath": "assets/Japandi/Ja_washing_dryer.png",
+    "isSystem": true
+  }
+];
+
+// =============================================================
+// STEP ③ ASSETS MODULE: SYSTEM ASSETS & YOUR ASSETS
+// =============================================================
+
+let systemAssetsList = [...EMBEDDED_SYSTEM_ASSETS];
+let userAssetsList = [];
+let currentSystemStyle = "all";
+let currentSystemCategory = "all";
+let systemSearchQuery = "";
+let userSearchQuery = "";
+let activeAssetSubtab = "system";
+let assetTargetForProject = null;
+let selectedProjectIdForAsset = null;
+
+async function initAssetsCatalog() {
+  // 1. Fetch system_assets_data.json
+  try {
+    const res = await fetch("system_assets_data.json");
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        systemAssetsList = data;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not load system_assets_data.json:", err);
+  }
+
+  // 2. Sub-items Switcher: System Assets vs Your Assets
+  const tabSystem = document.getElementById("tab-system-assets");
+  const tabYour = document.getElementById("tab-your-assets");
+  const viewSystem = document.getElementById("view-system-assets");
+  const viewYour = document.getElementById("view-your-assets");
+
+  if (tabSystem && tabYour && viewSystem && viewYour) {
+    tabSystem.addEventListener("click", () => {
+      activeAssetSubtab = "system";
+      tabSystem.classList.add("active");
+      tabSystem.setAttribute("aria-selected", "true");
+      tabYour.classList.remove("active");
+      tabYour.setAttribute("aria-selected", "false");
+      viewSystem.style.display = "flex";
+      viewYour.style.display = "none";
+      renderSystemAssets();
+    });
+
+    tabYour.addEventListener("click", () => {
+      activeAssetSubtab = "user";
+      tabYour.classList.add("active");
+      tabYour.setAttribute("aria-selected", "true");
+      tabSystem.classList.remove("active");
+      tabSystem.setAttribute("aria-selected", "false");
+      viewYour.style.display = "flex";
+      viewSystem.style.display = "none";
+      loadUserAssets();
+    });
+  }
+
+  // 3. Style Showcase Cards: Click to filter style & smooth scroll
+  document.querySelectorAll(".style-showcase-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const targetStyle = card.getAttribute("data-style-select");
+      if (targetStyle) {
+        currentSystemStyle = targetStyle;
+        updateStyleFilterPills(targetStyle);
+        renderSystemAssets();
+
+        // Highlight card
+        document.querySelectorAll(".style-showcase-card").forEach((c) => c.classList.remove("is-selected-style"));
+        card.classList.add("is-selected-style");
+
+        // Scroll to grid
+        const grid = document.getElementById("system-assets-grid");
+        if (grid) {
+          grid.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }
+    });
+  });
+
+  // 4. Style Filter Pills
+  const stylePillsContainer = document.getElementById("system-style-pills");
+  if (stylePillsContainer) {
+    stylePillsContainer.querySelectorAll(".filter-pill").forEach((pill) => {
+      pill.addEventListener("click", () => {
+        const style = pill.getAttribute("data-style");
+        currentSystemStyle = style || "all";
+        updateStyleFilterPills(currentSystemStyle);
+        renderSystemAssets();
+      });
+    });
+  }
+
+  // 5. Category Filter Chips
+  const catChipsContainer = document.getElementById("system-category-chips");
+  if (catChipsContainer) {
+    catChipsContainer.querySelectorAll(".category-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        catChipsContainer.querySelectorAll(".category-chip").forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        currentSystemCategory = chip.getAttribute("data-cat") || "all";
+        renderSystemAssets();
+      });
+    });
+  }
+
+  // 6. System Assets Search
+  const searchSystemInput = document.getElementById("search-system-assets");
+  const btnClearSystemSearch = document.getElementById("btn-clear-system-search");
+  if (searchSystemInput) {
+    searchSystemInput.addEventListener("input", (e) => {
+      systemSearchQuery = e.target.value.trim().toLowerCase();
+      if (btnClearSystemSearch) {
+        btnClearSystemSearch.style.display = systemSearchQuery ? "block" : "none";
+      }
+      renderSystemAssets();
+    });
+  }
+  if (btnClearSystemSearch) {
+    btnClearSystemSearch.addEventListener("click", () => {
+      if (searchSystemInput) searchSystemInput.value = "";
+      systemSearchQuery = "";
+      btnClearSystemSearch.style.display = "none";
+      renderSystemAssets();
+    });
+  }
+
+  // 7. Your Assets Search
+  const searchYourInput = document.getElementById("search-your-assets");
+  const btnClearYourSearch = document.getElementById("btn-clear-your-search");
+  if (searchYourInput) {
+    searchYourInput.addEventListener("input", (e) => {
+      userSearchQuery = e.target.value.trim().toLowerCase();
+      if (btnClearYourSearch) {
+        btnClearYourSearch.style.display = userSearchQuery ? "block" : "none";
+      }
+      renderYourAssets();
+    });
+  }
+  if (btnClearYourSearch) {
+    btnClearYourSearch.addEventListener("click", () => {
+      if (searchYourInput) searchYourInput.value = "";
+      userSearchQuery = "";
+      btnClearYourSearch.style.display = "none";
+      renderYourAssets();
+    });
+  }
+
+  // 8. Upload Custom Furniture Triggers in Your Assets
+  const btnUploadFromAssets = document.getElementById("btn-open-upload-modal-from-assets");
+  const btnEmptyUploadAction = document.getElementById("btn-empty-upload-action");
+  const btnEmptySwitchSystem = document.getElementById("btn-empty-switch-system");
+
+  const openUploadHandler = () => {
+    const targetProj = activeFurnitureProject || (currentProjects && currentProjects.length > 0 ? currentProjects[0] : null);
+    if (!targetProj) {
+      showToast("Please create a studio project first before uploading furniture.", "info");
+      const creatorCard = document.getElementById("project-creator-card");
+      if (creatorCard) creatorCard.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    openFurnitureUploadModal(targetProj);
+  };
+
+  if (btnUploadFromAssets) btnUploadFromAssets.addEventListener("click", openUploadHandler);
+  if (btnEmptyUploadAction) btnEmptyUploadAction.addEventListener("click", openUploadHandler);
+  if (btnEmptySwitchSystem) {
+    btnEmptySwitchSystem.addEventListener("click", () => {
+      if (tabSystem) tabSystem.click();
+    });
+  }
+
+  // 9. Studio Section Jump Navigation (Studio Projects <-> Assets)
+  const btnQuickProjects = document.getElementById("btn-quicknav-projects");
+  const btnQuickAssets = document.getElementById("btn-quicknav-assets");
+
+  if (btnQuickProjects) {
+    btnQuickProjects.addEventListener("click", (e) => {
+      e.preventDefault();
+      const projSec = document.getElementById("projects-section");
+      if (projSec) {
+        projSec.scrollIntoView({ behavior: "smooth", block: "start" });
+        btnQuickProjects.classList.add("active");
+        if (btnQuickAssets) btnQuickAssets.classList.remove("active");
+      }}
+    );
+  }
+  if (btnQuickAssets) {
+    btnQuickAssets.addEventListener("click", (e) => {
+      e.preventDefault();
+      const assetsSec = document.getElementById("assets-section");
+      if (assetsSec) {
+        assetsSec.scrollIntoView({ behavior: "smooth", block: "start" });
+        btnQuickAssets.classList.add("active");
+        if (btnQuickProjects) btnQuickProjects.classList.remove("active");
+      }}
+    );
+  }
+
+  // 10. Modal: Choose Asset for Project
+  const chooseModal = document.getElementById("choose-project-modal");
+  const btnCloseChoose = document.getElementById("btn-close-choose-proj");
+  const btnCancelChoose = document.getElementById("btn-cancel-choose-proj");
+  const formChoose = document.getElementById("form-choose-project");
+
+  if (btnCloseChoose) btnCloseChoose.addEventListener("click", closeChooseProjectModal);
+  if (btnCancelChoose) btnCancelChoose.addEventListener("click", closeChooseProjectModal);
+  if (chooseModal) {
+    chooseModal.addEventListener("click", (e) => {
+      if (e.target === chooseModal) closeChooseProjectModal();
+    });
+  }
+  if (formChoose) {
+    formChoose.addEventListener("submit", handleChooseProjectSubmit);
+  }
+
+  // 11. Shortcut from 2D Plan Editor Property Inspector
+  const btnChooseItemAsset = document.getElementById("btn-choose-item-asset");
+  if (btnChooseItemAsset) {
+    btnChooseItemAsset.addEventListener("click", () => {
+      if (!selectedObj) return;
+      openAssetPickerForEditorComponent(selectedObj);
+    });
+  }
+
+  // 12. Shortcut from Custom Furniture Ingestion Modal
+  const btnBrowseAssetsShortcut = document.getElementById("btn-browse-assets-for-active-proj");
+  if (btnBrowseAssetsShortcut) {
+    btnBrowseAssetsShortcut.addEventListener("click", () => {
+      closeFurnitureUploadModal();
+      const assetsSec = document.getElementById("assets-section");
+      if (assetsSec) {
+        assetsSec.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }
+
+  // Initial render
+  renderSystemAssets();
+  loadUserAssets();
+}
+
+function updateStyleFilterPills(selectedStyle) {
+  const container = document.getElementById("system-style-pills");
+  if (!container) return;
+  container.querySelectorAll(".filter-pill").forEach((p) => {
+    const s = p.getAttribute("data-style");
+    if (s === selectedStyle) {
+      p.classList.add("active");
+    } else {
+      p.classList.remove("active");
+    }
+  });
+}
+
+function renderSystemAssets() {
+  const grid = document.getElementById("system-assets-grid");
+  if (!grid) return;
+
+  const filtered = systemAssetsList.filter((item) => {
+    // Style check
+    if (currentSystemStyle !== "all" && item.style.toLowerCase() !== currentSystemStyle.toLowerCase()) {
+      return false;
+    }
+    // Category check
+    if (currentSystemCategory !== "all") {
+      const itemCat = (item.category || "").toLowerCase();
+      const filterCat = currentSystemCategory.toLowerCase();
+      if (!itemCat.includes(filterCat)) {
+        return false;
+      }
+    }
+    // Search query check
+    if (systemSearchQuery) {
+      const name = (item.name || "").toLowerCase();
+      const fn = (item.fileName || "").toLowerCase();
+      const cat = (item.category || "").toLowerCase();
+      const style = (item.style || "").toLowerCase();
+      if (!name.includes(systemSearchQuery) && !fn.includes(systemSearchQuery) && !cat.includes(systemSearchQuery) && !style.includes(systemSearchQuery)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  grid.innerHTML = "";
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="gallery-empty-state" style="grid-column: 1 / -1; padding: 36px 20px;">
+        <h3 class="empty-title">No system assets matched your filter</h3>
+        <p class="empty-desc">Try clearing your search query or selecting "All Styles" / "All Items".</p>
+      </div>
+    `;
+    return;
+  }
+
+  filtered.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "asset-catalog-card";
+    card.setAttribute("data-asset-id", item.id);
+
+    const styleClass = `style-tag-${item.style.toLowerCase()}`;
+
+    const is3dReady = item.status === "3d_ready" || Boolean(item.glbUrl || item.glbPath);
+    const glbModelUrl = item.glbUrl || item.glbPath;
+
+    card.innerHTML = `
+      <div class="asset-card-media" title="Click to view full image">
+        <img src="${escapeHtml(item.imagePath)}" alt="${escapeHtml(item.name)}" class="asset-card-img" loading="lazy">
+      </div>
+      <div class="asset-card-info">
+        <div class="asset-card-header">
+          <div class="asset-card-title" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+          <div class="asset-card-filename" title="${escapeHtml(item.fileName)}">${escapeHtml(item.fileName)}</div>
+        </div>
+        <div class="asset-card-badges-row">
+          <span class="asset-badge-style ${styleClass}">${escapeHtml(item.style)}</span>
+          <span class="asset-badge-category">${escapeHtml(item.category)}</span>
+          <span class="furniture-tag badge-system-item" style="font-size: 10px;">★ System Asset</span>
+          ${is3dReady ? `<span class="furniture-tag" style="color: #10b981; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1);">✓ 3D Ready</span>` : ""}
+        </div>
+        <div class="asset-card-actions">
+          <button type="button" class="btn-asset-choose" title="Choose this asset for any project">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Choose for Project</span>
+          </button>
+          ${is3dReady ? `
+          <button type="button" class="btn-asset-3d-review" title="Interactive 3D Review Window">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            <span>3D View</span>
+          </button>
+          ` : ""}
+          <button type="button" class="btn-asset-preview" title="View high-res photo">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Click handlers
+    const chooseBtn = card.querySelector(".btn-asset-choose");
+    chooseBtn.addEventListener("click", () => openChooseProjectModal(item));
+
+    if (is3dReady) {
+      const review3dBtn = card.querySelector(".btn-asset-3d-review");
+      if (review3dBtn) {
+        review3dBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          open3dReviewModal({
+            name: item.name,
+            category: item.category,
+            glbUrl: glbModelUrl,
+            modelUrls: item.modelUrls || { glb: glbModelUrl },
+          });
+        });
+      }
+    }
+
+    const media = card.querySelector(".asset-card-media");
+    media.addEventListener("click", () => openAssetLightbox(item.imagePath, item.name, `${item.style} · ${item.category}`));
+
+    const previewBtn = card.querySelector(".btn-asset-preview");
+    previewBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openAssetLightbox(item.imagePath, item.name, `${item.style} · ${item.category}`);
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+async function loadUserAssets() {
+  const token = localStorage.getItem("soraplan_token");
+  if (!token) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/projects/furniture/all`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      // Ensure 'Your assets' strictly contains user uploaded assets, excluding chosen system assets
+      userAssetsList = Array.isArray(data) ? data.filter((item) => {
+        const isSys = Boolean(item.is_system || item.isSystem);
+        const gcs = String(item.gcsUri || "");
+        const storage = String(item.storagePath || "");
+        const signed = String(item.signedUrl || "");
+        return !isSys && !gcs.startsWith("system://") && !storage.startsWith("assets/") && !signed.startsWith("assets/");
+      }) : [];
+    } else {
+      // Fallback: extract user-uploaded furniture items from currentProjects
+      const aggregated = [];
+      (currentProjects || []).forEach((p) => {
+        if (p.floorPlan && Array.isArray(p.floorPlan.furniture)) {
+          p.floorPlan.furniture.forEach((f) => {
+            if (f.image || f.photoUrl || f.signedUrl) {
+              const isSys = Boolean(f.is_system || f.isSystem);
+              const gcs = String(f.gcsUri || "");
+              const storage = String(f.storagePath || "");
+              const signed = String(f.signedUrl || f.image || f.photoUrl || "");
+              if (isSys || gcs.startsWith("system://") || storage.startsWith("assets/") || signed.startsWith("assets/")) {
+                return;
+              }
+              aggregated.push({
+                id: f.id,
+                projectId: p.id,
+                projectName: p.name,
+                fileName: f.fileName || `${f.name || f.id}.jpg`,
+                furnitureName: f.name || f.id,
+                furnitureType: f.subtype || f.furnitureType || "unknown",
+                signedUrl: f.signedUrl || f.image || f.photoUrl,
+                status: f.status || "uploaded",
+                is_system: false,
+              });
+            }
+          });
+        }
+      });
+      userAssetsList = aggregated;
+    }
+
+    // Update count badges
+    const totalCount = userAssetsList.length;
+    const badge = document.getElementById("your-assets-tab-count");
+    if (badge) badge.textContent = `${totalCount} Uploaded`;
+    const metaBadge = document.getElementById("your-assets-meta-count");
+    if (metaBadge) metaBadge.textContent = `${totalCount} Uploaded`;
+
+    renderYourAssets();
+  } catch (err) {
+    console.warn("Could not load user assets:", err);
+  }
+}
+
+function renderYourAssets() {
+  const grid = document.getElementById("your-assets-grid");
+  const emptyState = document.getElementById("your-assets-empty");
+  if (!grid || !emptyState) return;
+
+  // Filter out any system assets to strictly display user-uploaded furniture
+  const filtered = userAssetsList.filter((item) => {
+    const isSys = Boolean(item.is_system || item.isSystem);
+    const gcs = String(item.gcsUri || "");
+    const storage = String(item.storagePath || "");
+    const signed = String(item.signedUrl || "");
+    if (isSys || gcs.startsWith("system://") || storage.startsWith("assets/") || signed.startsWith("assets/")) {
+      return false;
+    }
+    if (!userSearchQuery) return true;
+    const name = (item.furnitureName || item.fileName || "").toLowerCase();
+    const type = (item.furnitureType || "").toLowerCase();
+    return name.includes(userSearchQuery) || type.includes(userSearchQuery);
+  });
+
+  if (filtered.length === 0) {
+    grid.style.display = "none";
+    grid.innerHTML = "";
+    emptyState.style.display = "block";
+    return;
+  }
+
+  emptyState.style.display = "none";
+  grid.style.display = "grid";
+  grid.innerHTML = "";
+
+  filtered.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "asset-catalog-card";
+    card.setAttribute("data-asset-id", item.id);
+
+    const imgSrc = item.signedUrl || "sofa.jpg";
+    const name = escapeHtml(item.furnitureName || item.fileName || "Custom Furniture");
+    const category = escapeHtml(item.furnitureType || "unknown");
+    const meshyStatus = item.meshyStatus || item.meshy_status;
+    const isReady3d = meshyStatus === "SUCCEEDED" || item.status === "3d_ready";
+    const projId = item.projectId || item.project_id || (activeFurnitureProject ? activeFurnitureProject.id : null);
+    const glbUrl = (item.modelUrls && item.modelUrls.glb) || (projId ? `${API_BASE_URL}/projects/${projId}/furniture/${item.id}/glb` : null);
+
+    let statusHtml = "";
+    if (isReady3d) {
+      statusHtml = `<span class="furniture-tag" style="color: #10b981; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.1);">✓ 3D Ready</span>`;
+    } else if (meshyStatus === "IN_PROGRESS" || item.status === "generating_3d") {
+      statusHtml = `<span class="furniture-tag" style="color: #0ea5e9; border-color: rgba(14,165,233,0.3); background: rgba(14,165,233,0.1);">🔄 3D Generating</span>`;
+    } else {
+      statusHtml = `<span class="furniture-tag" style="color: var(--ink-subtle);">Uploaded Photo</span>`;
+    }
+
+    card.innerHTML = `
+      <div class="asset-card-media" title="Click to view full photo">
+        <img src="${imgSrc}" alt="${name}" class="asset-card-img" loading="lazy">
+      </div>
+      <div class="asset-card-info">
+        <div class="asset-card-header">
+          <div class="asset-card-title" title="${name}">${name}</div>
+          <div class="asset-card-filename" title="${escapeHtml(item.fileName || '')}">${escapeHtml(item.fileName || '')}</div>
+        </div>
+        <div class="asset-card-badges-row">
+          <span class="asset-badge-style" style="background: rgba(255,255,255,0.08); color: var(--ink);">Custom</span>
+          <span class="asset-badge-category">${category}</span>
+          ${statusHtml}
+        </div>
+        <div class="asset-card-actions">
+          <button type="button" class="btn-asset-choose" title="Choose this asset for any project">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Choose for Project</span>
+          </button>
+          ${isReady3d ? `
+          <button type="button" class="btn-asset-3d-review" title="Interactive 3D View">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            <span>3D View</span>
+          </button>
+          ` : ""}
+          <button type="button" class="btn-asset-delete" data-furn-id="${escapeHtml(item.id)}" data-project-id="${escapeHtml(projId || '')}" data-furn-name="${name}" title="Delete this uploaded custom furniture asset">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Delete</span>
+          </button>
+          <button type="button" class="btn-asset-preview" title="View photo">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const chooseBtn = card.querySelector(".btn-asset-choose");
+    chooseBtn.addEventListener("click", () => openChooseProjectModal(item));
+
+    if (isReady3d) {
+      const review3dBtn = card.querySelector(".btn-asset-3d-review");
+      if (review3dBtn) {
+        review3dBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          open3dReviewModal({
+            name: item.furnitureName || item.fileName || "Custom Furniture",
+            category: item.furnitureType || "unknown",
+            glbUrl: glbUrl,
+            modelUrls: item.modelUrls || { glb: glbUrl },
+            imgSrc: imgSrc,
+            furnitureId: item.id,
+            projectId: projId,
+          });
+        });
+      }
+    }
+
+    const delBtn = card.querySelector(".btn-asset-delete");
+    if (delBtn) {
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        handleDeleteUserAsset(item.id, projId, name);
+      });
+    }
+
+    const media = card.querySelector(".asset-card-media");
+    media.addEventListener("click", () => openAssetLightbox(imgSrc, name, `Custom Furniture · ${category}`));
+
+    const previewBtn = card.querySelector(".btn-asset-preview");
+    previewBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openAssetLightbox(imgSrc, name, `Custom Furniture · ${category}`);
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+async function handleDeleteUserAsset(furnitureId, projectId, furnitureName) {
+  const confirmDel = window.confirm(`Are you sure you want to delete "${furnitureName}"? This will permanently remove the custom furniture photo and its 3D model.`);
+  if (!confirmDel) return;
+
+  const token = localStorage.getItem("soraplan_token");
+  if (!token) {
+    showToast("Authentication required to delete asset.", "error");
+    return;
+  }
+
+  try {
+    showToast(`Deleting "${furnitureName}"...`, "info");
+    const url = projectId
+      ? `${API_BASE_URL}/projects/${projectId}/furniture/${furnitureId}`
+      : `${API_BASE_URL}/projects/furniture/${furnitureId}`;
+
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to delete asset from server");
+    }
+
+    showToast(`✓ "${furnitureName}" deleted successfully.`, "success");
+
+    // Refresh User Assets list
+    await loadUserAssets();
+
+    // If active furniture project matches, also refresh project furniture modal list
+    if (activeFurnitureProject && (!projectId || activeFurnitureProject.id === projectId)) {
+      await loadProjectFurniture(activeFurnitureProject.id);
+    }
+
+    // Refresh projects list in background to update counts
+    loadProjects();
+  } catch (err) {
+    console.error("Delete user asset failed:", err);
+    showToast(`Delete failed: ${err.message}`, "error");
+  }
+}
+
+function openAssetLightbox(imgUrl, title, subtitle) {
+  if (!planModal || !modalPlanBody) return;
+  modalPlanTitle.textContent = title || "Asset Preview";
+  modalPlanMeta.textContent = subtitle || "";
+  modalGcsUri.textContent = imgUrl;
+  modalOpenNewTab.href = imgUrl;
+
+  modalPlanBody.innerHTML = `
+    <div style="display:flex; justify-content:center; align-items:center; min-height:360px; max-height:75vh; overflow:hidden; background:#080d10; border-radius:8px;">
+      <img src="${imgUrl}" alt="${title}" style="max-width:100%; max-height:70vh; object-fit:contain; border-radius:6px; box-shadow:0 12px 30px rgba(0,0,0,0.5);">
+    </div>
+  `;
+
+  planModal.style.display = "flex";
+}
+
+function openChooseProjectModal(asset, preselectedComponentId = null) {
+  assetTargetForProject = asset;
+  const modal = document.getElementById("choose-project-modal");
+  if (!modal) return;
+
+  const thumb = document.getElementById("asset-choice-thumb");
+  const title = document.getElementById("asset-choice-title");
+  const styleTag = document.getElementById("asset-choice-style-tag");
+  const catTag = document.getElementById("asset-choice-cat-tag");
+  const sysTag = document.getElementById("asset-choice-sys-tag");
+  const subText = document.getElementById("asset-choice-sub");
+
+  const isSystem = Boolean(asset.isSystem || asset.is_system);
+  const imgSrc = asset.imagePath || asset.signedUrl || "sofa.jpg";
+  const assetName = asset.name || asset.furnitureName || asset.fileName || "Asset";
+  const assetStyle = asset.style || (isSystem ? "System" : "Custom");
+  const assetCat = asset.category || asset.furnitureType || "Furniture";
+
+  if (thumb) thumb.src = imgSrc;
+  if (title) title.textContent = assetName;
+  if (styleTag) {
+    styleTag.textContent = assetStyle;
+    styleTag.className = `furniture-tag ${isSystem ? `style-tag-${assetStyle.toLowerCase()}` : ''}`;
+  }
+  if (catTag) catTag.textContent = assetCat;
+  if (sysTag) {
+    sysTag.textContent = isSystem ? "★ System Asset" : "👤 Your Asset";
+    sysTag.style.display = "inline-flex";
+  }
+  if (subText) {
+    subText.textContent = isSystem 
+      ? `Curated ${assetStyle} style preset. Allowed for all studio projects.`
+      : `Custom furniture photo uploaded by you. Allowed for all studio projects.`;
+  }
+
+  // Populate project selectable cards
+  const cardsList = document.getElementById("choose-project-cards-list");
+  const noProjectsMsg = document.getElementById("choose-no-projects-msg");
+  const submitBtn = document.getElementById("btn-submit-choose-proj");
+  const componentGroup = document.getElementById("group-plan-link");
+  const componentSelect = document.getElementById("select-assign-plan-item");
+
+  if (cardsList) {
+    cardsList.innerHTML = "";
+
+    if (!currentProjects || currentProjects.length === 0) {
+      if (noProjectsMsg) noProjectsMsg.style.display = "block";
+      if (submitBtn) submitBtn.disabled = true;
+      if (componentGroup) componentGroup.style.display = "none";
+      selectedProjectIdForAsset = null;
+    } else {
+      if (noProjectsMsg) noProjectsMsg.style.display = "none";
+      if (submitBtn) submitBtn.disabled = false;
+
+      // Select default project
+      const defaultProj = activeEditorProject || activeFurnitureProject || currentProjects[0];
+      selectedProjectIdForAsset = defaultProj.id;
+
+      currentProjects.forEach((proj) => {
+        const isSelected = proj.id === selectedProjectIdForAsset;
+        const card = document.createElement("div");
+        card.className = `choose-proj-radio-card ${isSelected ? "selected" : ""}`;
+        card.setAttribute("data-project-id", proj.id);
+
+        const planThumb = proj.planImage?.signedUrl || "floorplan_1.png";
+        const furnCount = proj.furnitureCount || 0;
+
+        card.innerHTML = `
+          <div class="choose-proj-card-left">
+            <img src="${planThumb}" alt="${escapeHtml(proj.name)}" class="choose-proj-thumb">
+            <div>
+              <div class="choose-proj-card-title">${escapeHtml(proj.name)}</div>
+              <div class="choose-proj-card-meta">${proj.hasPlanParsed ? "✓ 2D Plan Parsed" : "Plan Uploaded"} · 🛋️ ${furnCount} item${furnCount === 1 ? '' : 's'}</div>
+            </div>
+          </div>
+          <input type="radio" name="target_project_choice" value="${proj.id}" ${isSelected ? "checked" : ""}>
+        `;
+
+        card.addEventListener("click", () => {
+          selectedProjectIdForAsset = proj.id;
+          cardsList.querySelectorAll(".choose-proj-radio-card").forEach((c) => c.classList.remove("selected"));
+          card.classList.add("selected");
+          const radio = card.querySelector('input[type="radio"]');
+          if (radio) radio.checked = true;
+
+          updateComponentDropdownForProject(proj, preselectedComponentId);
+        });
+
+        cardsList.appendChild(card);
+      });
+
+      // Populate component dropdown for default project
+      updateComponentDropdownForProject(defaultProj, preselectedComponentId);
+    }
+  }
+
+  modal.style.display = "flex";
+}
+
+function updateComponentDropdownForProject(proj, preselectedComponentId = null) {
+  const componentGroup = document.getElementById("group-plan-link");
+  const componentSelect = document.getElementById("select-assign-plan-item");
+  if (!componentGroup || !componentSelect) return;
+
+  const furnitureList = (proj.floorPlan && proj.floorPlan.furniture) || 
+    (activeEditorProject?.id === proj.id && editorObjects ? editorObjects.filter((o) => o.type === "furniture") : []);
+
+  if (furnitureList && furnitureList.length > 0) {
+    componentGroup.style.display = "block";
+    componentSelect.innerHTML = `<option value="">-- Add as General Project Asset (No specific 2D link) --</option>`;
+
+    furnitureList.forEach((item) => {
+      const opt = document.createElement("option");
+      opt.value = item.id;
+      opt.textContent = `${item.name || item.id} (${item.subtype || item.furnitureType || "furniture"})`;
+      if (preselectedComponentId && item.id === preselectedComponentId) {
+        opt.selected = true;
+      }
+      componentSelect.appendChild(opt);
+    });
+  } else {
+    componentGroup.style.display = "none";
+    componentSelect.innerHTML = `<option value="">-- Add as General Project Asset --</option>`;
+  }
+}
+
+function closeChooseProjectModal() {
+  const modal = document.getElementById("choose-project-modal");
+  if (modal) modal.style.display = "none";
+  assetTargetForProject = null;
+  selectedProjectIdForAsset = null;
+}
+
+async function handleChooseProjectSubmit(e) {
+  e.preventDefault();
+  if (!assetTargetForProject || !selectedProjectIdForAsset) {
+    showToast("Please select a target project first.", "warning");
+    return;
+  }
+
+  const token = localStorage.getItem("soraplan_token");
+  if (!token) {
+    showToast("Authentication required.", "error");
+    return;
+  }
+
+  const submitBtn = document.getElementById("btn-submit-choose-proj");
+  const spinner = document.getElementById("choose-proj-spinner");
+  const submitText = document.getElementById("choose-proj-submit-text");
+  const componentSelect = document.getElementById("select-assign-plan-item");
+  const chosenComponentId = componentSelect && componentSelect.value ? componentSelect.value : null;
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (spinner) spinner.style.display = "inline-block";
+  if (submitText) submitText.textContent = "Adding to Project...";
+
+  try {
+    const targetProj = currentProjects.find((p) => p.id === selectedProjectIdForAsset) || { name: "Project" };
+    const isSystem = Boolean(assetTargetForProject.isSystem || assetTargetForProject.is_system);
+
+    const payload = {
+      sourceType: isSystem ? "system" : "user",
+      style: assetTargetForProject.style || null,
+      assetFileName: assetTargetForProject.fileName || "furniture.png",
+      furnitureName: assetTargetForProject.name || assetTargetForProject.furnitureName || "Furniture Asset",
+      furnitureType: assetTargetForProject.category || assetTargetForProject.furnitureType || "unknown",
+      componentId: chosenComponentId,
+      sourceProjectId: assetTargetForProject.projectId || null,
+      sourceFurnitureId: assetTargetForProject.id || null,
+    };
+
+    const res = await fetch(`${API_BASE_URL}/projects/${selectedProjectIdForAsset}/furniture/choose-asset`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || "Could not add asset to project");
+    }
+
+    const createdAsset = await res.json();
+    closeChooseProjectModal();
+
+    showToast(`✨ "${payload.furnitureName}" added to "${targetProj.name}"! Allowed for all project scenes.`, "success");
+
+    // If currently viewing target project's furniture modal, reload furniture
+    if (activeFurnitureProject && activeFurnitureProject.id === selectedProjectIdForAsset) {
+      loadProjectFurniture(selectedProjectIdForAsset);
+    }
+
+    // If currently in 2D editor for this project and component was linked
+    if (activeEditorProject && activeEditorProject.id === selectedProjectIdForAsset && chosenComponentId) {
+      const comp = (editorObjects || []).find((o) => o.id === chosenComponentId);
+      if (comp) {
+        comp.photoUrl = createdAsset.signedUrl || assetTargetForProject.imagePath;
+        comp.furnitureId = createdAsset.id;
+        pushEditorHistory();
+        drawEditor();
+      }
+    }
+
+    // Refresh projects list & user assets
+    loadProjects();
+    loadUserAssets();
+
+  } catch (err) {
+    console.error("Choose asset failed:", err);
+    showToast(`Error adding asset: ${err.message}`, "error");
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+    if (spinner) spinner.style.display = "none";
+    if (submitText) submitText.textContent = "✓ Add to Selected Project";
+  }
+}
+
+function openAssetPickerForEditorComponent(obj) {
+  if (!obj || !activeEditorProject) return;
+  // Jump to Assets section with preselected component
+  const assetsSec = document.getElementById("assets-section");
+  if (assetsSec) {
+    assetsSec.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast(`🛋️ Browsing Assets Catalog for "${obj.name || obj.id}". Click "Choose for Project" on any asset to assign it.`, "info");
+  }
+}

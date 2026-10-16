@@ -47,6 +47,7 @@ def mock_firestore():
                 "email": "test@soraplan.com",
                 "displayName": "Test User",
                 "photoUrl": "https://example.com/avatar.jpg",
+                "role": "user",
                 "plan": "free",
                 "quota": {
                     "projects": 5,
@@ -57,7 +58,24 @@ def mock_firestore():
                     "resetAt": None,
                 },
                 "emailVerified": True,
-            }
+            },
+            "tPST7GIKXTQaTiBOQH4hl7zIHxS2": {
+                "uid": "tPST7GIKXTQaTiBOQH4hl7zIHxS2",
+                "email": "admin@soraplan.com",
+                "displayName": "Admin User",
+                "photoUrl": "https://example.com/admin.jpg",
+                "role": "admin",
+                "plan": "free",
+                "quota": {
+                    "projects": 5,
+                    "rendersFinal": 20,
+                    "rendersDraft": 100,
+                    "assets3d": 10,
+                    "planParses": 20,
+                    "resetAt": None,
+                },
+                "emailVerified": True,
+            },
         },
         "projects": {},
         "planImages": {},
@@ -256,3 +274,51 @@ def client(mock_firestore, mock_storage_service, sample_user_profile):
         yield test_client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def admin_user_profile():
+    return UserProfile(
+        uid="tPST7GIKXTQaTiBOQH4hl7zIHxS2",
+        email="admin@soraplan.com",
+        display_name="Admin User",
+        photo_url="https://example.com/admin.jpg",
+        role="admin",
+        plan="free",
+        quota=UserQuota(
+            projects=5,
+            renders_final=20,
+            renders_draft=100,
+            assets3d=10,
+            plan_parses=20,
+        ),
+        email_verified=True,
+    )
+
+
+@pytest.fixture
+def admin_client(mock_firestore, mock_storage_service, admin_user_profile):
+    """Test client with mocked dependencies authenticated as Admin user."""
+    user_service = UserService(db=mock_firestore)
+    auth_service = AuthService(user_service=user_service)
+    project_service = ProjectService(db=mock_firestore, storage_service=mock_storage_service)
+
+    app.dependency_overrides[get_db] = lambda: mock_firestore
+    app.dependency_overrides[get_user_service] = lambda: user_service
+    app.dependency_overrides[get_auth_service] = lambda: auth_service
+    app.dependency_overrides[get_storage_service] = lambda: mock_storage_service
+    app.dependency_overrides[get_project_service] = lambda: project_service
+    app.dependency_overrides[get_current_token_payload] = lambda: {
+        "uid": "tPST7GIKXTQaTiBOQH4hl7zIHxS2",
+        "email": "admin@soraplan.com",
+        "name": "Admin User",
+        "picture": "https://example.com/admin.jpg",
+        "email_verified": True,
+    }
+    app.dependency_overrides[get_current_user] = lambda: admin_user_profile
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    app.dependency_overrides.clear()
+

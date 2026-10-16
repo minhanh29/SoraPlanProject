@@ -22,6 +22,7 @@ class UserProfile(BaseSchema):
     email: str
     display_name: Optional[str] = None
     photo_url: Optional[str] = None
+    role: str = Field(default="user", description="User role ('user' or 'admin')")
     plan: str = Field(default="free", description="User subscription tier (free, pro, enterprise)")
     quota: UserQuota = Field(default_factory=UserQuota)
     email_verified: bool = False

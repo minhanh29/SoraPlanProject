@@ -21,6 +21,35 @@ class PlanImage(BaseSchema):
     uploaded_at: Optional[datetime] = Field(default=None, description="Upload timestamp")
 
 
+class FurnitureImage(BaseSchema):
+    """Metadata for uploaded furniture photo."""
+
+    id: str = Field(..., description="Google Cloud auto-generated identifier")
+    project_id: str = Field(..., description="Associated project identifier")
+    owner_uid: str = Field(..., description="UID of project owner")
+    file_name: str = Field(..., description="Original filename uploaded by user")
+    furniture_name: Optional[str] = Field(default=None, description="Furniture label/name")
+    furniture_type: Optional[str] = Field(default="unknown", description="Furniture category")
+    component_id: Optional[str] = Field(default=None, description="Linked 2D plan component ID if assigned")
+    content_type: str = Field(..., description="MIME type (image/png, image/jpeg, image/webp)")
+    size_bytes: int = Field(default=0, description="File size in bytes")
+    bucket: str = Field(..., description="Google Cloud Storage bucket name")
+    storage_path: str = Field(..., description="Cloud Storage object path: {user_id}/{project_id}/furniture/{file_id}{ext}")
+    gcs_uri: str = Field(..., description="Full gs:// path")
+    signed_url: str = Field(..., description="V4 signed URL for public display")
+    signed_url_expires_at: Optional[datetime] = Field(default=None, description="Expiration time of signed display URL")
+    status: str = Field(default="uploaded", description="Asset processing status")
+    meshy_task_id: Optional[str] = Field(default=None, description="Meshy 3D generation task ID")
+    meshy_status: Optional[str] = Field(default=None, description="Meshy task status: PENDING | IN_PROGRESS | SUCCEEDED | FAILED")
+    meshy_progress: Optional[int] = Field(default=0, description="Meshy generation progress 0-100")
+    model_urls: Optional[dict] = Field(default=None, description="Generated 3D model URLs (glb, fbx, usdz, etc.)")
+    thumbnail_3d_url: Optional[str] = Field(default=None, description="Generated 3D preview thumbnail URL")
+    glb_storage_path: Optional[str] = Field(default=None, description="Cloud Storage path for cached GLB model")
+    glb_stream_url: Optional[str] = Field(default=None, description="Direct GLB streaming endpoint path")
+    is_system: bool = Field(default=False, description="Whether this furniture item belongs to the system catalog")
+    uploaded_at: Optional[datetime] = Field(default=None, description="Upload timestamp")
+
+
 class Project(BaseSchema):
     """Full project representation stored in Firestore projects/{projectId} collection."""
 
@@ -34,6 +63,8 @@ class Project(BaseSchema):
     current_job_id: Optional[str] = Field(default=None, description="Current or latest plan parse job ID")
     has_plan_parsed: bool = Field(default=False, description="True if floor plan has been parsed into structured geometry")
     floor_plan: Optional[dict] = Field(default=None, description="Parsed structured 2D floor plan scene data")
+    has_furniture: bool = Field(default=False, description="True if custom furniture photos have been uploaded")
+    furniture_count: int = Field(default=0, description="Number of uploaded furniture photos for this project")
     created_at: Optional[datetime] = Field(default=None, description="Creation timestamp")
     updated_at: Optional[datetime] = Field(default=None, description="Last update timestamp")
 
@@ -80,3 +111,56 @@ class UploadConfirmRequest(BaseSchema):
     file_name: str = Field(..., min_length=1, max_length=255)
     content_type: str = Field(...)
     size_bytes: Optional[int] = Field(default=None, ge=1)
+
+
+class FurnitureUploadUrlRequest(BaseSchema):
+    """Payload to request a signed upload URL for furniture photo."""
+
+    file_name: str = Field(..., min_length=1, max_length=255, description="Filename including extension")
+    content_type: str = Field(..., description="MIME type (image/png, image/jpeg, image/webp)")
+    size_bytes: Optional[int] = Field(default=None, ge=1, description="File size in bytes")
+    furniture_name: Optional[str] = Field(default=None, max_length=120, description="Optional furniture label")
+    furniture_type: Optional[str] = Field(default="unknown", description="Furniture category")
+    component_id: Optional[str] = Field(default=None, description="Optional linked 2D plan component ID")
+
+
+class FurnitureUploadConfirmRequest(BaseSchema):
+    """Payload to confirm completion of furniture photo upload."""
+
+    upload_id: str = Field(..., description="Google Cloud generated content identifier")
+    file_name: str = Field(..., min_length=1, max_length=255)
+    content_type: str = Field(...)
+    size_bytes: Optional[int] = Field(default=None, ge=1)
+    furniture_name: Optional[str] = Field(default=None, max_length=120)
+    furniture_type: Optional[str] = Field(default="unknown")
+    component_id: Optional[str] = Field(default=None)
+    is_system: Optional[bool] = Field(default=False, description="Whether this furniture belongs to system (admin only)")
+
+
+class UpdateFurnitureSystemRequest(BaseSchema):
+    """Payload to update the is_system field for a furniture image."""
+
+    is_system: bool = Field(..., description="Whether this furniture item belongs to the system catalog")
+
+
+class UpdateFurnitureRequest(BaseSchema):
+    """Payload to update mutable furniture metadata."""
+
+    is_system: Optional[bool] = Field(default=None, description="Whether this furniture belongs to system (admin only)")
+    furniture_name: Optional[str] = Field(default=None, max_length=120, description="Furniture label/name")
+    furniture_type: Optional[str] = Field(default=None, description="Furniture category")
+    component_id: Optional[str] = Field(default=None, description="Linked 2D plan component ID")
+
+
+class ChooseAssetRequest(BaseSchema):
+    """Payload to choose a System Asset or existing User Asset for a project."""
+
+    source_type: str = Field(..., description="'system' or 'user'")
+    style: Optional[str] = Field(default=None, description="Industrial | Minimalist | Japandi (for system assets)")
+    asset_file_name: str = Field(..., min_length=1, max_length=255, description="Filename e.g. In_sofa.png or sofa.jpg")
+    furniture_name: Optional[str] = Field(default=None, max_length=120, description="Furniture label/name")
+    furniture_type: Optional[str] = Field(default="unknown", description="Furniture category")
+    component_id: Optional[str] = Field(default=None, description="Optional linked 2D plan component ID")
+    source_project_id: Optional[str] = Field(default=None, description="Source project ID if copying an existing user asset")
+    source_furniture_id: Optional[str] = Field(default=None, description="Source furniture ID if copying an existing user asset")
+

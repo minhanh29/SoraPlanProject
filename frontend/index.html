@@ -12,6 +12,9 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
   
   <link rel="stylesheet" href="styles.css">
+  
+  <!-- 3D glTF/GLB Viewer (Google model-viewer) -->
+  <script type="module" src="vendor/model-viewer.min.js"></script>
 </head>
 <body>
 
@@ -184,6 +187,25 @@
           <span class="quota-pill-label">3D Assets</span>
           <span class="quota-pill-value" id="quota-assets-val">10 / mo</span>
         </div>
+      </div>
+
+      <!-- Studio Quick Navigation -->
+      <div class="studio-section-nav" role="tablist">
+        <a href="#projects-section" class="studio-nav-btn active" id="btn-quicknav-projects">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Studio Projects</span>
+        </a>
+        <a href="#assets-section" class="studio-nav-btn" id="btn-quicknav-assets">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <span>Assets</span>
+          <span class="studio-nav-badge" id="studio-nav-assets-badge">61+</span>
+        </a>
       </div>
     </section>
 
@@ -452,10 +474,261 @@
       </div>
     </section>
 
-    <div class="footer-info">
-      Single Source of Truth · Metric Scene Graph · Cloud Storage V4 Signed URLs · Cloud Run + Firestore
-    </div>
+    <!-- Assets Section (Directly under Studio Projects) -->
+    <section class="assets-gallery-section" id="assets-section">
+      <div class="assets-header-card">
+        <div class="assets-header-main">
+          <div class="gallery-header-left">
+            <span class="card-tag">Interior Catalog &amp; Library</span>
+            <h2 class="gallery-title">Assets (<span id="assets-total-badge">61</span>)</h2>
+            <p class="assets-header-desc">
+              Curated architectural interior styles &amp; custom uploaded furniture catalog. 
+              All System Assets and Your Assets can be chosen for any project with metric real-world scale.
+            </p>
+          </div>
+
+          <!-- Sub-items: System Assets & Your Assets -->
+          <div class="assets-subnav-tabs" role="tablist">
+            <button type="button" class="assets-tab-btn active" id="tab-system-assets" role="tab" aria-selected="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                <polyline points="2 17 12 22 22 17"></polyline>
+                <polyline points="2 12 12 17 22 12"></polyline>
+              </svg>
+              <div class="assets-tab-label-wrap">
+                <span class="assets-tab-title">System Assets</span>
+                <span class="assets-tab-meta">3 Styles · 61 Items</span>
+              </div>
+            </button>
+            <button type="button" class="assets-tab-btn" id="tab-your-assets" role="tab" aria-selected="false">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <div class="assets-tab-label-wrap">
+                <span class="assets-tab-title">Your Assets</span>
+                <span class="assets-tab-meta" id="your-assets-tab-count">0 Uploaded</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- SUB-ITEM 1: SYSTEM ASSETS VIEW -->
+      <!-- ============================================================ -->
+      <div class="assets-subview-panel" id="view-system-assets">
+        
+        <!-- Style Showcase Hero Cards to help user imagine each style -->
+        <div class="style-showcase-grid">
+          
+          <!-- Style 1: Industrial -->
+          <div class="style-showcase-card" data-style-select="Industrial" tabindex="0" role="button">
+            <div class="style-card-media-wrap">
+              <img src="assets/Industrial/Industrial.png" alt="Industrial Interior Style" class="style-hero-cover" loading="lazy">
+              <div class="style-card-scrim"></div>
+              <span class="style-tag style-tag-industrial">Industrial</span>
+              <span class="style-count-pill">21 Items</span>
+            </div>
+            <div class="style-card-body">
+              <div class="style-title-row">
+                <h3 class="style-card-title">Industrial Loft</h3>
+                <span class="style-status-chip">Curated Style</span>
+              </div>
+              <p class="style-card-desc">
+                Raw exposed brick, brushed steel accents, weathered hardwoods, aged saddle leather, and authentic urban warehouse architecture.
+              </p>
+              <div class="style-card-action">
+                <span class="style-action-text">Explore Industrial Collection (21) ➔</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Style 2: Japandi -->
+          <div class="style-showcase-card" data-style-select="Japandi" tabindex="0" role="button">
+            <div class="style-card-media-wrap">
+              <img src="assets/Japandi/Japandi.png" alt="Japandi Interior Style" class="style-hero-cover" loading="lazy">
+              <div class="style-card-scrim"></div>
+              <span class="style-tag style-tag-japandi">Japandi</span>
+              <span class="style-count-pill">20 Items</span>
+            </div>
+            <div class="style-card-body">
+              <div class="style-title-row">
+                <h3 class="style-card-title">Japandi Sanctuary</h3>
+                <span class="style-status-chip">Curated Style</span>
+              </div>
+              <p class="style-card-desc">
+                Scandinavian functional comfort blended with Japanese wabi-sabi simplicity, light oak slats, handmade ceramics, and organic linen.
+              </p>
+              <div class="style-card-action">
+                <span class="style-action-text">Explore Japandi Collection (20) ➔</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="assets-controls-bar">
+          <div class="assets-controls-row">
+            <div class="style-filter-pills" id="system-style-pills">
+              <button type="button" class="filter-pill active" data-style="all">All Styles (41)</button>
+              <button type="button" class="filter-pill" data-style="Industrial">Industrial (21)</button>
+              <button type="button" class="filter-pill" data-style="Japandi">Japandi (20)</button>
+            </div>
+
+            <div class="assets-search-wrapper">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="search-system-assets" class="assets-search-input" placeholder="Search system furniture (sofa, bed, table, chair...)...">
+              <button type="button" class="clear-search-btn" id="btn-clear-system-search" style="display: none;" title="Clear search">×</button>
+            </div>
+          </div>
+
+          <div class="category-filter-chips" id="system-category-chips">
+            <button type="button" class="category-chip active" data-cat="all">All Items</button>
+            <button type="button" class="category-chip" data-cat="Bed">Beds</button>
+            <button type="button" class="category-chip" data-cat="Sofa">Sofas</button>
+            <button type="button" class="category-chip" data-cat="Table">Tables &amp; Stands</button>
+            <button type="button" class="category-chip" data-cat="Chair">Chairs &amp; Seating</button>
+            <button type="button" class="category-chip" data-cat="Kitchen">Kitchen &amp; Storage</button>
+            <button type="button" class="category-chip" data-cat="Bathroom">Bathroom</button>
+            <button type="button" class="category-chip" data-cat="Appliance">Appliances &amp; Lights</button>
+          </div>
+        </div>
+
+        <!-- System Items Grid -->
+        <div class="assets-grid-layout" id="system-assets-grid">
+          <!-- Dynamically populated from system_assets_data -->
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- SUB-ITEM 2: YOUR ASSETS VIEW -->
+      <!-- ============================================================ -->
+      <div class="assets-subview-panel" id="view-your-assets" style="display: none;">
+        
+        <div class="assets-controls-bar">
+          <div class="assets-controls-row">
+            <div class="assets-search-wrapper" style="flex: 1;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="search-your-assets" class="assets-search-input" placeholder="Search your uploaded furniture...">
+              <button type="button" class="clear-search-btn" id="btn-clear-your-search" style="display: none;" title="Clear search">×</button>
+            </div>
+
+            <button type="button" class="btn-primary-action" id="btn-open-upload-modal-from-assets">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <span>+ Upload Custom Furniture</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty State for Your Assets -->
+        <div class="gallery-empty-state" id="your-assets-empty" style="display: none;">
+          <div class="empty-icon-wrap">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          </div>
+          <h3 class="empty-title">No custom furniture uploaded yet</h3>
+          <p class="empty-desc">
+            Upload real-world photos of your own furniture to generate metric 3D models with AI. 
+            All your uploaded assets are available to choose for any project.
+          </p>
+          <div class="empty-cta-row" style="margin-top: 18px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <button type="button" class="submit-btn" id="btn-empty-upload-action" style="width: auto; padding: 10px 22px;">
+              <span>+ Upload First Furniture Photo</span>
+            </button>
+            <button type="button" class="btn-secondary" id="btn-empty-switch-system">
+              <span>Browse System Assets (61)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Your Assets Grid -->
+        <div class="assets-grid-layout" id="your-assets-grid">
+          <!-- Dynamically populated from user uploaded furniture -->
+        </div>
+
+      </div>
+
+    </section>
   </main>
+
+  <!-- Modal: Choose Asset for Project -->
+  <div class="modal-backdrop" id="choose-project-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="choose-proj-modal-title">
+    <div class="modal-card choose-proj-card">
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <span class="card-tag">Cross-Project Placement</span>
+          <h2 class="modal-title" id="choose-proj-modal-title">Choose Project for Asset</h2>
+          <span class="modal-meta">Select which project to add this asset to.</span>
+        </div>
+        <button type="button" class="modal-close-btn" id="btn-close-choose-proj" aria-label="Close modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body choose-proj-body">
+        <!-- Asset Preview Strip -->
+        <div class="asset-choice-preview" id="asset-choice-preview">
+          <img src="floorplan_1.png" alt="Asset" class="asset-choice-thumb" id="asset-choice-thumb">
+          <div class="asset-choice-info">
+            <h4 class="asset-choice-title" id="asset-choice-title">Asset Name</h4>
+            <div class="asset-choice-badges">
+              <span class="furniture-tag" id="asset-choice-style-tag">Industrial</span>
+              <span class="furniture-tag" id="asset-choice-cat-tag">Sofa</span>
+              <span class="furniture-tag badge-system-item" id="asset-choice-sys-tag">★ System Asset</span>
+            </div>
+            <p class="asset-choice-sub" id="asset-choice-sub">Metric scaled asset ready to use in any 3D space.</p>
+          </div>
+        </div>
+
+        <form id="form-choose-project" novalidate>
+          <div class="form-group">
+            <label class="form-label">Select Target Project *</label>
+            <div class="choose-project-cards-list" id="choose-project-cards-list">
+              <!-- Dynamically populated project selectable cards -->
+            </div>
+            <p class="form-empty-msg" id="choose-no-projects-msg" style="display: none; color: var(--warning); font-size: 13px; margin-top: 6px;">
+              No projects created yet. Please create a project above first.
+            </p>
+          </div>
+
+          <div class="form-group" id="group-plan-link" style="display: none;">
+            <label for="select-assign-plan-item" class="form-label">Assign to 2D Plan Component (Optional)</label>
+            <div class="input-wrapper">
+              <select id="select-assign-plan-item" class="form-input form-select">
+                <option value="">-- Add as General Project Asset --</option>
+              </select>
+            </div>
+            <p class="form-help-text">Directly links this asset with a parsed furniture item on the 2D floor plan.</p>
+          </div>
+
+          <div class="choose-proj-actions">
+            <button type="button" class="btn-secondary" id="btn-cancel-choose-proj">Cancel</button>
+            <button type="submit" class="submit-btn choose-proj-submit" id="btn-submit-choose-proj" disabled>
+              <span class="spinner" id="choose-proj-spinner" style="display: none;" aria-hidden="true"></span>
+              <span id="choose-proj-submit-text">✓ Add to Selected Project</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal: Floor Plan Lightbox Viewer -->
   <div class="modal-backdrop" id="plan-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-plan-title">
@@ -586,13 +859,15 @@
           </button>
         </div>
 
-        <!-- Close Button -->
-        <button type="button" class="modal-close-btn" id="btn-close-editor" aria-label="Close editor">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        <!-- Topbar Right: Close Button -->
+        <div class="editor-topbar-right">
+          <button type="button" class="modal-close-btn" id="btn-close-editor" aria-label="Close editor">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       </header>
 
       <!-- Editor Body -->
@@ -663,6 +938,21 @@
               • Ctrl/Cmd + Z to undo
             </p>
           </div>
+
+          <!-- Step 2: Custom Furniture Library Section -->
+          <div class="sidebar-section furniture-sidebar-section">
+            <div class="sidebar-section-header">
+              <h3 class="sidebar-title">Step ② Furniture</h3>
+              <span class="sidebar-count-badge" id="sidebar-furniture-badge">0 items</span>
+            </div>
+            <p class="sidebar-hint" style="margin: 6px 0 10px 0;">
+              Upload real-world furniture photos to convert into accurate metric 3D assets.
+            </p>
+            <button type="button" class="btn-sidebar-furniture" id="btn-sidebar-furniture" title="Open Custom Furniture Upload Page">
+              <span class="btn-icon">🛋️</span>
+              <span>Upload Furniture Photos</span>
+            </button>
+          </div>
         </aside>
 
         <!-- Center: Canvas Workspace -->
@@ -670,6 +960,17 @@
           <canvas id="floorplan-canvas"></canvas>
           <div class="canvas-coords-overlay" id="canvas-coords-overlay">
             Pointer: 0.00′, 0.00′
+          </div>
+
+          <!-- Canvas Floating Furniture Action Banner -->
+          <div class="canvas-floating-furniture-cta" id="canvas-floating-furniture-cta">
+            <div class="floating-cta-info">
+              <span class="floating-step-tag">Step ② Next</span>
+              <span class="floating-cta-text">2D Plan checked? Add custom furniture photos</span>
+            </div>
+            <button type="button" class="btn-floating-furniture" id="btn-canvas-furniture" title="Open Custom Furniture Upload Page">
+              <span>🛋️ Upload Furniture Page ➔</span>
+            </button>
           </div>
         </div>
 
@@ -684,6 +985,14 @@
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
               </svg>
               <p>Select any wall, furniture piece, or fixture on the canvas to inspect and edit its properties.</p>
+              <button type="button" class="btn-topbar-furniture btn-inspector-furniture" id="btn-next-furniture" title="Proceed to Step 2: Upload Furniture Photos">
+                <span class="btn-icon">🛋️</span>
+                <span class="btn-text">Upload Furniture</span>
+                <span class="btn-pill" id="topbar-furniture-pill">0</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
             </div>
 
             <div id="inspector-fields" style="display: none;" class="inspector-form">
@@ -785,10 +1094,475 @@
                   <span>Delete</span>
                 </button>
               </div>
+              <div class="inspector-furniture-action" id="inspector-furniture-action" style="display: none; margin-top: 10px;">
+                <button type="button" class="btn-upload-item-photo" id="btn-assign-furniture-photo" title="Upload custom real-world photo for this furniture piece">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                    <circle cx="12" cy="13" r="4"></circle>
+                  </svg>
+                  <span>📸 Upload Photo for this Item</span>
+                </button>
+                <button type="button" class="btn-choose-item-asset" id="btn-choose-item-asset" title="Choose from System (Industrial &amp; Japandi) &amp; Your Assets" style="margin-top: 8px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                    <polyline points="2 17 12 22 22 17"></polyline>
+                    <polyline points="2 12 12 17 22 12"></polyline>
+                  </svg>
+                  <span>🛋️ Choose from Assets Catalog</span>
+                </button>
+              </div>
             </div>
           </div>
         </aside>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal: Step ② Furniture Ingestion — Upload Custom Furniture Photo -->
+  <div class="modal-backdrop" id="furniture-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="furniture-modal-title">
+    <div class="modal-card furniture-modal-card">
+      
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <div class="modal-step-tag">
+            <span class="card-tag">Step ② Furniture Ingestion</span>
+            <span class="modal-step-badge" id="furniture-project-badge">Project: --</span>
+          </div>
+          <h2 class="modal-title" id="furniture-modal-title">Upload Custom Furniture Photo</h2>
+          <p class="modal-subtitle">
+            Stream high-res photos of your furniture directly to Google Cloud Storage via V4 signed PUT URLs to build real-world-scaled 3D models.
+          </p>
+        </div>
+        <button type="button" class="modal-close-btn" id="btn-close-furniture-modal" aria-label="Close furniture upload modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Body with Split View -->
+      <div class="modal-body furniture-modal-body">
+        <div class="furniture-split-layout">
+          
+          <!-- Left Column: Upload Form & Dropzone -->
+          <div class="furniture-upload-col">
+            <div class="furniture-catalog-shortcut-box">
+              <div class="shortcut-text">
+                <span class="shortcut-title">✨ Prefer curated styles or your library?</span>
+                <span class="shortcut-desc">Choose from 41 System Assets (Industrial &amp; Japandi) or reuse existing assets.</span>
+              </div>
+              <button type="button" class="btn-secondary btn-shortcut-browse-assets" id="btn-browse-assets-for-active-proj">
+                <span>Browse Assets Catalog ➔</span>
+              </button>
+            </div>
+
+            <form id="furniture-upload-form" novalidate>
+              
+              <div class="furniture-form-grid">
+                <!-- Furniture Label / Name -->
+                <div class="form-group">
+                  <label for="furniture-name-input" class="form-label">Furniture Name / Label *</label>
+                  <div class="input-wrapper">
+                    <input 
+                      type="text" 
+                      id="furniture-name-input" 
+                      class="form-input" 
+                      placeholder="e.g. Modern Italian Leather Sectional" 
+                      required 
+                      maxlength="120"
+                    >
+                  </div>
+                </div>
+
+                <!-- Category & Linked 2D Component in 2 Columns -->
+                <div class="furniture-form-row">
+                  <div class="form-group">
+                    <label for="furniture-type-select" class="form-label">Category</label>
+                    <div class="input-wrapper">
+                      <select id="furniture-type-select" class="form-input form-select">
+                        <option value="sofa">Sofa / Sectional</option>
+                        <option value="armchair">Armchair / Accent Chair</option>
+                        <option value="chair">Dining Chair / Desk Chair</option>
+                        <option value="dining_table">Dining Table</option>
+                        <option value="coffee_table">Coffee Table</option>
+                        <option value="table">Side Table / Desk</option>
+                        <option value="bed">Bed (King / Queen / Single)</option>
+                        <option value="nightstand">Nightstand / Bedside</option>
+                        <option value="wardrobe">Wardrobe / Armoire</option>
+                        <option value="cabinet">Cabinet / Credenza</option>
+                        <option value="bookshelf">Bookshelf / Shelving</option>
+                        <option value="kitchen_island">Kitchen Island</option>
+                        <option value="decor">Decor / Lighting / Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="furniture-link-select" class="form-label">Assign to 2D Plan Item</label>
+                    <div class="input-wrapper">
+                      <select id="furniture-link-select" class="form-input form-select">
+                        <option value="">-- None (Add to Project Library) --</option>
+                        <!-- Dynamically populated from parsed floor plan furniture items -->
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Storage Ingestion Details Pill -->
+              <div class="gcs-info-box furniture-gcs-box">
+                <div class="gcs-info-header">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                  </svg>
+                  <span>Cloud Storage Ingestion Path</span>
+                </div>
+                <p class="gcs-info-text">
+                  Target: <code id="furniture-gcs-path-preview">soraplan-assest-dev/{user_id}/{project_id}/furniture/...</code><br>
+                  Method: <code>V4 Signed PUT</code> direct-to-cloud upload.
+                </p>
+              </div>
+
+              <!-- Native Hidden File Input -->
+              <input 
+                type="file" 
+                id="furniture-file-input" 
+                accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" 
+                style="display: none;"
+              >
+
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label class="form-label" style="margin-bottom: 0;">Furniture Photo (PNG / JPG / WebP) *</label>
+                <button type="button" class="btn-secondary btn-xs" id="btn-load-sample-furniture" title="Load sample sofa photo for fast testing">
+                  ⚡ Load Sample Sofa
+                </button>
+              </div>
+
+              <!-- Dropzone for Furniture Image -->
+              <div class="dropzone furniture-dropzone" id="furniture-dropzone" tabindex="0" role="button" aria-label="Drop furniture photo here or click to browse">
+                <div class="dropzone-inner" id="furniture-dropzone-idle">
+                  <div class="dropzone-icon-wrap">
+                    <svg class="dropzone-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                      <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                  </div>
+                  <div class="dropzone-primary-text">
+                    <strong>Click to select</strong> or drag and drop furniture photo
+                  </div>
+                  <div class="dropzone-hint">
+                    Clear photos of your sofa, chair, table, or bed (PNG, JPG, WebP up to 25MB)
+                  </div>
+                </div>
+
+                <!-- File Preview Card -->
+                <div class="file-preview-card" id="furniture-preview-card" style="display: none;">
+                  <div class="preview-media" id="furniture-media-container">
+                    <!-- Image thumbnail injected dynamically -->
+                  </div>
+                  <div class="preview-details">
+                    <div class="preview-filename" id="furniture-filename">furniture.jpg</div>
+                    <div class="preview-meta">
+                      <span class="preview-badge" id="furniture-type-badge">JPEG</span>
+                      <span class="preview-size" id="furniture-filesize">2.4 MB</span>
+                    </div>
+                    <div class="preview-actions-row">
+                      <button type="button" class="preview-remove-btn" id="btn-remove-furniture-file" title="Select different image">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                        <span>Change Photo</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Option: Transparent Background Checkbox (gpt-6-sol) -->
+              <div class="furniture-option-row" id="furniture-transparent-bg-wrapper">
+                <label class="furniture-checkbox-label" for="furniture-transparent-bg-checkbox">
+                  <input 
+                    type="checkbox" 
+                    id="furniture-transparent-bg-checkbox" 
+                    name="transparent_background"
+                    class="furniture-checkbox"
+                  >
+                  <span class="furniture-checkbox-custom"></span>
+                  <div class="furniture-checkbox-content">
+                    <span class="furniture-checkbox-title">
+                      <span>transparent background</span>
+                      <span class="furniture-ai-pill">gpt-6-sol</span>
+                    </span>
+                    <span class="furniture-checkbox-desc">
+                      Removes room background and isolates the furniture with a clean transparent background before 3D ingestion.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Admin Option: Belongs to System Checkbox (Admin Only) -->
+              <div class="furniture-option-row admin-only-field" id="furniture-system-wrapper" style="display: none;">
+                <label class="furniture-checkbox-label" for="furniture-system-checkbox">
+                  <input 
+                    type="checkbox" 
+                    id="furniture-system-checkbox" 
+                    name="is_system"
+                    class="furniture-checkbox"
+                  >
+                  <span class="furniture-checkbox-custom"></span>
+                  <div class="furniture-checkbox-content">
+                    <span class="furniture-checkbox-title">
+                      <span>belongs to system</span>
+                      <span class="furniture-admin-badge">Admin</span>
+                    </span>
+                    <span class="furniture-checkbox-desc">
+                      Flag this furniture photo to belong to the system catalog immediately on upload.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Multi-Step Upload Progress Bar -->
+              <div class="upload-progress-wrapper" id="furniture-progress-wrapper" style="display: none;">
+                <div class="progress-steps">
+                  <div class="progress-step-item" id="furn-step-url">
+                    <span class="step-num">1</span>
+                    <span class="step-label">Signed URL</span>
+                  </div>
+                  <div class="progress-step-item" id="furn-step-put">
+                    <span class="step-num">2</span>
+                    <span class="step-label">GCS Upload</span>
+                  </div>
+                  <div class="progress-step-item" id="furn-step-confirm">
+                    <span class="step-num">3</span>
+                    <span class="step-label">Register Asset</span>
+                  </div>
+                </div>
+
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="furniture-bar-fill" style="width: 0%;"></div>
+                </div>
+
+                <div class="progress-status-bar">
+                  <span class="progress-status-msg" id="furniture-status-msg">Requesting signed upload URL...</span>
+                  <span class="progress-status-pct" id="furniture-status-pct">0%</span>
+                </div>
+              </div>
+
+              <!-- Form Submit Button -->
+              <button type="submit" class="submit-btn" id="btn-submit-furniture">
+                <span class="spinner" id="furniture-spinner" aria-hidden="true"></span>
+                <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span id="furniture-btn-text">Upload Furniture Photo to Cloud Storage</span>
+              </button>
+
+            </form>
+          </div>
+
+          <!-- Right Column: Project Furniture Library & Gallery -->
+          <div class="furniture-gallery-col">
+            <div class="gallery-col-header">
+              <div class="gallery-col-title-wrap">
+                <h3 class="gallery-col-title">Project Furniture Library</h3>
+                <span class="count-pill" id="furniture-count-pill">0 items</span>
+              </div>
+              <button type="button" class="btn-secondary btn-xs" id="btn-refresh-furniture" title="Refresh library">
+                🔄 Refresh
+              </button>
+            </div>
+
+            <!-- Empty State for Furniture Library -->
+            <div class="furniture-empty-state" id="furniture-empty-state">
+              <div class="empty-furn-icon">🪑</div>
+              <div class="empty-furn-title">No furniture photos uploaded yet</div>
+              <div class="empty-furn-desc">Upload photos of your real-world furniture on the left. SoraPlan streams them to GCS to generate accurate 3D metric models.</div>
+            </div>
+
+            <!-- Grid of Uploaded Furniture Cards -->
+            <div class="furniture-items-grid" id="furniture-items-grid" style="display: none;">
+              <!-- Furniture cards dynamically injected here -->
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Modal Footer Actions -->
+      <div class="modal-footer furniture-modal-footer">
+        <div class="modal-footer-left">
+          <button type="button" class="btn-secondary" id="btn-back-to-editor">
+            ← Back to 2D Plan
+          </button>
+        </div>
+        <div class="modal-footer-right">
+          <button type="button" class="btn-primary" id="btn-proceed-3d-world">
+            <span>Proceed to 3D Style &amp; World ➔</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal: 3D Model Interactive Review Window -->
+  <div class="modal-backdrop review-3d-backdrop" id="modal-3d-review" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-3d-title">
+    <div class="modal-card review-3d-card">
+      
+      <!-- 3D Review Header -->
+      <div class="modal-header review-3d-header">
+        <div class="modal-header-info">
+          <div class="modal-step-tag">
+            <span class="card-tag">Meshy AI 3D Model</span>
+            <span class="modal-step-badge" id="review-3d-category-badge">Category: Table</span>
+            <span class="modal-step-badge badge-metric-scale">Metric Scale: Meters (Y-Up)</span>
+          </div>
+          <h2 class="modal-title" id="modal-3d-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: #10b981;">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            <span id="review-3d-title-text">3D Model Review</span>
+          </h2>
+          <p class="modal-subtitle" id="modal-3d-subtitle">
+            Interactive real-scale 3D asset generated with Meshy AI. Orbit, pan, and inspect before placing into the 3D home scene graph.
+          </p>
+        </div>
+        <button type="button" class="modal-close-btn" id="btn-close-3d-review" aria-label="Close 3D Review Window">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- 3D Review Body / Viewport -->
+      <div class="modal-body review-3d-body">
+        <div class="review-3d-viewport-container" id="review-3d-viewport-container">
+          
+          <!-- Google model-viewer element -->
+          <model-viewer
+            id="review-3d-model-viewer"
+            src=""
+            alt="3D Furniture Model"
+            camera-controls
+            touch-action="pan-y"
+            auto-rotate
+            auto-rotate-delay="1000"
+            rotation-per-second="24deg"
+            shadow-intensity="1.5"
+            shadow-softness="0.75"
+            exposure="1.0"
+            camera-orbit="40deg 75deg auto"
+            interaction-prompt="none"
+            class="model-viewer-canvas"
+          >
+          </model-viewer>
+
+          <!-- Loading Overlay -->
+          <div class="review-3d-loading-overlay" id="review-3d-loading-overlay">
+            <div class="review-3d-spinner-box">
+              <div class="cube-spinner">
+                <div class="cube-spinner-inner"></div>
+              </div>
+              <div class="review-3d-loading-text">Loading 3D Mesh…</div>
+              <div class="review-3d-loading-progress-track">
+                <div class="review-3d-loading-progress-fill" id="review-3d-progress-fill" style="width: 25%;"></div>
+              </div>
+              <div class="review-3d-loading-hint">Compiling PBR materials &amp; geometry buffer</div>
+            </div>
+          </div>
+
+          <!-- Error Overlay (if GLB fails to load) -->
+          <div class="review-3d-error-overlay" id="review-3d-error-overlay" style="display: none;">
+            <div class="review-3d-error-box">
+              <div class="review-3d-error-icon">⚠️</div>
+              <div class="review-3d-error-title">Unable to Render 3D Model</div>
+              <div class="review-3d-error-desc" id="review-3d-error-desc">The GLB asset could not be loaded directly in the viewport.</div>
+              <div class="review-3d-error-actions">
+                <button type="button" class="btn-secondary btn-sm" id="btn-review-3d-retry">
+                  🔄 Retry Loading
+                </button>
+                <a href="#" target="_blank" rel="noopener noreferrer" class="btn-primary btn-sm" id="btn-review-3d-fallback-link">
+                  ⬇ Download / Open GLB
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Floating HUD Controls Toolbar (Top-Right) -->
+          <div class="review-3d-hud-toolbar" role="toolbar" aria-label="3D Viewport Controls">
+            <button type="button" class="hud-control-btn active" id="btn-3d-toggle-rotate" title="Toggle Auto-Rotation">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+              <span id="label-toggle-rotate">Auto-Rotate</span>
+            </button>
+            <button type="button" class="hud-control-btn" id="btn-3d-reset-cam" title="Reset Camera Viewpoint">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>Reset View</span>
+            </button>
+            <div class="hud-separator"></div>
+            <button type="button" class="hud-control-btn" id="btn-3d-toggle-bg" title="Toggle Studio Background Theme">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2"></path><path d="M12 20v2"></path>
+                <path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path>
+                <path d="M2 12h2"></path><path d="M20 12h2"></path>
+                <path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path>
+              </svg>
+              <span id="label-bg-mode">Studio Dark</span>
+            </button>
+          </div>
+
+          <!-- Floating Interaction Navigation Guide (Bottom-Center) -->
+          <div class="review-3d-nav-guide">
+            <span class="guide-item"><kbd>Left-Click</kbd> Rotate</span>
+            <span class="guide-separator">•</span>
+            <span class="guide-item"><kbd>Right-Click / 2-Fingers</kbd> Pan</span>
+            <span class="guide-separator">•</span>
+            <span class="guide-item"><kbd>Scroll</kbd> Zoom</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 3D Review Footer -->
+      <div class="modal-footer review-3d-footer">
+        <div class="modal-footer-left">
+          <div class="review-3d-meta-badges">
+            <span class="meta-pill"><span class="pill-dot"></span> PBR Materials Enabled</span>
+            <span class="meta-pill">Format: GLB (glTF 2.0)</span>
+            <span class="meta-pill" id="review-3d-filesize">Meshy AI Standard Res</span>
+          </div>
+        </div>
+        <div class="modal-footer-right">
+          <a href="#" target="_blank" download class="btn-secondary" id="btn-review-3d-download-glb" title="Download binary glTF (.glb) file">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Download GLB</span>
+          </a>
+          <button type="button" class="btn-primary" id="btn-review-3d-done">
+            <span>Done</span>
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 

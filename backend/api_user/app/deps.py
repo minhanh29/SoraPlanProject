@@ -14,6 +14,7 @@ from .services.auth_service import AuthService
 from .services.user_service import UserService
 from .services.storage_service import StorageService
 from .services.project_service import ProjectService
+from .services.meshy_service import MeshyService
 
 logger = logging.getLogger("api_user.deps")
 bearer_scheme = HTTPBearer(auto_error=True)
@@ -44,12 +45,18 @@ def get_storage_service(storage_client: gcloud_storage.Client = Depends(get_stor
     return StorageService(client=storage_client)
 
 
+def get_meshy_service() -> MeshyService:
+    """Dependency for MeshyService."""
+    return MeshyService()
+
+
 def get_project_service(
     db: gcloud_firestore.Client = Depends(get_db),
     storage_service: StorageService = Depends(get_storage_service),
+    meshy_service: MeshyService = Depends(get_meshy_service),
 ) -> ProjectService:
     """Dependency for ProjectService."""
-    return ProjectService(db=db, storage_service=storage_service)
+    return ProjectService(db=db, storage_service=storage_service, meshy_service=meshy_service)
 
 
 async def get_current_token_payload(

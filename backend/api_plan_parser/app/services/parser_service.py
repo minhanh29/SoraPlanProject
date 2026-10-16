@@ -826,3 +826,145 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
             cleaned = cleaned[start : end + 1]
 
         return json.loads(cleaned)
+
+    def isolate_furniture_transparent_background(
+        self,
+        image_bytes: bytes,
+        mime_type: str = "image/jpeg",
+        furniture_name: str = "furniture",
+    ) -> Dict[str, Any]:
+        """
+        Calls OpenAI gpt-6-sol with image_generation tool to isolate furniture
+        with prompt '{uploaded_furniture} transparent background'.
+        Returns data URI with a transparent background PNG.
+        """
+        clean_name = (furniture_name or "furniture").strip()
+        prompt = f"{clean_name} transparent background"
+
+        media_type = mime_type if mime_type in ("image/png", "image/jpeg", "image/webp") else "image/jpeg"
+        b64_data = base64.b64encode(image_bytes).decode("utf-8")
+        data_uri = f"data:{media_type};base64,{b64_data}"
+
+        payload = {
+            "model": self.settings.OPENAI_MODEL,
+            "tools": [{"type": "image_generation"}],
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                        {"type": "input_image", "image_url": data_uri},
+                    ],
+                }
+            ],
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.settings.OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        logger.info("Calling OpenAI Responses API (%s) to generate transparent background for: '%s'", self.settings.OPENAI_MODEL, prompt)
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/responses",
+            headers=headers,
+            data=json.dumps(payload).encode("utf-8"),
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                res = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")
+            logger.error("OpenAI API HTTPError %d: %s", e.code, err_body)
+            raise RuntimeError(f"OpenAI API error ({e.code}): {err_body}")
+        except Exception as e:
+            logger.error("Failed to call OpenAI API: %s", e)
+            raise RuntimeError(f"Failed to communicate with OpenAI API: {str(e)}")
+
+        result_b64 = None
+        for item in res.get("output", []):
+            if item.get("type") == "image_generation_call":
+                result_b64 = item.get("result")
+                if result_b64:
+                    break
+
+        if not result_b64:
+            logger.error("OpenAI response did not contain image_generation_call result: %s", res)
+            raise RuntimeError("No image returned from OpenAI model for transparent background.")
+
+        # Post-process with alpha channel if PIL is available
+        if HAS_PIL and result_b64:
+            try:
+                raw_bytes = base64.b64decode(result_b64)
+                im = Image.open(io.BytesIO(raw_bytes))
+                im_trans = self._make_alpha_transparent(im)
+                buf = io.BytesIO()
+                im_trans.save(buf, format="PNG")
+                result_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+            except Exception as e:
+                logger.warning("Alpha transparency post-processing failed, using raw output: %s", e)
+
+        return {
+            "status": "success",
+            "furnitureName": clean_name,
+            "prompt": prompt,
+            "model": self.settings.OPENAI_MODEL,
+            "mimeType": "image/png",
+            "dataUri": f"data:image/png;base64,{result_b64}",
+            "result": result_b64,
+        }
+
+    def _make_alpha_transparent(self, im: Any) -> Any:
+        """Converts checkerboard or outer light background into clean RGBA alpha transparency."""
+        if not HAS_PIL:
+            return im
+        im = im.convert("RGBA")
+        w, h = im.size
+        pixels = im.load()
+
+        alpha_extrema = im.split()[-1].getextrema()
+        if alpha_extrema[0] < 128:
+            return im
+
+        corner_colors = [pixels[0, 0][:3], pixels[w - 1, 0][:3], pixels[0, h - 1][:3], pixels[w - 1, h - 1][:3]]
+        avg_corner = sum(sum(c) / 3 for c in corner_colors) / 4
+        if avg_corner < 180:
+            return im
+
+        def is_bg(r: int, g: int, b: int) -> bool:
+            diff = max(abs(r - g), abs(g - b), abs(r - b))
+            if diff <= 8:
+                if (234 <= r <= 248) or (249 <= r <= 255):
+                    return True
+            return False
+
+        import collections
+        visited = set()
+        queue = collections.deque()
+        for x in range(w):
+            if is_bg(*pixels[x, 0][:3]):
+                queue.append((x, 0))
+            if is_bg(*pixels[x, h - 1][:3]):
+                queue.append((x, h - 1))
+        for y in range(h):
+            if is_bg(*pixels[0, y][:3]):
+                queue.append((0, y))
+            if is_bg(*pixels[w - 1, y][:3]):
+                queue.append((w - 1, y))
+
+        while queue:
+            x, y = queue.popleft()
+            if (x, y) in visited:
+                continue
+            visited.add((x, y))
+
+            r, g, b, a = pixels[x, y]
+            if is_bg(r, g, b):
+                pixels[x, y] = (0, 0, 0, 0)
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in visited:
+                        queue.append((nx, ny))
+
+        return im
