@@ -20,24 +20,28 @@ Built for the Google AI builder hackathon.
 
 ## Current state
 
-The design docs (`GEMINI.md`, `docs/`) describe the target architecture (Next.js, R3F, Gemini). What runs
-today is a lighter first cut:
+The design docs (`GEMINI.md`, `docs/`) describe the target architecture. What runs today is the chat-first
+app from [`docs/10-chat-refactor-plan.md`](docs/10-chat-refactor-plan.md):
 
-- **Frontend:** static HTML/JS in `frontend/` (2D plan editor on Canvas, `<model-viewer>` for GLB review),
-  hosted on Firebase Hosting.
-- **API:** `backend/api`, FastAPI on Cloud Run. Auth (Firebase), projects, signed-URL uploads, Meshy jobs.
+- **Web:** `web/`, Vite + React + TypeScript, React Three Fiber, Firebase Auth + Firestore listeners, on
+  Firebase Hosting. One conversation per project; Gemini guides the flow (crop → plan review → style →
+  missing objects → isometric 3D) and edits the scene through tools.
+- **API:** `backend/api`, FastAPI on Cloud Run. Conversations, Gemini orchestrator (Vertex AI), asset
+  mapping, scene builder and scene ops, asset library with server-side Meshy polling (Cloud Tasks).
 - **Plan parsing worker:** `backend/plan_parsing_worker`, private FastAPI on Cloud Run, invoked by Cloud Tasks.
-  Parses sketches with OpenAI vision and writes the floor plan to Firestore.
-- **Preset furniture catalog:** `gs://soraplan-catalog/assets/{Industrial,Japandi}/` (public read). 3D files are
-  never committed to git.
+  Parses the cropped plan with OpenAI vision and posts the result into the conversation.
+- **Preset furniture catalog:** `gs://soraplan-catalog/assets/{Industrial,Japandi}/` (originals) and
+  `assets-web/` (meshopt + WebP, ~0.5 MB each). 3D files are never committed to git.
 
 ## Repository layout
 
 ```
-frontend/                     Static web app (config.js holds API + catalog URLs)
+web/                          Chat-first web app (Vite, React, R3F)
 backend/api/                  REST API (Cloud Run, public)
 backend/plan_parsing_worker/  Floor-plan parser (Cloud Run, private)
 deploy/                       setup.sh, upload_catalog.sh, deploy.sh
+scripts/                      catalog optimize/measure, asset migration, crop examples
+firestore.rules               read-only rules for the browser (all writes go through the API)
 docs/                         Target design and research
 ```
 
@@ -47,6 +51,7 @@ docs/                         Target design and research
 # API (port 8000)
 cd backend/api && cp .env.example .env   # fill in keys
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
+gcloud auth application-default login    # Gemini through Vertex AI
 .venv/bin/uvicorn app.main:app --reload --port 8000
 
 # Worker (port 8001)
@@ -54,8 +59,9 @@ cd backend/plan_parsing_worker && cp .env.example .env
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn app.main:app --reload --port 8001
 
-# Frontend (port 3000)
-cd frontend && npx serve . -p 3000
+# Web (port 5173)
+cd web && cp .env.example .env.local     # VITE_FIREBASE_API_KEY = FIREBASE_WEB_API_KEY
+npm install && npm run dev
 ```
 
 Credentials live only in the gitignored `.env` files and `backend/api/.secrets/`. On Cloud Run they come
@@ -64,13 +70,14 @@ from Secret Manager and the service accounts' own identity.
 ## Deploy (project `soraplan`, gcloud configuration `trungtin`)
 
 ```bash
-deploy/setup.sh            # once: APIs, service accounts, IAM, secrets, Cloud Tasks queue, buckets
-deploy/upload_catalog.sh   # sync local assets/ to gs://soraplan-catalog
-deploy/deploy.sh all       # worker -> api -> frontend
-deploy/deploy.sh api       # or one at a time: worker | api | frontend
+deploy/setup.sh                       # once: APIs, service accounts, IAM, secrets, queues, buckets
+scripts/optimize_catalog.sh           # once per catalog change: web-optimized GLBs
+deploy/upload_catalog.sh              # sync assets/ and catalog/out/assets-web to gs://soraplan-catalog
+deploy/deploy.sh all                  # worker -> api -> Firestore rules -> web
+backend/api/.venv/bin/python scripts/migrate_assets.py --apply   # once: seed assets/ in Firestore
 ```
 
-`firebase login` is needed once for the Hosting step.
+`firebase login` is needed once for the rules and Hosting steps.
 
 ## Documentation
 

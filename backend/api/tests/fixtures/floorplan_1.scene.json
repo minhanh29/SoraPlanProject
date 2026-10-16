@@ -1,0 +1,544 @@
+{
+ "id": "scn_proj_1",
+ "levels": [
+  {
+   "ceilingHeight": 2.7,
+   "elevation": 0.0,
+   "id": "lvl_0",
+   "items": [
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_master_bed",
+     "category": "Bed",
+     "componentId": "fur_001",
+     "dims": {
+      "d": 2.134,
+      "h": 0.873,
+      "w": 1.919
+     },
+     "id": "itm_fur_001",
+     "label": "Master Bed",
+     "position": [
+      9.525,
+      0.0,
+      1.3716
+     ],
+     "roomId": "rom_001",
+     "rotationY": 0.0,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_sofa",
+     "category": "Sofa",
+     "componentId": "fur_002",
+     "dims": {
+      "d": 0.914,
+      "h": 0.638,
+      "w": 2.069
+     },
+     "id": "itm_fur_002",
+     "label": "Sofa",
+     "position": [
+      0.6096,
+      0.0,
+      6.6294
+     ],
+     "roomId": "rom_003",
+     "rotationY": 1.5708,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_closet_storage",
+     "category": "Wardrobe & Storage",
+     "componentId": "fur_003",
+     "dims": {
+      "d": 0.513,
+      "h": 2.034,
+      "w": 1.707
+     },
+     "id": "itm_fur_003",
+     "label": "Closet",
+     "position": [
+      11.6129,
+      0.0,
+      2.3774
+     ],
+     "roomId": "rom_001",
+     "rotationY": -1.5708,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_living_table",
+     "category": "Coffee Table",
+     "componentId": "fur_004",
+     "dims": {
+      "d": 0.738,
+      "h": 0.617,
+      "w": 1.219
+     },
+     "id": "itm_fur_004",
+     "label": "Coffee table",
+     "position": [
+      2.2098,
+      0.0,
+      6.5532
+     ],
+     "roomId": "rom_003",
+     "rotationY": 1.5708,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_kitchen_table",
+     "category": "Dining Table",
+     "componentId": "fur_005",
+     "dims": {
+      "d": 0.773,
+      "h": 0.601,
+      "w": 1.524
+     },
+     "id": "itm_fur_005",
+     "label": "Dining table",
+     "position": [
+      9.2964,
+      0.0,
+      7.1628
+     ],
+     "roomId": "rom_004",
+     "rotationY": 3.1416,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_kitchen_chair",
+     "category": "Dining Chair",
+     "componentId": "fur_006",
+     "dims": {
+      "d": 0.434,
+      "h": 0.663,
+      "w": 0.457
+     },
+     "id": "itm_fur_006",
+     "label": "Chair",
+     "position": [
+      9.0678,
+      0.0,
+      6.416
+     ],
+     "roomId": "rom_004",
+     "rotationY": 0.0,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_kitchen_chair",
+     "category": "Dining Chair",
+     "componentId": "fur_007",
+     "dims": {
+      "d": 0.434,
+      "h": 0.663,
+      "w": 0.457
+     },
+     "id": "itm_fur_007",
+     "label": "Chair",
+     "position": [
+      9.6774,
+      0.0,
+      6.416
+     ],
+     "roomId": "rom_004",
+     "rotationY": 0.0,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_nightstand",
+     "category": "Nightstand",
+     "componentId": "fur_009",
+     "dims": {
+      "d": 0.457,
+      "h": 0.343,
+      "w": 0.444
+     },
+     "id": "itm_fur_009",
+     "label": "Nightstand",
+     "position": [
+      8.1534,
+      0.0,
+      0.5334
+     ],
+     "roomId": "rom_001",
+     "rotationY": 0.0,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_bath",
+     "category": "Bathtub",
+     "componentId": "fix_001",
+     "dims": {
+      "d": 0.673,
+      "h": 0.271,
+      "w": 1.524
+     },
+     "id": "itm_fix_001",
+     "label": "Bathtub",
+     "position": [
+      4.7244,
+      0.0,
+      0.5334
+     ],
+     "roomId": "rom_002",
+     "rotationY": 0.0,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_toilet",
+     "category": "Toilet",
+     "componentId": "fix_002",
+     "dims": {
+      "d": 0.732,
+      "h": 0.635,
+      "w": 0.426
+     },
+     "id": "itm_fix_002",
+     "label": "Toilet",
+     "position": [
+      5.5778,
+      0.0,
+      1.8898
+     ],
+     "roomId": "rom_002",
+     "rotationY": 0.0,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_sink",
+     "category": "Sink",
+     "componentId": "fix_003",
+     "dims": {
+      "d": 0.196,
+      "h": 0.271,
+      "w": 0.61
+     },
+     "id": "itm_fix_003",
+     "label": "Sink",
+     "position": [
+      4.2672,
+      0.0,
+      2.0574
+     ],
+     "roomId": "rom_002",
+     "rotationY": 0.0,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_kitchen_sink",
+     "category": "Kitchen Sink",
+     "componentId": "fix_004",
+     "dims": {
+      "d": 0.314,
+      "h": 0.293,
+      "w": 0.914
+     },
+     "id": "itm_fix_004",
+     "label": "Kitchen sink",
+     "position": [
+      10.8204,
+      0.0,
+      8.6868
+     ],
+     "roomId": "rom_004",
+     "rotationY": 3.1416,
+     "scaleMode": "uniform"
+    },
+    {
+     "addedBy": "parser",
+     "assetId": "sys_japandi_Ja_fridge",
+     "category": "Kitchen Appliance",
+     "componentId": "fix_005",
+     "dims": {
+      "d": 0.762,
+      "h": 1.72,
+      "w": 0.597
+     },
+     "id": "itm_fix_005",
+     "label": "Fridge",
+     "position": [
+      11.811,
+      0.0,
+      8.001
+     ],
+     "roomId": "rom_004",
+     "rotationY": -1.5708,
+     "scaleMode": "uniform"
+    }
+   ],
+   "name": "Ground floor",
+   "openings": [],
+   "rooms": [
+    {
+     "area": 24.15,
+     "floorColor": null,
+     "id": "rom_001",
+     "name": "Master Bedroom",
+     "polygon": [
+      {
+       "x": 6.096,
+       "z": 0.0
+      },
+      {
+       "x": 12.192,
+       "z": 0.0
+      },
+      {
+       "x": 12.192,
+       "z": 3.9624
+      },
+      {
+       "x": 6.096,
+       "z": 3.9624
+      }
+     ],
+     "type": "bedroom"
+    },
+    {
+     "area": 5.95,
+     "floorColor": null,
+     "id": "rom_002",
+     "name": "Bathroom",
+     "polygon": [
+      {
+       "x": 3.6576,
+       "z": 0.0
+      },
+      {
+       "x": 6.096,
+       "z": 0.0
+      },
+      {
+       "x": 6.096,
+       "z": 2.4384
+      },
+      {
+       "x": 3.6576,
+       "z": 2.4384
+      }
+     ],
+     "type": "bathroom"
+    },
+    {
+     "area": 34.75,
+     "floorColor": null,
+     "id": "rom_003",
+     "name": "Living Room",
+     "polygon": [
+      {
+       "x": 0.0,
+       "z": 3.9624
+      },
+      {
+       "x": 6.7056,
+       "z": 3.9624
+      },
+      {
+       "x": 6.7056,
+       "z": 9.144
+      },
+      {
+       "x": 0.0,
+       "z": 9.144
+      }
+     ],
+     "type": "living"
+    },
+    {
+     "area": 28.43,
+     "floorColor": null,
+     "id": "rom_004",
+     "name": "Kitchen",
+     "polygon": [
+      {
+       "x": 6.7056,
+       "z": 3.9624
+      },
+      {
+       "x": 12.192,
+       "z": 3.9624
+      },
+      {
+       "x": 12.192,
+       "z": 9.144
+      },
+      {
+       "x": 6.7056,
+       "z": 9.144
+      }
+     ],
+     "type": "kitchen"
+    }
+   ],
+   "walls": [
+    {
+     "color": null,
+     "end": [
+      1.524,
+      0.0
+     ],
+     "exterior": true,
+     "height": 2.7,
+     "id": "wall_001",
+     "start": [
+      0.0,
+      0.0
+     ],
+     "thickness": 0.1676
+    },
+    {
+     "color": null,
+     "end": [
+      12.192,
+      0.0
+     ],
+     "exterior": true,
+     "height": 2.7,
+     "id": "wall_002",
+     "start": [
+      2.7432,
+      0.0
+     ],
+     "thickness": 0.1676
+    },
+    {
+     "color": null,
+     "end": [
+      12.192,
+      9.144
+     ],
+     "exterior": true,
+     "height": 2.7,
+     "id": "wall_003",
+     "start": [
+      12.192,
+      0.0
+     ],
+     "thickness": 0.1676
+    },
+    {
+     "color": null,
+     "end": [
+      3.6576,
+      9.144
+     ],
+     "exterior": true,
+     "height": 2.7,
+     "id": "wall_004",
+     "start": [
+      0.0,
+      9.144
+     ],
+     "thickness": 0.1676
+    },
+    {
+     "color": null,
+     "end": [
+      12.192,
+      9.144
+     ],
+     "exterior": true,
+     "height": 2.7,
+     "id": "wall_005",
+     "start": [
+      4.572,
+      9.144
+     ],
+     "thickness": 0.1676
+    },
+    {
+     "color": null,
+     "end": [
+      0.0,
+      9.144
+     ],
+     "exterior": true,
+     "height": 2.7,
+     "id": "wall_006",
+     "start": [
+      0.0,
+      0.0
+     ],
+     "thickness": 0.1676
+    },
+    {
+     "color": null,
+     "end": [
+      6.096,
+      3.048
+     ],
+     "exterior": false,
+     "height": 2.7,
+     "id": "wall_007",
+     "start": [
+      6.096,
+      0.0
+     ],
+     "thickness": 0.1219
+    },
+    {
+     "color": null,
+     "end": [
+      3.6576,
+      2.4384
+     ],
+     "exterior": false,
+     "height": 2.7,
+     "id": "wall_008",
+     "start": [
+      3.6576,
+      0.0
+     ],
+     "thickness": 0.1219
+    },
+    {
+     "color": null,
+     "end": [
+      12.192,
+      3.9624
+     ],
+     "exterior": false,
+     "height": 2.7,
+     "id": "wall_009",
+     "start": [
+      7.0104,
+      3.9624
+     ],
+     "thickness": 0.1219
+    }
+   ]
+  }
+ ],
+ "meta": {
+  "bounds": {
+   "maxX": 12.192,
+   "maxZ": 9.144,
+   "minX": 0.0,
+   "minZ": 0.0
+  },
+  "palette": {
+   "accent": "#7D8C6A",
+   "floor": "#C8A57A",
+   "wall": "#EFE8DD"
+  },
+  "style": "Japandi"
+ },
+ "projectId": "proj_1",
+ "schemaVersion": "1.0",
+ "units": "m",
+ "version": 1
+}

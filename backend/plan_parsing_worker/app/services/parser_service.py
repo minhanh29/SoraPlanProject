@@ -38,6 +38,10 @@ from ..models.task import ParsePlanTaskRequest
 
 logger = logging.getLogger("plan_parsing_worker.service")
 
+
+class _SkipCorners(Exception):
+    """Control flow: cropped uploads skip the corner-detection pass."""
+
 SYSTEM_INSTRUCTION = """You are an architectural floor-plan digitisation engine.
 Analyse the supplied floor-plan image and reconstruct its editable 2D geometry as structured JSON.
 Your job is not to describe the image. Your job is to convert every meaningful architectural component into structured geometry.
@@ -123,6 +127,15 @@ Return ONLY a valid JSON object matching this exact schema:
     }
   ]
 }
+"""
+
+CROPPED_INSTRUCTION = """
+THE IMAGE IS ALREADY TIGHTLY CROPPED TO THE PLAN:
+- The user cropped it around the building footprint. Treat the full image as the footprint.
+- Coordinate (0, 0) is the top-left corner of the image and (width, height) is its bottom-right corner.
+- "width" / "height" are the real-world size of the whole image in the chosen units, so width:height
+  must equal the image aspect ratio ({img_w}:{img_h} px). Derive the scale from dimension labels when visible,
+  otherwise from standard sizes (interior doors ~3 ft / 0.9 m, beds ~5 ft x 6.7 ft).
 """
 
 CORNER_DETECTION_INSTRUCTION = """You are an architectural vision system specializing in floor plan geometric calibration.
@@ -308,6 +321,7 @@ class PlanParserService:
         image_bytes: bytes,
         mime_type: str = "image/png",
         room_corners: Optional[RoomCorners] = None,
+        cropped: bool = False,
     ) -> FloorPlan:
         """Call OpenAI Responses API with gpt-6-sol and parse floor plan image, calibrated to room footprint."""
         # 1. Analyze input image dimensions with PIL if available
@@ -338,6 +352,8 @@ class PlanParserService:
 
         # 3. Formulate calibrated system instruction
         active_instruction = SYSTEM_INSTRUCTION
+        if cropped and not room_corners:
+            active_instruction += CROPPED_INSTRUCTION.format(img_w=img_w, img_h=img_h)
         if room_corners:
             active_instruction += f"""
 CRITICAL PRE-CALIBRATED ROOM BOUNDARY CONSTRAINTS:
@@ -416,6 +432,9 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
         parsed_json = self._extract_json(raw_text)
 
         # 8. Normalize and validate geometry
+        if cropped and not room_corners:
+            # The whole image is the footprint: the overlay maps 1:1 onto [0, width] x [0, height]
+            parsed_json["sourceImage"] = {"width": img_w, "height": img_h, "cropX": 0, "cropY": 0, "cropWidth": img_w, "cropHeight": img_h}
         floor_plan = self.normalize_floor_plan(parsed_json, img_w, img_h, room_corners=room_corners)
         return floor_plan
 
@@ -710,6 +729,7 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
                 "lastError": str(e),
                 "updatedAt": firestore.SERVER_TIMESTAMP,
             })
+            self._notify_failed(db, task, f"Could not download the plan image: {e}")
             raise
 
         # 3A. Pre-parsing Step: Detect exactly 4 angles/corners of the room & match scale
@@ -726,6 +746,8 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
 
         room_corners: Optional[RoomCorners] = None
         try:
+            if task.cropped:
+                raise _SkipCorners()
             room_corners = self.detect_room_corners(image_bytes, mime_type=task.contentType or "image/png")
             corners_dict = room_corners.model_dump()
             logger.info("Successfully detected 4 room angles: %s", corners_dict)
@@ -738,6 +760,8 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
                 "roomCorners": corners_dict,
                 "updatedAt": firestore.SERVER_TIMESTAMP,
             })
+        except _SkipCorners:
+            logger.info("Cropped upload for job %s: skipping corner detection", task.jobId)
         except Exception as e:
             logger.warning("Room corner detection encountered warning: %s. Continuing with default scale.", e)
 
@@ -753,6 +777,7 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
                 image_bytes,
                 mime_type=task.contentType or "image/png",
                 room_corners=room_corners,
+                cropped=task.cropped,
             )
         except Exception as e:
             logger.error("Error during OpenAI analysis for job %s: %s", task.jobId, e)
@@ -768,6 +793,7 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
                 "lastError": str(e),
                 "updatedAt": firestore.SERVER_TIMESTAMP,
             })
+            self._notify_failed(db, task, str(e))
             raise
 
         # 4. Save results to Firestore
@@ -779,11 +805,20 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
 
         plan_dict = floor_plan.model_dump()
 
+        if self._superseded(project_ref, task):
+            job_ref.update({"status": "failed", "stage": "failed", "error": "Superseded by a newer parse",
+                            "progress": 100, "updatedAt": firestore.SERVER_TIMESTAMP})
+            logger.info("Job %s superseded; not saving its plan", task.jobId)
+            return floor_plan
+
         # Update Project in Firestore
         project_ref.update({
             "status": "completed",
             "hasPlanParsed": True,
             "floorPlan": plan_dict,
+            "floorPlanVersion": firestore.Increment(1),
+            "mapping": {},
+            "missing": [],
             "updatedAt": firestore.SERVER_TIMESTAMP,
         })
 
@@ -803,8 +838,57 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
             "updatedAt": firestore.SERVER_TIMESTAMP,
         })
 
+        self._notify_ready(db, task, floor_plan)
         logger.info("Successfully completed plan parsing job %s for project %s", task.jobId, task.projectId)
         return floor_plan
+
+    @staticmethod
+    def _post(db, conversation_id: str, kind: str, payload: Dict[str, Any], stage: str, preview: str) -> None:
+        """Append a predefined system message and move the chat to `stage` (the browser listens live)."""
+        conv_ref = db.collection("conversations").document(conversation_id)
+        conv_ref.collection("messages").document().set({
+            "role": "system",
+            "kind": kind,
+            "text": "",
+            "payload": payload,
+            "status": "done",
+            "createdAt": firestore.SERVER_TIMESTAMP,
+        })
+        conv_ref.update({
+            "stage": stage,
+            "busy": False,
+            "busyReason": None,
+            "lastMessageAt": firestore.SERVER_TIMESTAMP,
+            "lastMessagePreview": preview,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        })
+
+    def _notify_ready(self, db, task: ParsePlanTaskRequest, plan: FloorPlan) -> None:
+        if not task.conversationId:
+            return
+        stats = {"rooms": len(plan.rooms), "walls": len(plan.walls), "items": len(plan.furniture) + len(plan.fixtures)}
+        try:
+            self._post(db, task.conversationId, "plan_ready", {"stats": stats, "jobId": task.jobId}, "reviewing_plan", "Your plan is ready")
+        except Exception as e:
+            logger.error("Could not notify conversation %s: %s", task.conversationId, e)
+
+    @staticmethod
+    def _superseded(project_ref, task: ParsePlanTaskRequest) -> bool:
+        """True when the project has since started another parse (re-crop / retry)."""
+        snap = project_ref.get()
+        current = (snap.to_dict() or {}).get("currentJobId") if snap.exists else None
+        return bool(current and current != task.jobId)
+
+    def _notify_failed(self, db, task: ParsePlanTaskRequest, error: str) -> None:
+        if not task.conversationId:
+            return
+        if self._superseded(db.collection("projects").document(task.projectId), task):
+            return
+        try:
+            self._post(db, task.conversationId, "plan_failed", {"error": error[:500], "jobId": task.jobId}, "cropping",
+                       "We couldn't read the plan")
+        except Exception as e:
+            logger.error("Could not notify conversation %s: %s", task.conversationId, e)
 
     @staticmethod
     def _extract_json(text: str) -> Dict[str, Any]:

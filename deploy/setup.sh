@@ -24,7 +24,8 @@ gc services enable \
   firestore.googleapis.com \
   storage.googleapis.com \
   identitytoolkit.googleapis.com \
-  firebasehosting.googleapis.com
+  firebasehosting.googleapis.com \
+  aiplatform.googleapis.com
 
 # ---------------------------------------------------------------- Service accounts
 ensure_sa() {
@@ -47,6 +48,7 @@ log "Granting project roles"
 project_role "$API_SA" roles/datastore.user
 project_role "$API_SA" roles/firebaseauth.admin        # create users, revoke tokens
 project_role "$API_SA" roles/cloudtasks.enqueuer
+project_role "$API_SA" roles/aiplatform.user           # Gemini chat via Vertex AI
 project_role "$WORKER_SA" roles/datastore.user
 # Source deploys build with the default compute SA on new projects
 project_role "$COMPUTE_SA" roles/run.builder
@@ -90,6 +92,9 @@ cat > "$CORS_FILE" <<EOF
 [{"origin": ["*"], "method": ["GET", "HEAD"], "responseHeader": ["Content-Type", "Content-Length", "Range"], "maxAgeSeconds": 3600}]
 EOF
 gc storage buckets update "gs://$CATALOG_BUCKET" --cors-file="$CORS_FILE" >/dev/null
+# Admins promote user assets to the system catalog: the API copies their GLB/image into this bucket
+gc storage buckets add-iam-policy-binding "gs://$CATALOG_BUCKET" \
+  --member="serviceAccount:$API_SA" --role=roles/storage.objectAdmin >/dev/null
 
 # ---------------------------------------------------------------- Secrets
 upsert_secret() {
@@ -121,6 +126,12 @@ if ! gc tasks queues describe "$TASKS_QUEUE" --location="$REGION" >/dev/null 2>&
     --max-attempts=3 --min-backoff=10s --max-backoff=120s \
     --max-concurrent-dispatches=5 --max-dispatches-per-second=1
 fi
+log "Ensuring Cloud Tasks queue $MESHY_QUEUE (Meshy status polling)"
+if ! gc tasks queues describe "$MESHY_QUEUE" --location="$REGION" >/dev/null 2>&1; then
+  gc tasks queues create "$MESHY_QUEUE" --location="$REGION" \
+    --max-attempts=5 --min-backoff=15s --max-backoff=120s \
+    --max-concurrent-dispatches=10 --max-dispatches-per-second=5
+fi
 # Retry the agent binding now that the queue (and its service agent) exists
 gc iam service-accounts add-iam-policy-binding "$TASKS_SA" \
   --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-cloudtasks.iam.gserviceaccount.com" \
@@ -131,7 +142,8 @@ cat <<EOF
 
 Next:
   deploy/upload_catalog.sh     # push assets/ to gs://$CATALOG_BUCKET
-  deploy/deploy.sh all         # worker -> api -> frontend
+  deploy/deploy.sh all         # worker -> api -> rules -> frontend
+  backend/api/.venv/bin/python scripts/migrate_assets.py --apply   # seed assets/ (catalog + old uploads)
 
 Firebase Hosting uses the Firebase CLI's own login: run 'firebase login' once
 with an account that can deploy to project '$PROJECT_ID'.

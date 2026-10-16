@@ -186,3 +186,14 @@ class StorageService:
         except Exception as e:
             logger.error("Error deleting blobs under prefix %s: %s", prefix, e)
             return 0
+
+    def download_bytes(self, blob_path: str) -> bytes:
+        return self.bucket.blob(blob_path).download_as_bytes()
+
+    def copy_to_catalog(self, blob_path: str, catalog_path: str, content_type: str) -> str:
+        """Copy a private upload into the public catalog bucket; returns its public URL."""
+        data = self.download_bytes(blob_path)
+        blob = self.catalog_bucket.blob(catalog_path)
+        blob.cache_control = "public, max-age=31536000, immutable"
+        blob.upload_from_string(data, content_type=content_type)
+        return f"{self.settings.catalog_base_url}/{catalog_path}"

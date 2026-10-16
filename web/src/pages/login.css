@@ -1,0 +1,22 @@
+.login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, var(--accent-soft), transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, var(--surface-2), transparent 60%),
+    var(--bg);
+}
+.login__card { width: 100%; max-width: 400px; padding: 28px; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); animation: pop-in 0.25s var(--ease); }
+.login__brand { display: flex; gap: 14px; align-items: center; margin-bottom: 24px; }
+.login__brand h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.login__brand p { margin: 2px 0 0; }
+.login__google { height: 42px; }
+.login__or { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: var(--text-3); font-size: 13px; }
+.login__or::before, .login__or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.login__error { color: var(--danger); font-size: 13px; margin: -4px 0 12px; }
+.login__switch { text-align: center; margin: 16px 0 0; }
+.linklike { border: none; background: none; color: var(--accent); cursor: pointer; padding: 0; font: inherit; }
+.linklike:hover { text-decoration: underline; }
+.boot { height: 100dvh; display: grid; place-items: center; color: var(--text-3); }

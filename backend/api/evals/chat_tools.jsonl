@@ -1,0 +1,20 @@
+{"id": "crop_done", "stage": "cropping", "utterance": "ok I'm done cropping", "expect": {"tool": "confirm_crop"}}
+{"id": "crop_why", "stage": "cropping", "utterance": "why do I need to crop it?", "expect": {"tool": null}}
+{"id": "plan_ok", "stage": "reviewing_plan", "utterance": "looks right to me", "expect": {"tool": "confirm_plan"}}
+{"id": "plan_recrop", "stage": "reviewing_plan", "utterance": "the crop was bad, I want to crop again. yes I'm sure", "expect": {"tool": "restart_crop"}}
+{"id": "style_japandi", "stage": "choosing_style", "utterance": "let's go with japandi", "expect": {"tool": "select_style", "args": {"style": "Japandi"}}}
+{"id": "style_industrial", "stage": "choosing_style", "utterance": "I like the concrete and steel one", "expect": {"tool": "select_style", "args": {"style": "Industrial"}}}
+{"id": "missing_skip_all", "stage": "resolving_missing", "utterance": "skip the missing ones, I don't need them", "expect": {"tool": "skip_missing"}}
+{"id": "missing_scale_bed", "stage": "resolving_missing", "utterance": "make the master bed 20% bigger", "expect": {"tool": "scale_mapped_item", "args": {"componentId": "fur_001"}}}
+{"id": "move_sofa_left", "stage": "scene_ready", "utterance": "move the sofa 50 cm to the left", "expect": {"tool": "move_item", "args": {"itemId": "itm_fur_002", "dx": {"approx": -0.5, "tol": 0.05}}}}
+{"id": "move_bed_down", "stage": "scene_ready", "utterance": "push the bed 30 centimeters down", "expect": {"tool": "move_item", "args": {"itemId": "itm_fur_001", "dz": {"approx": 0.3, "tol": 0.05}}}}
+{"id": "move_table_kitchen", "stage": "scene_ready", "utterance": "put the coffee table in the kitchen", "expect": {"tool": "move_item", "args": {"itemId": "itm_fur_004", "toRoomId": "rom_004"}}}
+{"id": "rotate_sofa", "stage": "scene_ready", "utterance": "rotate the sofa 90 degrees clockwise", "expect": {"tool": "rotate_item", "args": {"itemId": "itm_fur_002", "degrees": {"approx": 90, "tol": 1}}}}
+{"id": "rotate_bed_ccw", "stage": "scene_ready", "utterance": "turn the bed 45° counterclockwise", "expect": {"tool": "rotate_item", "args": {"itemId": "itm_fur_001", "degrees": {"approx": -45, "tol": 1}}}}
+{"id": "resize_table", "stage": "scene_ready", "utterance": "make the dining table 1.8 m wide", "expect": {"tool": "resize_item", "args": {"itemId": "itm_fur_005", "w": {"approx": 1.8, "tol": 0.01}}}}
+{"id": "walls_white", "stage": "scene_ready", "utterance": "paint all the walls white", "expect": {"tool": "set_wall_color"}}
+{"id": "floor_kitchen", "stage": "scene_ready", "utterance": "make the kitchen floor dark grey", "expect": {"tool": "set_floor_color", "args": {"roomIds": ["rom_004"]}}}
+{"id": "undo", "stage": "scene_ready", "utterance": "undo that", "expect": {"tool": "undo_last_change"}}
+{"id": "delete_ask_first", "stage": "scene_ready", "utterance": "delete the closet", "expect": {"tool": null}}
+{"id": "add_armchair", "stage": "scene_ready", "utterance": "add an armchair to the living room", "expect": {"tool": "find_assets"}}
+{"id": "change_style_ask", "stage": "scene_ready", "utterance": "switch everything to industrial style", "expect": {"tool": null}}

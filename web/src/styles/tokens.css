@@ -1,0 +1,100 @@
+/* Design tokens. Components use these variables only — no hard-coded colors. */
+:root,
+:root[data-theme="light"] {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --surface-sunken: #eceff3;
+  --surface-glass: rgba(255, 255, 255, 0.78);
+  --border: #e2e6ec;
+  --border-strong: #cdd3db;
+  --text: #1b1f24;
+  --text-2: #4a525d;
+  --text-3: #7b8490;
+  --accent: #3b5bdb;
+  --accent-hover: #3049b8;
+  --accent-soft: #e8edff;
+  --accent-text: #ffffff;
+  --user-bubble: #eef1f8;
+  --success: #1f9d55;
+  --success-soft: #e3f6eb;
+  --warning: #d97706;
+  --warning-soft: #fff4e0;
+  --danger: #d6336c;
+  --danger-soft: #fde8ef;
+  --focus: rgba(59, 91, 219, 0.35);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 24px rgba(16, 24, 40, 0.08);
+  --shadow-lg: 0 18px 48px rgba(16, 24, 40, 0.14);
+  /* Canvas drawing (2D plan editor) */
+  --plan-bg: #ffffff;
+  --plan-grid: #eef1f5;
+  --plan-wall: #1f2328;
+  --plan-room: rgba(59, 91, 219, 0.05);
+  --plan-room-label: #3b5bdb;
+  --plan-furniture: #dbe4ff;
+  --plan-furniture-stroke: #4263eb;
+  --plan-fixture: #d3f9d8;
+  --plan-fixture-stroke: #2b8a3e;
+  --plan-select: #7048e8;
+  --plan-missing: #f59f00;
+  --plan-dim: #7048e8;
+  /* 3D viewport */
+  --scene-bg: #eef1f5;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #111316;
+  --surface: #181b20;
+  --surface-2: #1f232a;
+  --surface-sunken: #14171b;
+  --surface-glass: rgba(28, 32, 38, 0.78);
+  --border: #2a2f37;
+  --border-strong: #3a414b;
+  --text: #e8eaed;
+  --text-2: #b4bac3;
+  --text-3: #808893;
+  --accent: #7c95ff;
+  --accent-hover: #93a7ff;
+  --accent-soft: #232b48;
+  --accent-text: #0e1220;
+  --user-bubble: #242a35;
+  --success: #46c37b;
+  --success-soft: #16301f;
+  --warning: #f2a33a;
+  --warning-soft: #3a2a12;
+  --danger: #f06595;
+  --danger-soft: #3a1a26;
+  --focus: rgba(124, 149, 255, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.5);
+  --plan-bg: #15181c;
+  --plan-grid: #1f242b;
+  --plan-wall: #e8eaed;
+  --plan-room: rgba(124, 149, 255, 0.07);
+  --plan-room-label: #93a7ff;
+  --plan-furniture: #26304f;
+  --plan-furniture-stroke: #7c95ff;
+  --plan-fixture: #1d3626;
+  --plan-fixture-stroke: #51cf66;
+  --plan-select: #b197fc;
+  --plan-missing: #fcc419;
+  --plan-dim: #b197fc;
+  --scene-bg: #1a1d22;
+  color-scheme: dark;
+}
+
+:root {
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --sidebar-w: 272px;
+  --sidebar-w-collapsed: 64px;
+  --chat-max: 760px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}

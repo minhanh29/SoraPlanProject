@@ -1,0 +1,14 @@
+{
+  "Industrial": {
+    "name": "Industrial",
+    "palette": { "wall": "#8C8984", "floor": "#5A4636", "accent": "#2F3337" },
+    "cover": "assets/Industrial/In_sofa.png",
+    "blurb": "Concrete, dark oak and steel."
+  },
+  "Japandi": {
+    "name": "Japandi",
+    "palette": { "wall": "#EFE8DD", "floor": "#C8A57A", "accent": "#7D8C6A" },
+    "cover": "assets/Japandi/Ja_sofa.png",
+    "blurb": "Warm white, light oak and sage."
+  }
+}
