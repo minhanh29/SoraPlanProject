@@ -450,8 +450,8 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
               </span>
             )}
             <span className="s3d-hint__keys">
-              Drag item to move · ring rotates · corners scale · side dots stretch · top diamond sets height · R turn 90° · ⌘/Ctrl+D duplicate · Del delete · Pan: middle/right-drag, Space+drag or
-              two-finger scroll · F frame
+              Drag item to move · R turn 90° · ⌘/Ctrl+D duplicate · Del delete · Space+drag or
+              two-finger scroll · Middle mouse moves camera
             </span>
           </div>
         </>

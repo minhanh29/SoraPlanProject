@@ -94,25 +94,10 @@ export default function CropPanel({ conversation, project, files, onClose }: Pan
           onImageSize={(s) => setImgSize(s)}
           disabled={busy}
         />
-        <aside className="crop-side">
-          <p>Crop tight to the outer walls. Leave out titles, legends, margins and the table it is lying on.</p>
-          <figure className="crop-example good" style={{ margin: 0 }}>
-            <img src="/examples/crop-good.png" alt="Good crop: only the plan, edge to edge" />
-            <span>
-              <Icon name="check" size={14} /> Good crop
-            </span>
-          </figure>
-          <figure className="crop-example bad" style={{ margin: 0 }}>
-            <img src="/examples/crop-bad.png" alt="Bad crop: wide margins and title block" />
-            <span>
-              <Icon name="close" size={14} /> Bad crop
-            </span>
-          </figure>
-        </aside>
       </div>
 
       <div className="cpanel__foot">
-        <span className="grow">{effective ? `${effective.width} × ${effective.height} px selected` : "Loading…"}</span>
+        <span className="grow crop-hint">Crop tight to the outer walls. Leave out titles, legends, margins and the table it is lying on.</span>
         <button className="btn btn--primary" onClick={confirm} disabled={busy || !effective}>
           {confirming ? <Spinner /> : <Icon name="check" size={16} />} Confirm crop
         </button>

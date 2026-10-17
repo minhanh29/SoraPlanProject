@@ -19,16 +19,22 @@ export default function Shell() {
 
   useEffect(() => setDrawer(false), [location.pathname]);
 
-  const toggle = () => {
-    setCollapsed((c) => {
-      try {
-        localStorage.setItem(KEY, c ? "open" : "collapsed");
-      } catch {
-        /* ignore */
-      }
-      return !c;
-    });
+  const setAndStore = (next: boolean) => {
+    try {
+      localStorage.setItem(KEY, next ? "collapsed" : "open");
+    } catch {
+      /* ignore */
+    }
+    setCollapsed(next);
   };
+
+  const toggle = () => setAndStore(!collapsed);
+
+  // Creating a project collapses the sidebar to give the workspace more room
+  const collapseRequested = (location.state as { collapseSidebar?: boolean } | null)?.collapseSidebar;
+  useEffect(() => {
+    if (collapseRequested) setAndStore(true);
+  }, [location.key, collapseRequested]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={`shell ${collapsed ? "shell--collapsed" : ""} ${drawer ? "shell--drawer" : ""}`}>

@@ -63,20 +63,9 @@
 .crop-body { flex: 1; display: flex; min-height: 0; }
 .crop-stage { position: relative; flex: 1; min-width: 0; background: var(--surface-sunken); }
 .crop-stage canvas { display: block; touch-action: none; }
-.crop-side {
-  width: 260px; flex-shrink: 0; padding: 14px; border-left: 1px solid var(--border); overflow: auto;
-  display: grid; align-content: start; gap: 12px; background: var(--surface);
-}
-.crop-side p { margin: 0; font-size: 13px; color: var(--text-2); }
-.crop-example { display: grid; gap: 6px; }
-.crop-example img { width: 100%; border-radius: var(--radius-sm); border: 2px solid var(--border); background: var(--surface-2); aspect-ratio: 4 / 3; object-fit: cover; }
-.crop-example.good img { border-color: var(--success); }
-.crop-example.bad img { border-color: var(--danger); }
-.crop-example span { font-size: 12px; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
-.crop-example.good span { color: var(--success); }
-.crop-example.bad span { color: var(--danger); }
 .crop-readout { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); pointer-events: none; white-space: nowrap; }
 .crop-readout .mono { padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-glass); backdrop-filter: blur(6px); color: var(--text); }
+.crop-hint { font-size: 13px; color: var(--text-2); }
 .crop-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-3); gap: 8px; }
 
 /* ---------- mapping ---------- */
@@ -112,8 +101,6 @@
 
 @media (max-width: 899px) {
   .crop-body { flex-direction: column; }
-  .crop-side { width: auto; border-left: none; border-top: 1px solid var(--border); grid-template-columns: 1fr 1fr; max-height: 34%; }
-  .crop-side > p { grid-column: 1 / -1; }
   .map-inspector { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 55%; }
   .cpanel__head .hide-sm { display: none; }
 }

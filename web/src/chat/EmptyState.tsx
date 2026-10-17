@@ -104,7 +104,8 @@ export default function EmptyState() {
       await uploadToSignedUrl(res.signedUploadUrl, file, res.contentType, setProgress);
       setStep("processing");
       await api.uploadComplete(res.conversationId);
-      navigate(`/p/${res.conversationId}`);
+      // A new project needs the room: the shell collapses the sidebar on this flag
+      navigate(`/p/${res.conversationId}`, { state: { collapseSidebar: true } });
     } catch (e) {
       setStep(null);
       setError(e instanceof ApiError ? e.message : (e as Error).message || "Upload failed");
