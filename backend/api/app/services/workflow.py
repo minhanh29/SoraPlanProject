@@ -207,7 +207,6 @@ class Workflow:
                                detail="Upload a floor plan as PNG, JPEG, WebP or PDF")
         if size_bytes and size_bytes > self.settings.MAX_UPLOAD_SIZE_BYTES:
             raise AppException(status_code=400, code="FILE_TOO_LARGE", detail="The file is larger than 25 MB")
-        self.projects._check_project_quota(uid)
 
         ref = self.db.collection("projects").document()
         pid = ref.id

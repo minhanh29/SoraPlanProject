@@ -11,7 +11,6 @@ from ..errors import (
     AppException,
     ForbiddenException,
     NotFoundException,
-    QuotaExceededException,
 )
 from ..models.project import PlanImage, Project
 from .storage_service import StorageService
@@ -118,36 +117,6 @@ class ProjectService:
         project_ref.delete()
         logger.info("Deleted project %s for user %s", project_id, user_uid)
         return True
-
-    def _check_project_quota(self, user_uid: str):
-        """Verify user has not exceeded their plan project quota."""
-        user_doc = self.db.collection("users").document(user_uid).get()
-        if user_doc.exists:
-            user_data = user_doc.to_dict() or {}
-            max_projects = user_data.get("quota", {}).get("projects", 5)
-        else:
-            max_projects = 5
-
-        try:
-            current_projects = list(
-                self.db.collection("projects")
-                .where(filter=FieldFilter("ownerUid", "==", user_uid))
-                .stream()
-            )
-        except (TypeError, Exception):
-            current_projects = list(
-                self.db.collection("projects")
-                .where("ownerUid", "==", user_uid)
-                .stream()
-            )
-        if len(current_projects) >= max_projects:
-            raise QuotaExceededException(
-                detail=(
-                    f"Project quota reached ({len(current_projects)}/{max_projects}). "
-                    "Upgrade your plan to create more projects."
-                ),
-                code="QUOTA_EXCEEDED",
-            )
 
     def _refresh_plan_signed_url(self, plan_data: dict) -> dict:
         """Refresh signed read URL if the plan data contains storage path."""

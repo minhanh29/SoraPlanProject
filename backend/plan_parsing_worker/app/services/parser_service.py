@@ -4,9 +4,10 @@ import json
 import logging
 import math
 import re
+import time
 import urllib.request
 import urllib.error
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import httpx
 import importlib
 
@@ -44,85 +45,72 @@ class _SkipCorners(Exception):
 
 SYSTEM_INSTRUCTION = """You are an architectural floor-plan digitisation engine.
 Analyse the supplied floor-plan image and reconstruct its editable 2D geometry as structured JSON.
-Your job is not to describe the image. Your job is to convert every meaningful architectural component into structured geometry.
+Your job is not to describe the image. Your job is to locate every meaningful architectural component precisely.
 
-1. WALLS & EXTERIOR BOUNDARY (OUTSIDE THE ROOM):
-- Detect and add all outer perimeter walls that run around the exterior of the room / building footprint ("exterior": true), as well as all interior partition walls ("exterior": false).
-- The outer boundary walls framing the outside of the room MUST be included so the room perimeter is clearly established.
+0. COORDINATES (READ CAREFULLY):
+- Report ALL geometry in normalized image coordinates: integers from 0 to 1000, where [0, 0] is the top-left
+  corner of the WHOLE image and [1000, 1000] is its bottom-right corner, independent of the image aspect ratio.
+- Boxes are [ymin, xmin, ymax, xmax]. Points are [y, x]. Lines are [y1, x1, y2, x2].
+- Do NOT convert anything to feet or meters; the server does that from "footprint_box_2d" and the real-world size.
 
-2. WINDOWS AND DOORS (BLANK GAPS BETWEEN WALLS):
-- IMPORTANT: Do NOT detect, parse, or create separate objects for doors or windows (do NOT output "doors" or "windows" arrays).
-- For the places of windows and doors, LET IT BE THE BLANK BETWEEN THE WALL.
-- Whenever a wall (exterior or interior) contains a window or door opening, SPLIT the wall into separate individual wall segments before and after the opening.
-- The space where each window or door is located must be left as an open blank gap between the wall segments (e.g. Wall Segment A -> blank space where window/door is -> Wall Segment B).
-- Do NOT draw a single solid wall continuously across window or door openings. Every window and door location must remain an open blank gap between adjacent wall segments.
+1. FOOTPRINT & SCALE:
+- "footprint_box_2d": the tight box around the OUTER faces of the exterior walls of the building.
+- "width" / "height": the real-world size of that footprint, read from the overall dimension strings
+  (e.g. 57'-0"). If only chained dimensions are given, add them up. If none are visible, estimate from standard
+  sizes (interior doors ~3 ft / 0.9 m, queen bed ~5 x 6.7 ft). "units": "ft" or "m".
 
-3. PHYSICAL OBJECTS & LABELS:
-- Detect rooms, furniture, appliances, plumbing fixtures, counters, cabinets and other visible floor-plan objects.
-- Preserve relative position, orientation and size.
-- Furniture and fixtures must preserve approximately the same aspect ratio as shown in the floor plan.
-- When explicit measurements are visible (e.g. 40' x 30', 9' x 12', etc.), use them to derive a real-world coordinate system in feet (units: "ft") or meters (units: "m"). All returned objects must use the same coordinate system.
-- Use the top-left of the building footprint as origin (0, 0), with X increasing to the right and Y increasing downward.
-- Walls should be represented as editable line segments with thickness (x1, y1, x2, y2, thickness, exterior).
-- Do NOT include dimension arrows, annotation lines, decorative text or the 'FLOOR PLAN' title as physical objects.
-- Room labels should become room metadata.
-- If an object is uncertain, include it with a lower confidence score.
+2. WALLS:
+- Add all exterior walls ("exterior": true) and all interior partition walls ("exterior": false).
+- "line" runs along the wall's CENTERLINE. Horizontal walls keep y1 == y2; vertical walls keep x1 == x2.
+- "thickness" is the drawn wall thickness on the same 0-1000 scale, measured along the image width.
+- Do NOT create door or window objects. Wherever a wall has a door or window opening, SPLIT the wall into
+  separate segments before and after the opening and leave the opening as a blank gap.
+- Connected walls must share endpoints exactly (corners and T-junctions meet).
+
+3. FURNITURE & FIXTURES:
+- One entry per symbol actually DRAWN on the plan (each dining chair, each nightstand separately). Never one box
+  around a group, and never invent items that are not drawn. Room names and dimension text are not objects.
+- "box_2d" is the TIGHT box around the drawn symbol's outline as it appears in the image: its true drawn size,
+  not a standard size, and excluding text labels, door swing arcs and nearby objects.
+- "angle" is 0 for every object drawn parallel to the walls, whichever way it faces (the box already gives its
+  extent). Only for objects drawn diagonally give the clockwise angle in degrees; box_2d is still the tight
+  axis-aligned box around the drawn symbol.
+- Every object lies inside the footprint.
+
+4. ROOMS:
+- "polygon": the room's inner wall faces as [y, x] points, clockwise. "name" comes from the plan label.
+- "statedDimensions": the room's written size (e.g. 18' x 10') in real-world units when shown, else null.
+
+If an object is uncertain, include it with a lower confidence score.
 
 Return ONLY a valid JSON object matching this exact schema:
 {
-  "id": "fp_001",
   "units": "ft" or "m",
   "width": <number>,
   "height": <number>,
-  "sourceImage": { "width": <image_px_width>, "height": <image_px_height> },
+  "footprint_box_2d": [ymin, xmin, ymax, xmax],
   "scaleConfidence": <number 0-1>,
   "rooms": [
-    {
-      "id": "rom_...",
-      "name": "...",
-      "polygon": [{"x": <number>, "y": <number>}, ...],
-      "statedDimensions": {"width": <number>, "height": <number>},
-      "confidence": <number>
-    }
+    {"name": "...", "polygon": [[y, x], ...], "statedDimensions": {"width": <number>, "height": <number>} or null, "confidence": <number>}
   ],
   "walls": [
-    {
-      "id": "wall_...",
-      "type": "wall",
-      "x1": <number>,
-      "y1": <number>,
-      "x2": <number>,
-      "y2": <number>,
-      "thickness": <number>,
-      "exterior": true/false,
-      "confidence": <number>
-    }
+    {"line": [y1, x1, y2, x2], "thickness": <number>, "exterior": true/false, "confidence": <number>}
   ],
   "furniture": [
     {
-      "id": "fur_...",
-      "type": "furniture",
       "furnitureType": "bed" | "sofa" | "chair" | "armchair" | "table" | "coffee_table" | "dining_table" | "desk" | "nightstand" | "wardrobe" | "cabinet" | "kitchen_island" | "unknown",
       "label": "...",
-      "x": <number>,
-      "y": <number>,
-      "width": <number>,
-      "height": <number>,
-      "rotation": <degrees 0-360>,
+      "box_2d": [ymin, xmin, ymax, xmax],
+      "angle": <degrees>,
       "confidence": <number>
     }
   ],
   "fixtures": [
     {
-      "id": "fix_...",
-      "type": "fixture",
       "fixtureType": "sink" | "toilet" | "bathtub" | "shower" | "stove" | "oven" | "refrigerator" | "washer" | "dryer" | "counter" | "unknown",
       "label": "...",
-      "x": <number>,
-      "y": <number>,
-      "width": <number>,
-      "height": <number>,
-      "rotation": <degrees 0-360>,
+      "box_2d": [ymin, xmin, ymax, xmax],
+      "angle": <degrees>,
       "confidence": <number>
     }
   ]
@@ -130,60 +118,126 @@ Return ONLY a valid JSON object matching this exact schema:
 """
 
 CROPPED_INSTRUCTION = """
-THE IMAGE IS ALREADY TIGHTLY CROPPED TO THE PLAN:
-- The user cropped it around the building footprint. Treat the full image as the footprint.
-- Coordinate (0, 0) is the top-left corner of the image and (width, height) is its bottom-right corner.
-- "width" / "height" are the real-world size of the whole image in the chosen units, so width:height
-  must equal the image aspect ratio ({img_w}:{img_h} px). Derive the scale from dimension labels when visible,
-  otherwise from standard sizes (interior doors ~3 ft / 0.9 m, beds ~5 ft x 6.7 ft).
+The user cropped the image around the plan, but margins with dimension lines may remain: footprint_box_2d is
+still the box around the exterior walls only.
+"""
+
+CORNERS_INSTRUCTION = """
+The building footprint was already measured: footprint_box_2d = {box} and its real-world size is
+{w} x {h} {units}. Use exactly these values for "footprint_box_2d", "width", "height" and "units".
 """
 
 CORNER_DETECTION_INSTRUCTION = """You are an architectural vision system specializing in floor plan geometric calibration.
-Your task is to detect the exact four outer corners (angles) of the main building / room footprint in this floor plan image.
+Find the main building footprint in this floor plan image and its real-world size.
 Rules:
-1. Ignore outer margins, outside dimension lines/arrows (e.g. 40'-0", 30'-0"), title blocks, legends, and bottom labels like 'FLOOR PLAN'.
-2. Identify the outermost physical exterior wall corners defining the main room or building envelope:
-   - topLeft: (x, y in pixels)
-   - topRight: (x, y in pixels)
-   - bottomRight: (x, y in pixels)
-   - bottomLeft: (x, y in pixels)
-3. Calculate the tight crop bounding box around these four corners:
-   - x: minimum pixel X
-   - y: minimum pixel Y
-   - width: pixel width (topRight.x - topLeft.x)
-   - height: pixel height (bottomLeft.y - topLeft.y)
-4. Read any explicit dimension annotations specifying the overall width and height of this room/building (e.g. 40 ft x 30 ft, or meters). If no text is visible, estimate real-world dimensions using standard residential scale (e.g. 40 x 30 ft).
-5. Return ONLY a valid JSON object matching this schema:
+1. Ignore outer margins, dimension lines/arrows (e.g. 40'-0"), title blocks, legends and labels like 'FLOOR PLAN'.
+2. "footprint_box_2d" is the tight box around the OUTER faces of the exterior walls, as [ymin, xmin, ymax, xmax]
+   in normalized image coordinates: integers 0-1000, where [0, 0] is the image's top-left corner and
+   [1000, 1000] its bottom-right, independent of the aspect ratio.
+3. Read the overall dimension annotations for the footprint's width and height (add up chained dimensions if
+   needed). If none are visible, estimate from standard residential sizes.
+4. Return ONLY a valid JSON object matching this schema:
 {
-  "imageWidth": <image_px_width>,
-  "imageHeight": <image_px_height>,
-  "corners": {
-    "topLeft": {"x": <number>, "y": <number>},
-    "topRight": {"x": <number>, "y": <number>},
-    "bottomRight": {"x": <number>, "y": <number>},
-    "bottomLeft": {"x": <number>, "y": <number>}
-  },
-  "crop": {
-    "x": <number>,
-    "y": <number>,
-    "width": <number>,
-    "height": <number>
-  },
-  "statedDimensions": {
-    "width": <number>,
-    "height": <number>,
-    "units": "ft" or "m"
-  },
+  "footprint_box_2d": [ymin, xmin, ymax, xmax],
+  "statedDimensions": {"width": <number>, "height": <number>, "units": "ft" or "m"},
   "confidence": <number between 0 and 1>
 }
 """
 
 
+def _pos(v: Any) -> Optional[float]:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f > 0 and math.isfinite(f) else None
+
+
+def _box_px(box: Any, img_w: int, img_h: int) -> Optional[Tuple[float, float, float, float]]:
+    """Normalized [ymin, xmin, ymax, xmax] (0-1000) -> pixel (x0, y0, x1, y1), or None if unusable."""
+    if not (isinstance(box, list) and len(box) == 4):
+        return None
+    try:
+        y0, x0, y1, x1 = (float(v) for v in box)
+    except (TypeError, ValueError):
+        return None
+    x0, x1 = sorted((x0, x1))
+    y0, y1 = sorted((y0, y1))
+    x0, y0, x1, y1 = (max(0.0, min(1000.0, v)) for v in (x0, y0, x1, y1))
+    if x1 - x0 < 1 or y1 - y0 < 1:
+        return None
+    return (x0 / 1000 * img_w, y0 / 1000 * img_h, x1 / 1000 * img_w, y1 / 1000 * img_h)
+
+
+def _dedupe(items: List[Dict[str, Any]], kind_key: str, iou_limit: float = 0.6) -> List[Dict[str, Any]]:
+    """Drop a box that mostly overlaps a more confident box of the same type (the model sometimes repeats one)."""
+    kept: List[Dict[str, Any]] = []
+    for o in sorted(items, key=lambda o: -float(o.get("confidence") or 0)):
+        ax0, ay0, ax1, ay1 = o["x"], o["y"], o["x"] + o["width"], o["y"] + o["height"]
+        dup = False
+        for k in kept:
+            if k.get(kind_key) != o.get(kind_key):
+                continue
+            bx0, by0, bx1, by1 = k["x"], k["y"], k["x"] + k["width"], k["y"] + k["height"]
+            iw, ih = min(ax1, bx1) - max(ax0, bx0), min(ay1, by1) - max(ay0, by0)
+            if iw <= 0 or ih <= 0:
+                continue
+            inter = iw * ih
+            if inter / (o["width"] * o["height"] + k["width"] * k["height"] - inter) > iou_limit:
+                dup = True
+                break
+        if not dup:
+            kept.append(o)
+    return kept
+
+
 class PlanParserService:
-    """Service to parse floor plan images with OpenAI gpt-6-sol and normalize geometry."""
+    """Service to parse floor plan images with Gemini and normalize geometry."""
 
     def __init__(self):
         self.settings = get_settings()
+        self._genai_client = None
+
+    @property
+    def genai_client(self):
+        """Vertex AI with the worker's service account; GEMINI_API_KEY switches to the Gemini API for local dev."""
+        if self._genai_client is None:
+            from google import genai
+
+            if self.settings.GEMINI_API_KEY:
+                self._genai_client = genai.Client(api_key=self.settings.GEMINI_API_KEY)
+            else:
+                self._genai_client = genai.Client(
+                    vertexai=True,
+                    project=self.settings.FIREBASE_PROJECT_ID,
+                    location=self.settings.GEMINI_LOCATION,
+                )
+        return self._genai_client
+
+    def _generate_json(self, instruction: str, image_bytes: bytes, media_type: str, timeout_s: int) -> str:
+        """One Gemini call: instruction + plan image -> JSON text."""
+        from google.genai import types
+
+        model = self.settings.GEMINI_PARSER_MODEL
+        started = time.monotonic()
+        resp = self.genai_client.models.generate_content(
+            model=model,
+            contents=[types.Content(role="user", parts=[
+                types.Part.from_text(text=instruction),
+                types.Part.from_bytes(data=image_bytes, mime_type=media_type),
+            ])],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                media_resolution=types.MediaResolution.MEDIA_RESOLUTION_HIGH,
+                http_options=types.HttpOptions(timeout=timeout_s * 1000),
+            ),
+        )
+        um = resp.usage_metadata
+        logger.info(json.dumps({
+            "event": "gemini_plan_call", "model": model, "latencyMs": int((time.monotonic() - started) * 1000),
+            "tokens": {"prompt": um.prompt_token_count or 0, "output": um.candidates_token_count or 0} if um else {},
+        }))
+        return resp.text or ""
 
     def detect_room_corners(self, image_bytes: bytes, mime_type: str = "image/png") -> RoomCorners:
         """Step 1 (Pre-parsing Step): Detect 4 exact corners of room footprint & physical scale."""
@@ -206,41 +260,13 @@ class PlanParserService:
         else:
             media_type = "image/png"
 
-        b64_data = base64.b64encode(image_bytes).decode("utf-8")
-        data_uri = f"data:{media_type};base64,{b64_data}"
+        instruction = CORNER_DETECTION_INSTRUCTION
 
-        instruction = CORNER_DETECTION_INSTRUCTION.replace("<image_px_width>", str(img_w)).replace("<image_px_height>", str(img_h))
-
-        payload = {
-            "model": self.settings.OPENAI_MODEL,
-            "input": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": instruction},
-                        {"type": "input_image", "image_url": data_uri},
-                    ],
-                }
-            ],
-        }
-
-        headers = {
-            "Authorization": f"Bearer {self.settings.OPENAI_API_KEY}",
-            "Content-Type": "application/json",
-        }
-
-        logger.info("Step 1: Calling OpenAI Responses API to detect 4 room angles...")
-        req = urllib.request.Request(
-            "https://api.openai.com/v1/responses",
-            headers=headers,
-            data=json.dumps(payload).encode("utf-8"),
-        )
-
+        logger.info("Step 1: Calling Gemini (%s) to detect the building footprint...", self.settings.GEMINI_PARSER_MODEL)
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                res = json.loads(resp.read().decode("utf-8"))
+            raw_text = self._generate_json(instruction, image_bytes, media_type, timeout_s=60)
         except Exception as e:
-            logger.error("Failed to detect room corners with OpenAI: %s", e)
+            logger.error("Failed to detect room corners with Gemini: %s", e)
             crop_w = int(img_w * 0.75)
             crop_h = int(img_h * 0.75)
             crop_x = int((img_w - crop_w) / 2)
@@ -260,56 +286,29 @@ class PlanParserService:
                 confidence=0.5,
             )
 
-        raw_text = ""
-        for item in res.get("output", []):
-            if item.get("type") == "message":
-                for c in item.get("content", []):
-                    if c.get("type") == "output_text":
-                        raw_text = c.get("text", "")
-                        break
-            if raw_text:
-                break
-
         data = self._extract_json(raw_text)
-        corners_data = data.get("corners", {})
-        crop_data = data.get("crop", {})
-        stated = data.get("statedDimensions", {})
-
-        tl = corners_data.get("topLeft", {})
-        tr = corners_data.get("topRight", {})
-        br = corners_data.get("bottomRight", {})
-        bl = corners_data.get("bottomLeft", {})
-
-        tl_pt = Point2D(x=float(tl.get("x", 0)), y=float(tl.get("y", 0)))
-        tr_pt = Point2D(x=float(tr.get("x", img_w)), y=float(tr.get("y", 0)))
-        br_pt = Point2D(x=float(br.get("x", img_w)), y=float(br.get("y", img_h)))
-        bl_pt = Point2D(x=float(bl.get("x", 0)), y=float(bl.get("y", img_h)))
-
-        crop_x = float(crop_data.get("x", min(tl_pt.x, bl_pt.x)))
-        crop_y = float(crop_data.get("y", min(tl_pt.y, tr_pt.y)))
-        crop_w = float(crop_data.get("width", max(tr_pt.x, br_pt.x) - crop_x))
-        crop_h = float(crop_data.get("height", max(bl_pt.y, br_pt.y) - crop_y))
-
+        box = _box_px(data.get("footprint_box_2d"), img_w, img_h) or (0.0, 0.0, float(img_w), float(img_h))
+        x0, y0, x1, y1 = box
+        stated = data.get("statedDimensions") or {}
         plan_w = float(stated.get("width") or 40.0)
         plan_h = float(stated.get("height") or 30.0)
         units = str(stated.get("units") or "ft")
-        conf = float(data.get("confidence") or 0.95)
+        conf = float(data.get("confidence") or 0.9)
 
         logger.info(
-            "Detected 4 room angles: TL=(%d,%d), TR=(%d,%d), BR=(%d,%d), BL=(%d,%d) -> Crop=(%d,%d,%d,%d), Stated Size=%.1fx%.1f %s",
-            tl_pt.x, tl_pt.y, tr_pt.x, tr_pt.y, br_pt.x, br_pt.y, bl_pt.x, bl_pt.y,
-            crop_x, crop_y, crop_w, crop_h, plan_w, plan_h, units,
+            "Detected footprint px=(%.0f,%.0f)-(%.0f,%.0f), stated size=%.1fx%.1f %s",
+            x0, y0, x1, y1, plan_w, plan_h, units,
         )
 
         return RoomCorners(
-            topLeft=tl_pt,
-            topRight=tr_pt,
-            bottomRight=br_pt,
-            bottomLeft=bl_pt,
-            cropX=crop_x,
-            cropY=crop_y,
-            cropWidth=crop_w,
-            cropHeight=crop_h,
+            topLeft=Point2D(x=x0, y=y0),
+            topRight=Point2D(x=x1, y=y0),
+            bottomRight=Point2D(x=x1, y=y1),
+            bottomLeft=Point2D(x=x0, y=y1),
+            cropX=x0,
+            cropY=y0,
+            cropWidth=x1 - x0,
+            cropHeight=y1 - y0,
             planWidth=plan_w,
             planHeight=plan_h,
             units="m" if units == "m" else "ft",
@@ -323,7 +322,7 @@ class PlanParserService:
         room_corners: Optional[RoomCorners] = None,
         cropped: bool = False,
     ) -> FloorPlan:
-        """Call OpenAI Responses API with gpt-6-sol and parse floor plan image, calibrated to room footprint."""
+        """Call Gemini to parse the floor plan image, calibrated to room footprint."""
         # 1. Analyze input image dimensions with PIL if available
         img_w, img_h = 2048, 1536
         if HAS_PIL and Image:
@@ -346,97 +345,154 @@ class PlanParserService:
         else:
             media_type = "image/png"
 
-        # 2. Encode to Base64
-        b64_data = base64.b64encode(image_bytes).decode("utf-8")
-        data_uri = f"data:{media_type};base64,{b64_data}"
-
-        # 3. Formulate calibrated system instruction
+        # 2. Formulate calibrated system instruction
         active_instruction = SYSTEM_INSTRUCTION
         if cropped and not room_corners:
-            active_instruction += CROPPED_INSTRUCTION.format(img_w=img_w, img_h=img_h)
+            active_instruction += CROPPED_INSTRUCTION
         if room_corners:
-            active_instruction += f"""
-CRITICAL PRE-CALIBRATED ROOM BOUNDARY CONSTRAINTS:
-The exact four outer corners (angles) of this room/building footprint have been detected:
-- Top-Left Corner: ({room_corners.topLeft.x:.0f}, {room_corners.topLeft.y:.0f}) pixels
-- Top-Right Corner: ({room_corners.topRight.x:.0f}, {room_corners.topRight.y:.0f}) pixels
-- Bottom-Right Corner: ({room_corners.bottomRight.x:.0f}, {room_corners.bottomRight.y:.0f}) pixels
-- Bottom-Left Corner: ({room_corners.bottomLeft.x:.0f}, {room_corners.bottomLeft.y:.0f}) pixels
-- Room Crop Region: x={room_corners.cropX:.0f}, y={room_corners.cropY:.0f}, width={room_corners.cropWidth:.0f}, height={room_corners.cropHeight:.0f} pixels
-- Real-World Room Dimensions: {room_corners.planWidth} x {room_corners.planHeight} {room_corners.units}
+            box = [
+                round(room_corners.cropY / img_h * 1000), round(room_corners.cropX / img_w * 1000),
+                round((room_corners.cropY + room_corners.cropHeight) / img_h * 1000),
+                round((room_corners.cropX + room_corners.cropWidth) / img_w * 1000),
+            ]
+            active_instruction += CORNERS_INSTRUCTION.format(
+                box=box, w=room_corners.planWidth, h=room_corners.planHeight, units=room_corners.units,
+            )
 
-You MUST align the reconstructed 2D geometry directly with this room boundary:
-1. Coordinate (0, 0) MUST map to the room Top-Left corner.
-2. Coordinate ({room_corners.planWidth}, {room_corners.planHeight}) MUST map to the room Bottom-Right corner.
-3. Plan "width" MUST BE {room_corners.planWidth} and "height" MUST BE {room_corners.planHeight} with units="{room_corners.units}".
-4. In "sourceImage", include:
-   "cropX": {room_corners.cropX:.0f}, "cropY": {room_corners.cropY:.0f}, "cropWidth": {room_corners.cropWidth:.0f}, "cropHeight": {room_corners.cropHeight:.0f}
-5. Outer Perimeter Walls: Add all boundary walls around the outside perimeter of the room. Where windows or doors are located, leave them as open blank gaps between adjacent wall segments.
-"""
-
-        # 4. Formulate OpenAI Responses API payload
-        payload = {
-            "model": self.settings.OPENAI_MODEL,
-            "input": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": active_instruction},
-                        {"type": "input_image", "image_url": data_uri},
-                    ],
-                }
-            ],
-        }
-
-        # 5. Invoke OpenAI API
-        headers = {
-            "Authorization": f"Bearer {self.settings.OPENAI_API_KEY}",
-            "Content-Type": "application/json",
-        }
-
-        logger.info("Calling OpenAI Responses API with model: %s...", self.settings.OPENAI_MODEL)
-        req = urllib.request.Request(
-            "https://api.openai.com/v1/responses",
-            headers=headers,
-            data=json.dumps(payload).encode("utf-8"),
-        )
-
+        # 3. Invoke Gemini
+        logger.info("Calling Gemini with model: %s...", self.settings.GEMINI_PARSER_MODEL)
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                res = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="ignore")
-            logger.error("OpenAI API HTTPError %d: %s", e.code, err_body)
-            raise RuntimeError(f"OpenAI API error ({e.code}): {err_body}")
+            raw_text = self._generate_json(active_instruction, image_bytes, media_type, timeout_s=120)
         except Exception as e:
-            logger.error("Failed to call OpenAI API: %s", e)
-            raise RuntimeError(f"Failed to communicate with OpenAI API: {str(e)}")
-
-        # 6. Extract text response
-        raw_text = ""
-        output_items = res.get("output", [])
-        for item in output_items:
-            if item.get("type") == "message":
-                for c in item.get("content", []):
-                    if c.get("type") == "output_text":
-                        raw_text = c.get("text", "")
-                        break
-            if raw_text:
-                break
+            logger.error("Gemini API call failed: %s", e)
+            raise RuntimeError(f"Gemini API error: {e}")
 
         if not raw_text:
-            logger.error("OpenAI response did not contain message output_text: %s", res)
-            raise RuntimeError("No structured output received from OpenAI model.")
+            raise RuntimeError("No structured output received from Gemini model.")
 
-        # 7. Parse JSON from output text
+        # 4. Parse JSON from output text
         parsed_json = self._extract_json(raw_text)
 
-        # 8. Normalize and validate geometry
-        if cropped and not room_corners:
-            # The whole image is the footprint: the overlay maps 1:1 onto [0, width] x [0, height]
-            parsed_json["sourceImage"] = {"width": img_w, "height": img_h, "cropX": 0, "cropY": 0, "cropWidth": img_w, "cropHeight": img_h}
-        floor_plan = self.normalize_floor_plan(parsed_json, img_w, img_h, room_corners=room_corners)
+        # 5. Image coordinates -> plan units, then normalize and validate geometry
+        plan_json = self.to_plan_units(parsed_json, img_w, img_h, room_corners=room_corners)
+        floor_plan = self.normalize_floor_plan(plan_json, img_w, img_h, room_corners=room_corners)
         return floor_plan
+
+    def to_plan_units(
+        self,
+        data: Dict[str, Any],
+        img_w: int,
+        img_h: int,
+        room_corners: Optional[RoomCorners] = None,
+    ) -> Dict[str, Any]:
+        """Map the model's normalized 0-1000 image geometry onto the plan's real-world frame.
+
+        The plan frame is the footprint crop: (0, 0) is its top-left, (width, height) its bottom-right, which is
+        how the editor overlays the plan on `sourceImage`. Boxes are clipped to the plan, near-axis walls are
+        snapped straight and duplicate boxes are dropped.
+        """
+        units = "m" if data.get("units") == "m" else "ft"
+        if room_corners and room_corners.cropWidth > 0 and room_corners.cropHeight > 0:
+            cx, cy, cw, ch = room_corners.cropX, room_corners.cropY, room_corners.cropWidth, room_corners.cropHeight
+            width, height, units = float(room_corners.planWidth), float(room_corners.planHeight), room_corners.units
+            sx, sy = width / cw, height / ch
+        else:
+            fb = _box_px(data.get("footprint_box_2d"), img_w, img_h)
+            if not fb or (fb[2] - fb[0]) * (fb[3] - fb[1]) < 0.2 * img_w * img_h:
+                fb = (0.0, 0.0, float(img_w), float(img_h))
+            cx, cy, cw, ch = fb[0], fb[1], fb[2] - fb[0], fb[3] - fb[1]
+            sw, sh = _pos(data.get("width")), _pos(data.get("height"))
+            # One isotropic scale: an uneven x/y scale would squash every object
+            scales = [v for v in (sw / cw if sw else None, sh / ch if sh else None) if v]
+            s = sum(scales) / len(scales) if scales else 40.0 / cw
+            sx = sy = s
+            width, height = cw * s, ch * s
+
+        def pt(ny: Any, nx: Any) -> Tuple[float, float]:
+            return ((float(nx) / 1000 * img_w - cx) * sx, (float(ny) / 1000 * img_h - cy) * sy)
+
+        walls = []
+        max_t = 2.0 if units == "ft" else 0.6
+        for w in data.get("walls") or []:
+            line = w.get("line")
+            if not (isinstance(line, list) and len(line) == 4):
+                continue
+            try:
+                x1, y1 = pt(line[0], line[1])
+                x2, y2 = pt(line[2], line[3])
+            except (TypeError, ValueError):
+                continue
+            if abs(y2 - y1) <= abs(x2 - x1) * 0.05:
+                y1 = y2 = (y1 + y2) / 2
+            elif abs(x2 - x1) <= abs(y2 - y1) * 0.05:
+                x1 = x2 = (x1 + x2) / 2
+            if math.hypot(x2 - x1, y2 - y1) < 0.05:
+                continue
+            t = _pos(w.get("thickness"))
+            thick = t / 1000 * img_w * sx if t else (0.5 if units == "ft" else 0.15)
+            walls.append({
+                "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+                "thickness": min(max(thick, max_t / 20), max_t),
+                "exterior": bool(w.get("exterior")), "confidence": w.get("confidence", 0.9),
+            })
+
+        def boxes(items: Any, kind_key: str) -> List[Dict[str, Any]]:
+            out: List[Dict[str, Any]] = []
+            for o in items or []:
+                b = o.get("box_2d")
+                if not (isinstance(b, list) and len(b) == 4):
+                    continue
+                try:
+                    x0, y0 = pt(min(b[0], b[2]), min(b[1], b[3]))
+                    x1, y1 = pt(max(b[0], b[2]), max(b[1], b[3]))
+                    angle = float(o.get("angle") or 0) % 360
+                except (TypeError, ValueError):
+                    continue
+                # Clip to the plan; drop boxes that are mostly outside it
+                area = (x1 - x0) * (y1 - y0)
+                cx0, cy0, cx1, cy1 = max(x0, 0.0), max(y0, 0.0), min(x1, width), min(y1, height)
+                if area <= 0 or cx1 <= cx0 or cy1 <= cy0 or (cx1 - cx0) * (cy1 - cy0) < 0.5 * area:
+                    continue
+                bw, bh = cx1 - cx0, cy1 - cy0
+                off = angle % 90
+                if min(off, 90 - off) < 10:
+                    rot, w_, h_ = 0.0, bw, bh  # parallel to the walls: the box is the footprint
+                else:
+                    # Diagonal: shrink the axis-aligned bounds back to the object's own size (exact for squares)
+                    r = math.radians(angle)
+                    k = abs(math.cos(r)) + abs(math.sin(r))
+                    rot, w_, h_ = angle, bw / k, bh / k
+                mx, my = (cx0 + cx1) / 2, (cy0 + cy1) / 2
+                out.append({
+                    **{k_: v for k_, v in o.items() if k_ not in ("box_2d", "angle")},
+                    "x": mx - w_ / 2, "y": my - h_ / 2, "width": w_, "height": h_, "rotation": rot,
+                })
+            return _dedupe(out, kind_key)
+
+        rooms = []
+        for r in data.get("rooms") or []:
+            poly = []
+            for p in r.get("polygon") or []:
+                if isinstance(p, list) and len(p) == 2:
+                    try:
+                        x, y = pt(p[0], p[1])
+                    except (TypeError, ValueError):
+                        continue
+                    poly.append({"x": min(max(x, 0.0), width), "y": min(max(y, 0.0), height)})
+            if len(poly) >= 3:
+                rooms.append({**r, "polygon": poly})
+
+        return {
+            "units": units,
+            "width": width,
+            "height": height,
+            "scaleConfidence": data.get("scaleConfidence", 0.9),
+            "sourceImage": {"width": img_w, "height": img_h, "cropX": cx, "cropY": cy, "cropWidth": cw, "cropHeight": ch},
+            "rooms": rooms,
+            "walls": walls,
+            "furniture": boxes(data.get("furniture"), "furnitureType"),
+            "fixtures": boxes(data.get("fixtures"), "fixtureType"),
+        }
 
     def normalize_floor_plan(
         self,
@@ -652,7 +708,7 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
             windows=windows,
             furniture=furniture,
             fixtures=fixtures,
-            metadata={"parsedBy": "gpt-6-sol", "parserVersion": "1.0"},
+            metadata={"parsedBy": self.settings.GEMINI_PARSER_MODEL, "parserVersion": "2.0"},
         )
 
     def execute_plan_parsing_job(self, task: ParsePlanTaskRequest) -> FloorPlan:
@@ -780,7 +836,7 @@ You MUST align the reconstructed 2D geometry directly with this room boundary:
                 cropped=task.cropped,
             )
         except Exception as e:
-            logger.error("Error during OpenAI analysis for job %s: %s", task.jobId, e)
+            logger.error("Error during Gemini analysis for job %s: %s", task.jobId, e)
             job_ref.update({
                 "status": "failed",
                 "error": f"AI Parsing failed: {str(e)}",

@@ -50,6 +50,7 @@ project_role "$API_SA" roles/firebaseauth.admin        # create users, revoke to
 project_role "$API_SA" roles/cloudtasks.enqueuer
 project_role "$API_SA" roles/aiplatform.user           # Gemini chat via Vertex AI
 project_role "$WORKER_SA" roles/datastore.user
+project_role "$WORKER_SA" roles/aiplatform.user        # Gemini plan parsing via Vertex AI
 # Source deploys build with the default compute SA on new projects
 project_role "$COMPUTE_SA" roles/run.builder
 

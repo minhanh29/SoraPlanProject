@@ -24,9 +24,17 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = Field(default="SoraPlan Plan Parser Worker", description="Worker service name")
     DEBUG: bool = Field(default=False, description="Debug mode")
 
-    # OpenAI configuration
+    # Gemini (floor plan parsing). Vertex AI with the service account by default.
+    GEMINI_PARSER_MODEL: str = Field(default="gemini-4-argon", description="Gemini vision model for floor plan parsing")
+    GEMINI_LOCATION: str = Field(default="global", description="Vertex AI location for Gemini")
+    GEMINI_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Local dev only: use the Gemini API with a key instead of Vertex AI. Unset on Cloud Run.",
+    )
+
+    # OpenAI configuration (furniture background removal)
     OPENAI_API_KEY: str = Field(..., description="OpenAI API Key")
-    OPENAI_MODEL: str = Field(default="gpt-6-sol", description="OpenAI Vision model for floor plan parsing")
+    OPENAI_MODEL: str = Field(default="gpt-6-sol", description="OpenAI model for furniture background removal")
 
     # Google Cloud / Firebase configuration
     FIREBASE_PROJECT_ID: str = Field(default="soraplan", description="Google Cloud Project ID")

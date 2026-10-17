@@ -29,7 +29,7 @@ app from [`docs/10-chat-refactor-plan.md`](docs/10-chat-refactor-plan.md):
 - **API:** `backend/api`, FastAPI on Cloud Run. Conversations, Gemini orchestrator (Vertex AI), asset
   mapping, scene builder and scene ops, asset library with server-side Meshy polling (Cloud Tasks).
 - **Plan parsing worker:** `backend/plan_parsing_worker`, private FastAPI on Cloud Run, invoked by Cloud Tasks.
-  Parses the cropped plan with OpenAI vision and posts the result into the conversation.
+  Parses the cropped plan with Gemini 4 Argon (Vertex AI) and posts the result into the conversation.
 - **Preset furniture catalog:** `gs://soraplan-catalog/assets/{Industrial,Japandi}/` (originals) and
   `assets-web/` (meshopt + WebP, ~0.5 MB each). 3D files are never committed to git.
 

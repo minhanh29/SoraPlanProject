@@ -15,8 +15,9 @@ ENV_YAML="$(mktemp)"
 trap 'rm -f "$ENV_YAML"' EXIT
 
 deploy_worker() {
-  local model
+  local model parser_model
   model="$(env_get "$WORKER_ENV_FILE" OPENAI_MODEL)"
+  parser_model="$(env_get "$WORKER_ENV_FILE" GEMINI_PARSER_MODEL)"
 
   log "Deploying $WORKER_SERVICE from backend/plan_parsing_worker"
   cat > "$ENV_YAML" <<EOF
@@ -24,6 +25,8 @@ ENV: production
 FIREBASE_PROJECT_ID: "$PROJECT_ID"
 GCS_BUCKET_NAME: "$UPLOADS_BUCKET"
 OPENAI_MODEL: "${model:-gpt-6-sol}"
+GEMINI_PARSER_MODEL: "${parser_model:-$GEMINI_PARSER_MODEL}"
+GEMINI_LOCATION: "$GEMINI_LOCATION"
 EOF
 
   gc run deploy "$WORKER_SERVICE" \

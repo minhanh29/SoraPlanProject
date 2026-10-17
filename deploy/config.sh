@@ -36,6 +36,8 @@ MESHY_QUEUE_PATH="projects/${PROJECT_ID}/locations/${REGION}/queues/${MESHY_QUEU
 # Gemini (chat orchestrator) through Vertex AI with the API's service account
 GEMINI_CHAT_MODEL="${GEMINI_CHAT_MODEL:-gemini-3.8-flash}"
 GEMINI_LOCATION="${GEMINI_LOCATION:-global}"
+# Gemini (plan parsing) through Vertex AI with the worker's service account
+GEMINI_PARSER_MODEL="${GEMINI_PARSER_MODEL:-gemini-4-argon}"
 
 # Secret Manager secret names -> env var they feed
 SECRET_FIREBASE_WEB_API_KEY="firebase-web-api-key"
