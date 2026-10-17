@@ -1,0 +1,53 @@
+.plan-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--plan-bg);
+}
+.plan-canvas__el {
+  display: block;
+  touch-action: none;
+  user-select: none;
+}
+.plan-canvas__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.plan-canvas__overlay > * { pointer-events: auto; }
+
+/* ---------- inspector ---------- */
+.pe-inspector {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 248px;
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  padding: 12px 14px 14px;
+  z-index: 5;
+  animation: pop-in 0.15s var(--ease);
+  box-shadow: var(--shadow-md);
+}
+.pe-inspector__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.pe-inspector .field { margin-bottom: 10px; }
+.pe-inspector .input, .pe-inspector .select { height: 32px; font-size: 13px; }
+.pe-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pe-num { position: relative; display: grid; gap: 3px; font-size: 12px; color: var(--text-3); }
+.pe-num .input { padding-right: 22px; font-family: var(--mono); }
+.pe-num em { position: absolute; right: 8px; bottom: 7px; font-style: normal; font-size: 11px; color: var(--text-3); pointer-events: none; }
+.pe-inspector__actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.pe-danger { color: var(--danger); }
+
+@media (max-width: 899px) {
+  .pe-inspector {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 46%;
+  }
+}

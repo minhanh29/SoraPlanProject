@@ -10,11 +10,16 @@ from google.cloud import storage as gcloud_storage
 from .errors import UnauthorizedException
 from .firebase import get_auth, get_firestore_client, get_storage_client
 from .models.user import UserProfile
-from .services.auth_service import AuthService
 from .services.user_service import UserService
 from .services.storage_service import StorageService
 from .services.project_service import ProjectService
 from .services.meshy_service import MeshyService
+from .services.asset_service import AssetService
+from .services.conversation_service import ConversationService
+from .services.gemini_client import GeminiClient
+from .services.orchestrator import Orchestrator
+from .services.scene_ops import SceneService
+from .services.workflow import Workflow
 
 logger = logging.getLogger("api.deps")
 bearer_scheme = HTTPBearer(auto_error=True)
@@ -28,11 +33,6 @@ def get_db() -> gcloud_firestore.Client:
 def get_user_service(db: gcloud_firestore.Client = Depends(get_db)) -> UserService:
     """Dependency for UserService."""
     return UserService(db=db)
-
-
-def get_auth_service(user_service: UserService = Depends(get_user_service)) -> AuthService:
-    """Dependency for AuthService."""
-    return AuthService(user_service=user_service)
 
 
 def get_storage() -> gcloud_storage.Client:
@@ -57,6 +57,63 @@ def get_project_service(
 ) -> ProjectService:
     """Dependency for ProjectService."""
     return ProjectService(db=db, storage_service=storage_service, meshy_service=meshy_service)
+
+
+def get_asset_service(
+    db: gcloud_firestore.Client = Depends(get_db),
+    storage_service: StorageService = Depends(get_storage_service),
+    meshy_service: MeshyService = Depends(get_meshy_service),
+) -> AssetService:
+    return AssetService(db=db, storage_service=storage_service, meshy_service=meshy_service)
+
+
+def get_conversation_service(db: gcloud_firestore.Client = Depends(get_db)) -> ConversationService:
+    return ConversationService(db=db)
+
+
+def get_scene_service(
+    db: gcloud_firestore.Client = Depends(get_db),
+    asset_service: AssetService = Depends(get_asset_service),
+) -> SceneService:
+    return SceneService(db=db, asset_lookup=asset_service.get)
+
+
+_gemini: GeminiClient | None = None
+
+
+def get_gemini() -> GeminiClient:
+    """One client per process (it holds the HTTP connection pool)."""
+    global _gemini
+    if _gemini is None:
+        _gemini = GeminiClient()
+    return _gemini
+
+
+def get_workflow(
+    db: gcloud_firestore.Client = Depends(get_db),
+    storage_service: StorageService = Depends(get_storage_service),
+    conversation_service: ConversationService = Depends(get_conversation_service),
+    project_service: ProjectService = Depends(get_project_service),
+    asset_service: AssetService = Depends(get_asset_service),
+    scene_service: SceneService = Depends(get_scene_service),
+    gemini: GeminiClient = Depends(get_gemini),
+) -> Workflow:
+    return Workflow(
+        db=db,
+        storage=storage_service,
+        conversations=conversation_service,
+        projects=project_service,
+        assets=asset_service,
+        scenes=scene_service,
+        classify=gemini.classify_labels,
+    )
+
+
+def get_orchestrator(
+    workflow: Workflow = Depends(get_workflow),
+    gemini: GeminiClient = Depends(get_gemini),
+) -> Orchestrator:
+    return Orchestrator(workflow=workflow, gemini=gemini)
 
 
 def get_current_token_payload(

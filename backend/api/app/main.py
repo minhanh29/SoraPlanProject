@@ -14,7 +14,15 @@ from .errors import (
     validation_exception_handler,
 )
 from .firebase import init_firebase
-from .routers import auth_router, users_router, projects_router, jobs_router
+from .routers import (
+    assets_router,
+    conversations_router,
+    internal_router,
+    jobs_router,
+    projects_router,
+    scenes_router,
+    users_router,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,7 +50,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version="0.1.0",
-        description="SoraPlan User Management and Authentication API connected with Firebase and Firestore.",
+        description="SoraPlan API: chat-first projects, plan review, asset library and 3D scenes.",
         lifespan=lifespan,
     )
 
@@ -51,7 +59,13 @@ def create_app() -> FastAPI:
     async def request_id_middleware(request: Request, call_next):
         req_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:12]}"
         request.state.request_id = req_id
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Answer here, inside CORSMiddleware: an unhandled error would otherwise reach the browser
+            # without CORS headers and look like a CORS failure instead of a 500.
+            logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+            response = await generic_exception_handler(request, exc)
         response.headers["X-Request-ID"] = req_id
         return response
 
@@ -89,10 +103,13 @@ def create_app() -> FastAPI:
         }
 
     # API Routers
-    app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(users_router, prefix=settings.API_V1_STR)
+    app.include_router(conversations_router, prefix=settings.API_V1_STR)
     app.include_router(projects_router, prefix=settings.API_V1_STR)
+    app.include_router(scenes_router, prefix=settings.API_V1_STR)
+    app.include_router(assets_router, prefix=settings.API_V1_STR)
     app.include_router(jobs_router, prefix=settings.API_V1_STR)
+    app.include_router(internal_router)
 
     return app
 

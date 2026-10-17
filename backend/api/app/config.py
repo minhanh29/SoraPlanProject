@@ -104,6 +104,28 @@ class Settings(BaseSettings):
         description="Meshy AI REST API base URL",
     )
 
+    MESHY_POLL_QUEUE: Optional[str] = Field(
+        default=None,
+        description="Cloud Tasks queue path for Meshy status polling (projects/{p}/locations/{l}/queues/meshy-poll). "
+        "Unset locally: a background thread polls instead.",
+    )
+    MESHY_POLL_INTERVAL_SECONDS: int = Field(default=15, description="Delay between Meshy status polls")
+    MESHY_POLL_MAX_ATTEMPTS: int = Field(default=40, description="Polls before a generation is marked failed")
+    API_PUBLIC_URL: Optional[str] = Field(
+        default=None,
+        description="This API's own base URL (no /v1). Cloud Tasks calls /internal/* on it; also the OIDC audience.",
+    )
+
+    # Gemini (chat orchestrator). Vertex AI with the service account by default (decision D2).
+    GEMINI_CHAT_MODEL: str = Field(default="gemini-3.8-flash", description="Model for chat + tool calls")
+    GEMINI_LOCATION: str = Field(default="global", description="Vertex AI location for Gemini")
+    GEMINI_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Local dev only: use the Gemini API with a key instead of Vertex AI. Unset on Cloud Run.",
+    )
+    CHAT_HISTORY_MESSAGES: int = Field(default=20, description="Past messages sent to Gemini each turn")
+    CHAT_MAX_TOOL_ROUNDS: int = Field(default=4, description="Model ↔ tool round trips per user turn")
+
     # CORS configuration
     CORS_ORIGINS: Union[List[str], str] = Field(
         default=[

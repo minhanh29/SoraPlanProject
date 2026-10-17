@@ -13,6 +13,8 @@ class ParsePlanTaskRequest(BaseModel):
     uploadId: Optional[str] = Field(default=None, description="Plan upload identifier")
     fileName: Optional[str] = Field(default=None, description="Original filename")
     contentType: Optional[str] = Field(default="image/png", description="MIME type")
+    cropped: bool = Field(default=False, description="Image is the user's tight crop: skip corner detection")
+    conversationId: Optional[str] = Field(default=None, description="Chat to notify with plan_ready / plan_failed")
 
 
 class TaskStatusResponse(BaseModel):

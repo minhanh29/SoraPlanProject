@@ -1,0 +1,55 @@
+import { useMemo } from "react";
+import type { Palette, SceneOpening, SceneWall } from "../../lib/types";
+import { wallPieces } from "./geometry";
+
+interface Props {
+  walls: SceneWall[];
+  openings: SceneOpening[];
+  palette: Palette;
+  /** Clip height for the cutaway view (null = full height). */
+  cutHeight: number | null;
+}
+
+function Wall({ wall, openings, color, cutHeight }: { wall: SceneWall; openings: SceneOpening[]; color: string; cutHeight: number | null }) {
+  const [x1, z1] = wall.start;
+  const [x2, z2] = wall.end;
+  const length = Math.hypot(x2 - x1, z2 - z1);
+  const angle = Math.atan2(z2 - z1, x2 - x1);
+  const pieces = useMemo(
+    () => wallPieces(length, wall.height, wall.thickness, openings, cutHeight ?? undefined),
+    [length, wall.height, wall.thickness, openings, cutHeight],
+  );
+  if (length < 0.01) return null;
+  return (
+    <group position={[(x1 + x2) / 2, 0, (z1 + z2) / 2]} rotation={[0, -angle, 0]}>
+      {pieces.map((p, i) => (
+        <mesh
+          key={i}
+          position={[(p.u0 + p.u1) / 2 - length / 2, (p.y0 + p.y1) / 2, 0]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[p.u1 - p.u0, p.y1 - p.y0, wall.thickness]} />
+          <meshStandardMaterial color={color} roughness={0.92} metalness={0} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+export default function Walls({ walls, openings, palette, cutHeight }: Props) {
+  const byWall = useMemo(() => {
+    const m = new Map<string, SceneOpening[]>();
+    for (const o of openings) m.set(o.wallId, [...(m.get(o.wallId) || []), o]);
+    return m;
+  }, [openings]);
+  return (
+    <group>
+      {walls.map((w) => (
+        <Wall key={w.id} wall={w} openings={byWall.get(w.id) || EMPTY} color={w.color || palette.wall} cutHeight={cutHeight} />
+      ))}
+    </group>
+  );
+}
+
+const EMPTY: SceneOpening[] = [];

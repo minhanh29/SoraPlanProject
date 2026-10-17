@@ -1,0 +1,12 @@
+{
+  "name": "soraplan-catalog-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": { "measure": "node measure.mjs" },
+  "dependencies": {
+    "@gltf-transform/core": "4.1.0",
+    "@gltf-transform/extensions": "4.1.0",
+    "@gltf-transform/functions": "4.1.0",
+    "meshoptimizer": "0.21.0"
+  }
+}

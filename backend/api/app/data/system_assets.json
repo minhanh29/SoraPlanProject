@@ -1,0 +1,658 @@
+[
+  {
+    "id": "sys_industrial_In_TV_stand",
+    "name": "Industrial Tv Stand",
+    "category": "TV Stand",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_TV_stand.png",
+    "glbPath": "assets/Industrial/In_TV_stand.glb",
+    "glbWebPath": "assets-web/Industrial/In_TV_stand.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.695,
+      "h": 0.407
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_bath",
+    "name": "Industrial Bath",
+    "category": "Bathtub",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_bath.png",
+    "glbPath": "assets/Industrial/In_bath.glb",
+    "glbWebPath": "assets-web/Industrial/In_bath.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.857,
+      "h": 0.316
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_bed_1",
+    "name": "Industrial Bed 1",
+    "category": "Bed",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_bed_1.png",
+    "glbPath": "assets/Industrial/In_bed_1.glb",
+    "glbWebPath": "assets-web/Industrial/In_bed_1.glb",
+    "dims": {
+      "w": 1.49,
+      "d": 1.902,
+      "h": 0.771
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_bed_2",
+    "name": "Industrial Bed 2",
+    "category": "Bed",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_bed_2.png",
+    "glbPath": "assets/Industrial/In_bed_2.glb",
+    "glbWebPath": "assets-web/Industrial/In_bed_2.glb",
+    "dims": {
+      "w": 1.472,
+      "d": 1.903,
+      "h": 0.722
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_bed_master",
+    "name": "Industrial Bed Master",
+    "category": "Bed",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_bed_master.png",
+    "glbPath": "assets/Industrial/In_bed_master.glb",
+    "glbWebPath": "assets-web/Industrial/In_bed_master.glb",
+    "dims": {
+      "w": 1.439,
+      "d": 1.902,
+      "h": 0.707
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_closet_storage",
+    "name": "Industrial Closet Storage",
+    "category": "Wardrobe & Storage",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_closet_storage.png",
+    "glbPath": "assets/Industrial/In_closet_storage.glb",
+    "glbWebPath": "assets-web/Industrial/In_closet_storage.glb",
+    "dims": {
+      "w": 1.676,
+      "d": 0.665,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_fridge",
+    "name": "Industrial Fridge",
+    "category": "Kitchen Appliance",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_fridge.png",
+    "glbPath": "assets/Industrial/In_fridge.glb",
+    "glbWebPath": "assets-web/Industrial/In_fridge.glb",
+    "dims": {
+      "w": 0.732,
+      "d": 0.683,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_kitchen_chair_1",
+    "name": "Industrial Kitchen Chair 1",
+    "category": "Dining Chair",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_kitchen_chair_1.png",
+    "glbPath": "assets/Industrial/In_kitchen_chair_1.glb",
+    "glbWebPath": "assets-web/Industrial/In_kitchen_chair_1.glb",
+    "dims": {
+      "w": 1.622,
+      "d": 1.444,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_kitchen_chair_2",
+    "name": "Industrial Kitchen Chair 2",
+    "category": "Dining Chair",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_kitchen_chair_2.png",
+    "glbPath": "assets/Industrial/In_kitchen_chair_2.glb",
+    "glbWebPath": "assets-web/Industrial/In_kitchen_chair_2.glb",
+    "dims": {
+      "w": 1.657,
+      "d": 1.411,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_kitchen_counter",
+    "name": "Industrial Kitchen Counter",
+    "category": "Kitchen Counter",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_kitchen_counter.png",
+    "glbPath": "assets/Industrial/In_kitchen_counter.glb",
+    "glbWebPath": "assets-web/Industrial/In_kitchen_counter.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.338,
+      "h": 1.099
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_kitchen_sink",
+    "name": "Industrial Kitchen Sink",
+    "category": "Kitchen Sink",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_kitchen_sink.png",
+    "glbPath": "assets/Industrial/In_kitchen_sink.glb",
+    "glbWebPath": "assets-web/Industrial/In_kitchen_sink.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.808,
+      "h": 0.593
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_kitchen_table_1",
+    "name": "Industrial Kitchen Table 1",
+    "category": "Dining Table",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_kitchen_table_1.png",
+    "glbPath": "assets/Industrial/In_kitchen_table_1.glb",
+    "glbWebPath": "assets-web/Industrial/In_kitchen_table_1.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.828,
+      "h": 0.538
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_kitchen_table_2",
+    "name": "Industrial Kitchen Table 2",
+    "category": "Dining Table",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_kitchen_table_2.png",
+    "glbPath": "assets/Industrial/In_kitchen_table_2.glb",
+    "glbWebPath": "assets-web/Industrial/In_kitchen_table_2.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.706,
+      "h": 0.553
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_lightstand",
+    "name": "Industrial Lightstand",
+    "category": "Lighting",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_lightstand.png",
+    "glbPath": "assets/Industrial/In_lightstand.glb",
+    "glbWebPath": "assets-web/Industrial/In_lightstand.glb",
+    "dims": {
+      "w": 1.777,
+      "d": 1.571,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_living_chair",
+    "name": "Industrial Living Chair",
+    "category": "Armchair",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_living_chair.png",
+    "glbPath": "assets/Industrial/In_living_chair.glb",
+    "glbWebPath": "assets-web/Industrial/In_living_chair.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 1.745,
+      "h": 1.405
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_living_table",
+    "name": "Industrial Living Table",
+    "category": "Coffee Table",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_living_table.png",
+    "glbPath": "assets/Industrial/In_living_table.glb",
+    "glbWebPath": "assets-web/Industrial/In_living_table.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 1.012,
+      "h": 0.543
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_sofa",
+    "name": "Industrial Sofa",
+    "category": "Sofa",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_sofa.png",
+    "glbPath": "assets/Industrial/In_sofa.glb",
+    "glbWebPath": "assets-web/Industrial/In_sofa.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.974,
+      "h": 0.649
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_stool",
+    "name": "Industrial Stool",
+    "category": "Stool",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_stool.png",
+    "glbPath": "assets/Industrial/In_stool.glb",
+    "glbWebPath": "assets-web/Industrial/In_stool.glb",
+    "dims": {
+      "w": 1.693,
+      "d": 1.698,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_toilet",
+    "name": "Industrial Toilet",
+    "category": "Toilet",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_toilet.png",
+    "glbPath": "assets/Industrial/In_toilet.glb",
+    "glbWebPath": "assets-web/Industrial/In_toilet.glb",
+    "dims": {
+      "w": 1.14,
+      "d": 1.903,
+      "h": 1.708
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_toilet_sink",
+    "name": "Industrial Toilet Sink",
+    "category": "Bathroom Vanity",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_toilet_sink.png",
+    "glbPath": "assets/Industrial/In_toilet_sink.glb",
+    "glbWebPath": "assets-web/Industrial/In_toilet_sink.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.641,
+      "h": 0.731
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_industrial_In_washing_dryer",
+    "name": "Industrial Washing Dryer",
+    "category": "Appliance",
+    "style": "Industrial",
+    "imagePath": "assets/Industrial/In_washing_dryer.png",
+    "glbPath": "assets/Industrial/In_washing_dryer.glb",
+    "glbWebPath": "assets-web/Industrial/In_washing_dryer.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.933,
+      "h": 1.172
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_TV_stand",
+    "name": "Japandi Tv Stand",
+    "category": "TV Stand",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_TV_stand.png",
+    "glbPath": "assets/Japandi/Ja_TV_stand.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_TV_stand.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.406,
+      "h": 0.283
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_bath",
+    "name": "Japandi Bath",
+    "category": "Bathtub",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_bath.png",
+    "glbPath": "assets/Japandi/Ja_bath.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_bath.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.84,
+      "h": 0.338
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_bed_1",
+    "name": "Japandi Bed 1",
+    "category": "Bed",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_bed_1.png",
+    "glbPath": "assets/Japandi/Ja_bed_1.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_bed_1.glb",
+    "dims": {
+      "w": 1.528,
+      "d": 1.903,
+      "h": 0.712
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_bed_2",
+    "name": "Japandi Bed 2",
+    "category": "Bed",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_bed_2.png",
+    "glbPath": "assets/Japandi/Ja_bed_2.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_bed_2.glb",
+    "dims": {
+      "w": 1.624,
+      "d": 1.903,
+      "h": 0.745
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_closet_storage",
+    "name": "Japandi Closet Storage",
+    "category": "Wardrobe & Storage",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_closet_storage.png",
+    "glbPath": "assets/Japandi/Ja_closet_storage.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_closet_storage.glb",
+    "dims": {
+      "w": 1.597,
+      "d": 0.48,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_fridge",
+    "name": "Japandi Fridge",
+    "category": "Kitchen Appliance",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_fridge.png",
+    "glbPath": "assets/Japandi/Ja_fridge.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_fridge.glb",
+    "dims": {
+      "w": 0.66,
+      "d": 0.843,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_bench",
+    "name": "Japandi Kitchen Bench",
+    "category": "Dining Bench",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_kitchen_bench.png",
+    "glbPath": "assets/Japandi/Ja_kitchen_bench.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_kitchen_bench.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.557,
+      "h": 0.551
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_chair",
+    "name": "Japandi Kitchen Chair",
+    "category": "Dining Chair",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_kitchen_chair.png",
+    "glbPath": "assets/Japandi/Ja_kitchen_chair.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_kitchen_chair.glb",
+    "dims": {
+      "w": 1.313,
+      "d": 1.245,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_counter",
+    "name": "Japandi Kitchen Counter",
+    "category": "Kitchen Counter",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_kitchen_counter.png",
+    "glbPath": "assets/Japandi/Ja_kitchen_counter.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_kitchen_counter.glb",
+    "dims": {
+      "w": 0.733,
+      "d": 0.422,
+      "h": 1.903
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_sink",
+    "name": "Japandi Kitchen Sink",
+    "category": "Kitchen Sink",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_kitchen_sink.png",
+    "glbPath": "assets/Japandi/Ja_kitchen_sink.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_kitchen_sink.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.653,
+      "h": 0.609
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_table",
+    "name": "Japandi Kitchen Table",
+    "category": "Dining Table",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_kitchen_table.png",
+    "glbPath": "assets/Japandi/Ja_kitchen_table.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_kitchen_table.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.965,
+      "h": 0.75
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_kitchen_table_2",
+    "name": "Japandi Kitchen Table 2",
+    "category": "Dining Table",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_kitchen_table_2.png",
+    "glbPath": "assets/Japandi/Ja_kitchen_table_2.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_kitchen_table_2.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.805,
+      "h": 0.666
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_living_chair",
+    "name": "Japandi Living Chair",
+    "category": "Armchair",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_living_chair.png",
+    "glbPath": "assets/Japandi/Ja_living_chair.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_living_chair.glb",
+    "dims": {
+      "w": 1.672,
+      "d": 1.901,
+      "h": 1.652
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_living_table",
+    "name": "Japandi Living Table",
+    "category": "Coffee Table",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_living_table.png",
+    "glbPath": "assets/Japandi/Ja_living_table.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_living_table.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 1.152,
+      "h": 0.963
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_master_bed",
+    "name": "Japandi Master Bed",
+    "category": "Bed",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_master_bed.png",
+    "glbPath": "assets/Japandi/Ja_master_bed.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_master_bed.glb",
+    "dims": {
+      "w": 1.712,
+      "d": 1.903,
+      "h": 0.779
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_nightstand",
+    "name": "Japandi Nightstand",
+    "category": "Nightstand",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_nightstand.png",
+    "glbPath": "assets/Japandi/Ja_nightstand.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_nightstand.glb",
+    "dims": {
+      "w": 1.846,
+      "d": 1.903,
+      "h": 1.428
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_sink",
+    "name": "Japandi Sink",
+    "category": "Sink",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_sink.png",
+    "glbPath": "assets/Japandi/Ja_sink.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_sink.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.612,
+      "h": 0.846
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_sofa",
+    "name": "Japandi Sofa",
+    "category": "Sofa",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_sofa.png",
+    "glbPath": "assets/Japandi/Ja_sofa.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_sofa.glb",
+    "dims": {
+      "w": 1.903,
+      "d": 0.841,
+      "h": 0.587
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_toilet",
+    "name": "Japandi Toilet",
+    "category": "Toilet",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_toilet.png",
+    "glbPath": "assets/Japandi/Ja_toilet.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_toilet.glb",
+    "dims": {
+      "w": 1.107,
+      "d": 1.901,
+      "h": 1.65
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  },
+  {
+    "id": "sys_japandi_Ja_washing_dryer",
+    "name": "Japandi Washing Dryer",
+    "category": "Appliance",
+    "style": "Japandi",
+    "imagePath": "assets/Japandi/Ja_washing_dryer.png",
+    "glbPath": "assets/Japandi/Ja_washing_dryer.glb",
+    "glbWebPath": "assets-web/Japandi/Ja_washing_dryer.glb",
+    "dims": {
+      "w": 1.904,
+      "d": 1.03,
+      "h": 1.162
+    },
+    "frontAxis": "+z",
+    "rotationOffset": 0
+  }
+]

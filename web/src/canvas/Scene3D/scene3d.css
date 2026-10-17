@@ -1,0 +1,209 @@
+.s3d-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  background: var(--scene-bg);
+  animation: fade-in 0.3s var(--ease);
+}
+.s3d-panel--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.s3d-panel canvas { display: block; outline: none; }
+
+/* ---------- toolbar ---------- */
+.s3d-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 5;
+}
+.s3d-toolbar__group {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-glass);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.s3d-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.s3d-tool:hover { background: var(--surface-2); color: var(--text); }
+.s3d-tool.is-active { background: var(--accent-soft); color: var(--accent); }
+.s3d-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+}
+.s3d-color { position: relative; }
+.s3d-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  animation: pop-in 0.12s var(--ease);
+  z-index: 10;
+}
+.s3d-swatches { display: grid; grid-template-columns: repeat(6, 26px); gap: 6px; }
+.s3d-swatch--lg {
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s;
+}
+.s3d-swatch--lg:hover { transform: scale(1.1); }
+.s3d-swatch--lg.is-active { outline: 2px solid var(--accent); outline-offset: 2px; }
+.s3d-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.s3d-custom input { width: 28px; height: 24px; padding: 0; border: none; background: none; cursor: pointer; }
+
+/* ---------- hint ---------- */
+.s3d-hint {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 12px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.s3d-hint__legend { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
+.s3d-hint__error { color: var(--danger); }
+.s3d-hint__swatch { width: 12px; height: 12px; border-radius: 3px; opacity: 0.85; }
+@media (max-width: 900px) {
+  .s3d-tool__label { display: none; }
+  .s3d-hint__keys { display: none; }
+  .s3d-tool { padding: 0 10px; }
+}
+
+/* ---------- labels & chip (drei <Html>) ---------- */
+.s3d-tag {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-glass);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font: 500 11px/1.5 var(--font);
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+}
+.s3d-tag__status { margin-left: 6px; color: var(--warning); }
+.s3d-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  font: 13px/1.35 var(--font);
+  color: var(--text);
+  white-space: nowrap;
+  animation: pop-in 0.15s var(--ease);
+  user-select: none;
+}
+/* drei <Html> puts the anchor's top-left at the item's on-screen top edge: lift the chip fully above it. */
+.s3d-anchor { transform: translate(-50%, calc(-100% - 10px)); }
+.s3d-chip__btn { width: 30px; height: 30px; }
+.s3d-chip__btn--danger:hover { color: var(--danger); background: var(--danger-soft); }
+.s3d-chip__text { display: flex; align-items: baseline; gap: 8px; margin-right: 4px; }
+.s3d-chip__text span { color: var(--text-3); font-size: 12px; font-family: var(--mono); }
+.s3d-chip .s3d-chip__warn { color: var(--danger); font-family: var(--font); }
+.s3d-chip.is-warn { border-color: var(--danger); }
+.s3d-chip--live { padding: 4px 12px; gap: 10px; font-family: var(--mono); font-size: 12px; }
+
+/* ---------- replace picker ---------- */
+.s3d-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.s3d-picker__card {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.s3d-picker__card:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+.s3d-picker__img {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.s3d-picker__img img { width: 100%; height: 100%; object-fit: contain; }
+.s3d-picker__name { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- add picker ---------- */
+.s3d-add__bar { display: grid; gap: 10px; margin-bottom: 14px; }
+.s3d-add__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-3);
+}
+.s3d-add__search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
+.s3d-add__search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text); }
+.s3d-add__cats { display: flex; gap: 6px; flex-wrap: wrap; }
+.s3d-add__grid { max-height: min(52vh, 460px); overflow-y: auto; padding: 2px; }
+.s3d-tool--primary { background: var(--accent); color: var(--accent-text); }
+.s3d-tool--primary:hover { background: var(--accent-hover); color: var(--accent-text); }

@@ -1,112 +1,57 @@
 # SoraPlan API (`backend/api`)
 
-FastAPI backend service responsible for user management, authentication, and quotas for the **SoraPlan** platform, integrating directly with **Firebase Authentication** and **Cloud Firestore**.
+FastAPI service behind the chat-first web app (`web/`). The browser signs in with the Firebase Auth JS SDK,
+reads Firestore live (read-only rules) and sends every write here with its Firebase ID token.
+Design: [`docs/10-chat-refactor-plan.md`](../../docs/10-chat-refactor-plan.md).
 
-## Features
+## Endpoints (`/v1`, Bearer Firebase ID token)
 
-- **Sign Up**: Creates user account in Firebase Auth and provisions initial user profile and quotas in Firestore (`users/{uid}`).
-- **Login**: Authenticates email and password against Firebase Identity Toolkit, retrieving ID Token and Refresh Token, and heals user profile if needed.
-- **Google Sign-In**: Verifies client-side Firebase Google ID tokens and provisions user profile.
-- **Token Refresh**: Refreshes expired ID tokens via Firebase SecureToken API.
-- **User Profile & Quotas**: Fetch and update user profiles, view subscription plan quotas (projects, 3D assets, renders).
-- **RFC 7807 Problem Details**: Standardized error responses across all endpoints.
-- **REST Wire Format**: camelCase JSON matching TypeScript schemas.
-
-## API Endpoints
-
-### Auth (`/v1/auth`)
-
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/v1/auth/signup` | Register new user with email & password | No |
-| `POST` | `/v1/auth/login` | Login with email & password | No |
-| `POST` | `/v1/auth/google` | Authenticate with client-provided Firebase Google token | No |
-| `POST` | `/v1/auth/refresh` | Refresh ID token using refresh token | No |
-| `GET` | `/v1/auth/me` | Get currently authenticated user profile | Bearer Token |
-| `POST` | `/v1/auth/logout` | Revoke all refresh tokens for current user | Bearer Token |
-
-### Users (`/v1/users`)
-
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `GET` | `/v1/users/me` | Get profile for current user | Bearer Token |
-| `PATCH` | `/v1/users/me` | Update display name and/or avatar photo URL | Bearer Token |
-| `GET` | `/v1/users/me/quota` | Get user quota limits and tier information | Bearer Token |
-| `GET` | `/v1/users/{uid}` | Get user profile by UID | Bearer Token |
-
-### Projects & Floor Plan Uploads (`/v1/projects`)
-
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/v1/projects` | Create a new project (auto-generated Google Cloud ID) | Bearer Token |
-| `GET` | `/v1/projects` | List all projects for authenticated user with signed URLs | Bearer Token |
-| `GET` | `/v1/projects/{id}` | Get project details by ID with signed display URL | Bearer Token |
-| `POST` | `/v1/projects/{id}/upload-url` | Generate V4 signed PUT upload URL & signed display URL | Bearer Token |
-| `POST` | `/v1/projects/{id}/confirm-upload` | Confirm direct upload and write update to Firestore | Bearer Token |
-| `DELETE` | `/v1/projects/{id}` | Delete project and remove uploaded plan from GCS | Bearer Token |
-
-### Custom Furniture Ingestion (`/v1/projects/{id}/furniture`)
-
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/v1/projects/{id}/furniture/upload-url` | Generate V4 signed PUT upload URL for furniture photo (`soraplan-assest-dev/{user_id}/{project_id}/furniture/{file_id}.ext`) | Bearer Token |
-| `POST` | `/v1/projects/{id}/furniture/confirm-upload` | Confirm furniture upload and trigger Meshy 3D generation | Bearer Token |
-| `GET` | `/v1/projects/{id}/furniture` | List all custom furniture photos for project with fresh signed display URLs and 3D status | Bearer Token |
-| `GET` | `/v1/projects/{id}/furniture/{furniture_id}/3d-status` | Poll Meshy API for 3D model status and update Firestore with GLB/USDZ links | Bearer Token |
-| `POST` | `/v1/projects/{id}/furniture/{furniture_id}/generate-3d` | Explicitly trigger or retry Meshy Image-to-3D generation | Bearer Token |
-| `DELETE` | `/v1/projects/{id}/furniture/{furniture_id}` | Delete furniture item from Cloud Storage and Firestore subcollection | Bearer Token |
-
-### Meshy Image-to-3D Generation Settings
-When a furniture photo upload is confirmed, SoraPlan automatically triggers Meshy Image-to-3D generation (`POST https://api.meshy.ai/openapi/v1/image-to-3d`) using the configured `MESHY_API_KEY`:
-- **Resolution**: `standard` (`model_type: "standard"`, `geometry_resolution: "standard"`)
-- **Texture**: `allowed` (`should_texture: true`, `enable_pbr: true`)
-- **Image enhancement**: `allowed` (`image_enhancement: true`)
-- **Output**: Multi-format 3D models (`glb`, `usdz`, `fbx`, `obj`), PBR texture maps, and preview renders.
-
-> **Single Plan Rule**: Each project accepts strictly **one** floor plan (sketch image, screenshot, or PDF). Once uploaded successfully, re-uploading to the same project is permanently blocked (HTTP 409 `PLAN_ALREADY_UPLOADED`). To upload another floor plan, users must create a new project. Projects can have multiple custom furniture photos in their furniture library.
->
-> **Google Cloud Storage & ID Conventions**:
-> - Object storage path follows: `soraplan-assest-dev/{user_id}/{project_id}/{files}`
-> - Public display URLs are V4 signed GET URLs (`X-Goog-Algorithm=GOOG4-RSA-SHA256`).
-> - All identifiers (`projectId`, `uploadId` / `contentId`) are generated strictly following Google Cloud Firestore ID specifications, never created locally.
-
-
-### System
-
-| Method | Endpoint | Description |
+| Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Health check endpoint |
-| `GET` | `/docs` | Interactive Swagger API documentation |
-| `GET` | `/redoc` | ReDoc API documentation |
+| GET/PATCH | `/users/me` | Profile; `role` comes from `ADMIN_UIDS` |
+| POST | `/conversations` | Start a project from a plan file → `{projectId, conversationId, signedUploadUrl}` |
+| POST | `/conversations/{id}/upload-complete` | PDF page 1 → PNG, EXIF fix, thumbnail; stage → `cropping` |
+| POST | `/conversations/{id}/messages` | Chat turn: Gemini + tool loop, reply streamed into Firestore |
+| POST | `/conversations/{id}/stop` | Stop the reply being generated |
+| POST | `/conversations/{id}/actions` | UI buttons, same handlers as the Gemini tools (`confirm_crop`, `confirm_plan`, `select_style`, `skip_missing`, `continue`, `edit_plan`, `restart_crop`, `retry_parse`, `undo_last_change`) |
+| PATCH / DELETE | `/conversations/{id}` | Rename / save `stageData.crop` · delete chat, project, scene, files |
+| GET | `/projects`, `/projects/{id}`, `/projects/{id}/plan` | Read projects |
+| GET | `/projects/{id}/files` | Fresh signed URLs of the original and cropped plan |
+| PUT | `/projects/{id}/plan` | Save the edited 2D plan (bumps `floorPlanVersion`) |
+| PATCH | `/projects/{id}/mapping` | Rescale a matched model, reset it, or assign an asset to a box |
+| POST | `/projects/{id}/scene/ops` · `/scene/undo` · `/scene/redo` | 3D edits as op batches (409 `SCENE_VERSION_CONFLICT`); history shared with AI edits |
+| GET / POST / PATCH / DELETE | `/assets…` | Library: list (`scope=system|mine`), upload URL, confirm (starts Meshy), edit / promote (admin), delete |
+| POST | `/assets/remove-background` | Cut furniture out of a photo (proxied to the private worker) |
+| GET | `/jobs/{id}` | Parse job status (marks stale jobs failed and resets the chat) |
+| POST | `/internal/assets/{id}/poll` | Cloud Tasks only (OIDC token of `TASKS_INVOKER_SA`, audience `API_PUBLIC_URL`) |
 
-## Setup & Running Locally
+## Layout
 
-### 1. Install dependencies
-
-```bash
-pip install -r requirements.txt
+```
+app/routers/      conversations, projects, scenes, assets, internal, users, jobs
+app/services/
+  workflow.py           stage machine (create → crop → parse → review → style → mapping → scene)
+  orchestrator.py       Gemini turn: context, tool loop, streaming, scene_change messages
+  gemini_client.py      google-genai (Vertex AI) wrapper, retries, logging
+  tools.py              tool registry: schema, allowed stages, confirmation rule, handlers
+  asset_mapper.py       plan objects → catalog assets (category table, footprint fit, orientation)
+  scene_builder.py      FloorPlan + style + mapping → SceneGraph (meters)
+  scene_ops.py          apply / invert op batches, undo/redo, scenes/{id}
+  asset_service.py      assets/{id}, Meshy start + server-side polling, promotion to the catalog
+  crop_service.py       PDF render, crop, thumbnail · glb.py: GLB bounding box
+app/data/         system_assets.json (41 presets, measured proportions), styles.json (palettes)
+evals/            chat_tools.jsonl + run_chat_tools.py (real Gemini tool-choice eval)
 ```
 
-### 2. Configure Environment
-
-Copy `.env.example` to `.env`:
+## Develop
 
 ```bash
-cp .env.example .env
+cp .env.example .env && python -m venv .venv && .venv/bin/pip install -r requirements.txt
+gcloud auth application-default login          # Vertex AI (Gemini) with your account
+.venv/bin/uvicorn app.main:app --reload --port 8000
+.venv/bin/python -m pytest -q tests            # fully mocked (in-memory Firestore/Storage/Meshy/Gemini)
+.venv/bin/python -m evals.run_chat_tools       # real Gemini, target ≥ 18/20
 ```
 
-Ensure `FIREBASE_PROJECT_ID=soraplan` and `FIREBASE_WEB_API_KEY` are populated. Authentication uses Google Application Default Credentials (ADC) or a Service Account JSON path.
-
-### 3. Run Development Server
-
-```bash
-uvicorn app.main:app --reload --port 8000
-```
-
-Access API docs at: [http://localhost:8000/docs](http://localhost:8000/docs)
-
-### 4. Run Tests
-
-```bash
-pytest
-```
+Without `MESHY_POLL_QUEUE` the API polls Meshy from a background thread; without `CLOUD_TASKS_QUEUE` it calls
+the parsing worker directly. `UPDATE_GOLDEN=1 pytest tests/test_scene_builder.py` refreshes the golden scene.

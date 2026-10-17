@@ -204,6 +204,7 @@ soraplan/
 | [07-3d-asset-pipeline.md](docs/07-3d-asset-pipeline.md) | 3D / BE engineer | Meshy integration, GLB normalization, preset catalog |
 | [08-infra-devops.md](docs/08-infra-devops.md) | DevOps | Terraform, CI/CD, envs, secrets, monitoring, budget |
 | [09-roadmap-and-tasks.md](docs/09-roadmap-and-tasks.md) | PM / everyone | Milestones, task tickets, demo script |
+| [10-chat-refactor-plan.md](docs/10-chat-refactor-plan.md) | Everyone | Chat-first refactor: what runs today (§9) |
 
 ---
 
@@ -227,91 +228,115 @@ soraplan/
 
 ## 9. What runs today
 
-Implemented so far: step ① (upload + parse + 2D plan editor) and the furniture → 3D part of step ②.
+The chat-first app from [`docs/10-chat-refactor-plan.md`](docs/10-chat-refactor-plan.md): one conversation per
+project, Gemini as the guide, a canvas beside the chat for crop, plan review, mapping and 3D.
 Differences from the target design that matter when you change code:
 
 | Target (§4–6) | Today |
 |---|---|
-| Next.js + R3F in `apps/web` | Static HTML/JS in `frontend/` (one large `app.js`, Canvas 2D editor, `<model-viewer>` for GLB review) |
+| Next.js + R3F in `apps/web` | Vite + React + TS + R3F in `web/` (static SPA on Firebase Hosting) |
 | `services/api`, `ai-worker`, `asset-worker` | `backend/api` and `backend/plan_parsing_worker` (both FastAPI, Python 3.12) |
-| Gemini 3.1 Pro plan parsing | OpenAI Responses API (`OPENAI_MODEL`, default `gpt-6-sol`), 2 passes: room corners, then full plan |
-| Meters everywhere | Parsed `FloorPlan` defaults to `units: "ft"`, plan-space coordinates |
-| Meshy behind a provider interface | `MeshyService` called directly from `ProjectService`; status advances only when the client polls |
-| Catalog via GCS + CDN | Public bucket `gs://soraplan-catalog`, no CDN |
+| Gemini 3.1 Pro plan parsing | OpenAI Responses API (`OPENAI_MODEL`) on the user's crop, one pass (decision D4) |
+| Meters everywhere | Parsed `FloorPlan` is in plan units (`ft` default); the scene builder converts to meters (§9.3) |
+| Full SceneGraph + SceneOps | v1 subset: one level, walls, openings, rooms (floor color), items; ops `item.*`, `surface.material` |
+| Gemini ADK agents | `orchestrator.py`: one Gemini Flash chat (Vertex AI) with function calling over `tools.py` |
+| Catalog via GCS + CDN | Public bucket `gs://soraplan-catalog` (`assets/` originals, `assets-web/` optimized), no CDN |
 
 ### 9.1 Topology
 
 ```
- Browser ── static site on Firebase Hosting (frontend/, config.js sets API + catalog URLs)
-   │  REST + Firebase ID token                         PUT file to V4 signed URL
-   ▼                                                              │
- Cloud Run: soraplan-api (public)  ── signs URLs ──► gs://soraplan-assest-dev  (private uploads, GLB cache)
-   │  Firestore: users, projects, jobs                            ▲
-   │  Meshy: create + poll image-to-3D                            │ download plan
-   │  enqueue (OIDC token) ─► Cloud Tasks: plan-parsing ─►  Cloud Run: soraplan-plan-parsing-worker (private)
-   │  proxy background removal (ID token) ─────────────────►    │  OpenAI vision → FloorPlan → Firestore
-   ▼
- gs://soraplan-catalog/assets/{Industrial,Japandi}/*.{glb,usdz,png}  (public read; browser loads directly)
+ Browser (web/, Firebase Hosting)
+   ├─ Firebase Auth JS SDK (email/password, Google)
+   ├─ Firestore onSnapshot, read-only rules: conversations(+messages), projects, scenes, assets, jobs
+   └─ REST + Firebase ID token ─► Cloud Run: soraplan-api (public)
+                                    ├─ Workflow (stages) + Orchestrator ─► Gemini on Vertex AI (function calling)
+                                    ├─ AssetMapper / SceneBuilder / SceneOps (deterministic)
+                                    ├─ Cloud Tasks plan-parsing ─► soraplan-plan-parsing-worker (private)
+                                    │                               └─ writes jobs/*, projects/*.floorPlan and
+                                    │                                  plan_ready / plan_failed chat messages
+                                    └─ Cloud Tasks meshy-poll ─► POST /internal/assets/{id}/poll (OIDC-verified)
+ Storage: gs://soraplan-assest-dev (uploads, crops, user GLBs) · gs://soraplan-catalog (assets/, assets-web/)
 ```
 
-- The worker has **no public access**. Only the API's service account (direct calls with a Google ID token)
-  and the Cloud Tasks invoker SA (OIDC token) can call it. The browser never calls it.
-- Parse jobs: API writes `jobs/{jobId}` (`queued`) → worker advances `stage`
-  (`downloading_image → detecting_room_corners → analyzing_with_ai → saving_results → completed | failed`).
-  The client polls `GET /v1/jobs/{id}`. A job with no update for `JOB_STALE_SECONDS` (900) is marked failed.
-- Without `CLOUD_TASKS_QUEUE` (local dev) the API dispatches to the worker from a background thread.
+- **AI proposes, deterministic code applies.** Gemini never writes Firestore; it calls tools (`tools.py`) that
+  check the stage, validate args and apply. UI buttons call the same handlers (`POST /conversations/{id}/actions`).
+- Destructive tools (`remove_item`, `restart_crop`, `edit_plan`, `select_style` after 3D) run only when the
+  user's latest message is an explicit yes; otherwise the tool returns `NEEDS_CONFIRMATION` and Gemini asks.
+- Predefined chat copy lives only in `web/src/chat/messageTemplates.ts`; the backend writes `kind` + `payload`.
+- The worker has **no public access**; only the API's SA and the Cloud Tasks invoker SA can call it.
+  A parse job with no update for `JOB_STALE_SECONDS` (900) is failed by `GET /v1/jobs/{id}` and the chat is reset.
+- Meshy progress is polled server-side (queue `meshy-poll`, every 15 s, max 40 tries); locally a thread polls.
+  When a model for a plan box is ready, its mapping is refit and the 3D placeholder resized.
+- 3D edits are op batches with `baseVersion` (409 on conflict); each batch stores its inverse, and the
+  undo/redo stacks on `scenes/{id}` are shared by UI and AI edits.
 
 ### 9.2 Layout
 
 ```
-frontend/                     index.html, app.js, styles.css, config.js (local defaults), vendor/model-viewer
-backend/api/                  app/{routers,services,models}, tests/ (pytest), Dockerfile
+web/                          src/{lib,hooks,layout,chat,canvas/{PlanEditor,Scene3D},assets,three}, public/config.js
+backend/api/                  app/{routers,services,models,data}, tests/ (pytest, in-memory fakes), evals/
 backend/plan_parsing_worker/  app/{routers,services,models}, Dockerfile
+scripts/                      optimize_catalog.sh, catalog/measure.mjs, migrate_assets.py, make_crop_examples.py
 deploy/                       config.sh, setup.sh, upload_catalog.sh, deploy.sh
-firebase.json, .firebaserc    Hosting serves build/frontend (generated by deploy.sh)
-docs/                         target design
+firebase.json, firestore.rules, firestore.indexes.json
+docs/                         target design; 10-chat-refactor-plan.md = what was built
 ```
 
-### 9.3 Preset catalog
+### 9.3 Units, scale and the catalog
 
-- Logical path `assets/{Style}/{file}` is the identifier everywhere (Firestore `storagePath`, the embedded
-  catalog in `app.js`). It maps to `https://storage.googleapis.com/soraplan-catalog/assets/{Style}/{file}`.
-- Backend: `ProjectService.catalog_url()`; frontend: `resolveAssetUrl()`. Never read catalog files from disk.
+- Plan → scene: `k = 0.3048` for `ft`, `1` for `m`, `10 / max(width, height)` for `normalized`;
+  `X = x·k`, `Z = y·k`, `rotationY = -deg2rad(rotation) + rotationOffset`. Same rule in
+  `backend/api/app/services/geometry.py` and `web/src/lib/units.ts`.
+- Meshy scales every model so its longest side is ~1.9 units: catalog `dims` are **proportions**, not meters
+  (all catalog models face +Z; checked by measuring which side is taller). The mapper (`fit_asset`) fills each
+  plan box, stretching one floor axis at most 20 % past a uniform fit, then pulls the height into the
+  category's plausible range (`CATEGORY_HEIGHT_RANGE_M`: vertical stretch ≤ 1.5×, then uniform ≤ 1.25×).
+  It picks a 90° turn so the long sides match; seats face a table within reach, everything else turns its
+  back to the first wall behind it. Items added in 3D use `real_dims` (mirrored in `web/src/lib/furniture.ts`).
+  Users can rescale per box during mapping or in 3D. Existing scenes keep their sizes until re-mapped.
+- Logical paths `assets/{Style}/{file}` and `assets-web/{Style}/{file}` map to
+  `https://storage.googleapis.com/soraplan-catalog/...`. `assets/{id}` docs store ready-to-use URLs;
+  `backend/api/app/data/system_assets.json` is the bundled fallback until Firestore is seeded.
 - The local `assets/` folder (gitignored) is only the upload source for `deploy/upload_catalog.sh`.
 
 ### 9.4 Signed URLs
 
 On Cloud Run there is no key file, so `StorageService` signs through the IAM `signBlob` API as the API's
 own service account. That needs `roles/iam.serviceAccountTokenCreator` on itself (granted by `setup.sh`)
-and a **`cloud-platform`-scoped** token (the Storage client's devstorage token is rejected with
-"insufficient authentication scopes"). Outside `development`/`testing`, signing failures raise instead of
-returning an unsigned URL.
+and a **`cloud-platform`-scoped** token. Outside `development`/`testing`, signing failures raise.
+User asset URLs are signed for 7 days and re-signed by `GET /v1/assets?scope=mine` when < 1 day is left;
+plan images are signed on demand by `GET /v1/projects/{id}/files`.
 
 ### 9.5 Configuration and credentials
 
 | Where | API (`backend/api`) | Worker (`backend/plan_parsing_worker`) |
 |---|---|---|
-| Local | `.env` (copy `.env.example`), key at `.secrets/serviceAccountKey.json` | `.env`, reuses `../api/.secrets/serviceAccountKey.json` |
-| Cloud Run env vars | `ENV`, `FIREBASE_PROJECT_ID`, `GCS_BUCKET_NAME`, `CATALOG_BUCKET_NAME`, `PLAN_PARSER_WORKER_URL`, `CLOUD_TASKS_QUEUE`, `TASKS_INVOKER_SA`, `WORKER_REQUIRES_AUTH=true`, `CORS_ORIGINS`, `ADMIN_UIDS` | `ENV`, `FIREBASE_PROJECT_ID`, `GCS_BUCKET_NAME`, `OPENAI_MODEL` |
-| Secret Manager | `firebase-web-api-key` → `FIREBASE_WEB_API_KEY`, `meshy-api-key` → `MESHY_API_KEY` | `openai-api-key` → `OPENAI_API_KEY` |
+| Local | `.env` (copy `.env.example`), key at `.secrets/serviceAccountKey.json`, `gcloud auth application-default login` for Gemini | `.env`, reuses `../api/.secrets/serviceAccountKey.json` |
+| Cloud Run env vars | `ENV`, `FIREBASE_PROJECT_ID`, `GCS_BUCKET_NAME`, `CATALOG_BUCKET_NAME`, `PLAN_PARSER_WORKER_URL`, `CLOUD_TASKS_QUEUE`, `TASKS_INVOKER_SA`, `WORKER_REQUIRES_AUTH=true`, `CORS_ORIGINS`, `ADMIN_UIDS`, `MESHY_POLL_QUEUE`, `API_PUBLIC_URL`, `GEMINI_CHAT_MODEL`, `GEMINI_LOCATION` | `ENV`, `FIREBASE_PROJECT_ID`, `GCS_BUCKET_NAME`, `OPENAI_MODEL` |
+| Secret Manager | `meshy-api-key` → `MESHY_API_KEY`; `firebase-web-api-key` (written into the web build's `config.js`) | `openai-api-key` → `OPENAI_API_KEY` |
+| Web | `web/.env.local`: `VITE_FIREBASE_API_KEY` (local); `dist/config.js` generated by `deploy.sh` | — |
 
-- `FIREBASE_CREDENTIALS_PATH` is for local dev only; unset means Application Default Credentials.
-- `ADMIN_UIDS` (comma-separated) is the only source of admin rights; the frontend trusts the API's `role`.
+- Gemini uses Vertex AI with the API service account (`roles/aiplatform.user`); `GEMINI_API_KEY` is a local-only
+  alternative. Model ids are env values, never hard-coded in code paths.
+- `ADMIN_UIDS` (comma-separated) is the only source of admin rights; the web app trusts the API's `role`.
 - `CORS_ORIGINS` is an explicit list, never `*` (the API allows credentials).
-- `.dockerignore` / `.gcloudignore` keep `.env`, `.secrets/` and tests out of images. Check with
-  `gcloud meta list-files-for-upload backend/api`.
+- `.dockerignore` / `.gcloudignore` keep `.env`, `.secrets/` and tests out of images.
 
 ### 9.6 Local development
 
 ```bash
 cd backend/api && cp .env.example .env && python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn app.main:app --reload --port 8000          # API
-.venv/bin/python -m pytest -q tests                            # 41 tests, fully mocked
+.venv/bin/python -m pytest -q tests                            # 117 tests, fully mocked
+.venv/bin/python -m evals.run_chat_tools                       # Gemini tool-choice eval (real model)
 
 cd backend/plan_parsing_worker && cp .env.example .env && python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn app.main:app --reload --port 8001          # worker
 
-cd frontend && npx serve . -p 3000                             # http://localhost:3000
+cd web && cp .env.example .env.local && npm install
+npm run dev                                                    # http://localhost:5173 → Cloud Run API
+#   (public/config.js); local API: VITE_API_BASE_URL=http://localhost:8000/v1 in web/.env.local
+npm test && npm run typecheck
 ```
 
 ---
@@ -329,32 +354,37 @@ env var (e.g. `REGION=us-central1 deploy/deploy.sh api`).
 | Cloud Run | `soraplan-api` | public, 1 GiB, timeout 300 s, max 5 instances |
 | Cloud Run | `soraplan-plan-parsing-worker` | `--no-allow-unauthenticated`, 1 GiB, timeout 600 s, concurrency 4, max 3 |
 | Cloud Tasks | `plan-parsing` | max 3 attempts, 1 dispatch/s, 5 concurrent |
-| Bucket | `soraplan-assest-dev` | private user uploads + cached Meshy GLBs; CORS for Hosting + localhost |
-| Bucket | `soraplan-catalog` | public read (`allUsers` objectViewer), CORS `*` GET |
-| Service account | `soraplan-api@` | Firestore, Firebase Auth admin, uploads objectAdmin, Tasks enqueuer, signs as itself |
+| Cloud Tasks | `meshy-poll` | API → `/internal/assets/{id}/poll` with OIDC token; max 5 attempts |
+| Bucket | `soraplan-assest-dev` | private user uploads, crops, user GLBs; CORS for Hosting + localhost |
+| Bucket | `soraplan-catalog` | public read (`allUsers` objectViewer), CORS `*` GET; API SA objectAdmin (promotions) |
+| Firestore | rules + indexes | `firestore.rules` (read-only for browsers), `firestore.indexes.json` |
+| Service account | `soraplan-api@` | Firestore, Firebase Auth admin, Vertex AI user, uploads objectAdmin, Tasks enqueuer, signs as itself |
 | Service account | `soraplan-worker@` | Firestore, uploads objectViewer, OpenAI secret |
-| Service account | `soraplan-tasks-invoker@` | `run.invoker` on the worker; identity in Cloud Tasks OIDC tokens |
-| Hosting | `https://soraplan.web.app` | serves `build/frontend` |
+| Service account | `soraplan-tasks-invoker@` | `run.invoker` on the worker; identity in Cloud Tasks OIDC tokens (both queues) |
+| Hosting | `https://soraplan.web.app` | serves `web/dist` (SPA rewrite to `index.html`) |
 
 ### 10.2 First-time setup
 
 ```bash
-deploy/setup.sh            # idempotent: APIs, service accounts, IAM, secrets, queue, buckets, CORS
-deploy/upload_catalog.sh   # sync assets/{Industrial,Japandi} to gs://soraplan-catalog (DRY_RUN=1 to preview)
+deploy/setup.sh            # idempotent: APIs, service accounts, IAM, secrets, queues, buckets, CORS
+scripts/optimize_catalog.sh  # meshopt + WebP copies of the catalog in catalog/out/assets-web
+deploy/upload_catalog.sh   # sync assets/ and catalog/out/assets-web to gs://soraplan-catalog (DRY_RUN=1 to preview)
 firebase login             # once; the Firebase CLI does not use gcloud credentials
-deploy/deploy.sh all       # worker → api → frontend (order matters: api needs the worker URL)
+deploy/deploy.sh all       # worker → api → rules → web (order matters: api needs the worker URL)
+backend/api/.venv/bin/python scripts/migrate_assets.py --apply   # seed assets/ (dry run without --apply)
 ```
 
 `setup.sh` reads secret values from `backend/api/.env` (`FIREBASE_WEB_API_KEY`, `MESHY_API_KEY`) and
 `backend/plan_parsing_worker/.env` (`OPENAI_API_KEY`). Re-running it after changing a key adds a new secret
-version; redeploy the service to pick it up.
+version; redeploy the service to pick it up. The first API deploy sets `API_PUBLIC_URL` to its own URL.
 
 ### 10.3 Updating
 
 ```bash
 deploy/deploy.sh worker     # backend/plan_parsing_worker changed
 deploy/deploy.sh api        # backend/api changed
-deploy/deploy.sh frontend   # frontend/ changed (writes build/frontend/config.js with the API URL)
+deploy/deploy.sh rules      # firestore.rules / firestore.indexes.json changed
+deploy/deploy.sh frontend   # web/ changed (npm ci && npm run build, writes dist/config.js)
 deploy/upload_catalog.sh    # catalog models added or changed (uploads only the diff)
 ```
 
@@ -362,12 +392,70 @@ Cloud Run deploys use `--source` (Cloud Build builds each service's Dockerfile).
 revision; roll back with
 `gcloud --configuration=trungtin run services update-traffic soraplan-api --region=asia-southeast1 --to-revisions=<REV>=100`.
 
-### 10.4 Troubleshooting
+### 10.4 Deployment log (what is live — update this after every deploy)
+
+**2026-10-17 — chat-first refactor (docs/10) deployed.** Infra existed before; only the new pieces were added,
+so `setup.sh` was NOT re-run. Done, in order:
+
+| Step | Command (run from repo root) | Result |
+|---|---|---|
+| Vertex AI API | `gcloud ... services enable aiplatform.googleapis.com` | enabled |
+| Gemini role | `gcloud ... projects add-iam-policy-binding soraplan --member=serviceAccount:soraplan-api@... --role=roles/aiplatform.user --condition=None` | granted |
+| Catalog write (promotions) | `gcloud ... storage buckets add-iam-policy-binding gs://soraplan-catalog --member=serviceAccount:soraplan-api@... --role=roles/storage.objectAdmin` | granted |
+| Meshy poll queue | `gcloud ... tasks queues create meshy-poll --location=asia-southeast1 --max-attempts=5 --min-backoff=15s --max-backoff=120s --max-concurrent-dispatches=10 --max-dispatches-per-second=5` | created |
+| Optimized models | `gcloud ... storage rsync catalog/out/assets-web gs://soraplan-catalog/assets-web --recursive --cache-control='public, max-age=31536000, immutable' --content-type=model/gltf-binary` | 41 GLBs, 25 MB, public |
+| Worker | `deploy/deploy.sh worker` | revision `soraplan-plan-parsing-worker-00002-67l` |
+| API | `deploy/deploy.sh api` | revision `soraplan-api-00003-jmf`, `/health` OK |
+| API fix | `deploy/deploy.sh api` | revision `soraplan-api-00004-hlh`: `app/data/*.json` was excluded by `*.json` in `.dockerignore`/`.gcloudignore` (500 on confirm_plan, seen in the browser as a CORS error); now whitelisted, and unhandled errors return a JSON 500 with CORS headers |
+| Firestore | `deploy/deploy.sh rules` | rules + indexes released |
+| Web | `deploy/deploy.sh frontend` | `https://soraplan.web.app` (web/dist) |
+| Asset library | `cd backend/api && FIREBASE_CREDENTIALS_PATH=.secrets/serviceAccountKey.json .venv/bin/python ../../scripts/migrate_assets.py --apply` | 41 system + 2 user assets in `assets/` |
+
+**2026-10-17 — mapping/3D fixes.** `deploy/deploy.sh api` → revision `soraplan-api-00005-ccz` (rollback target:
+`soraplan-api-00004-hlh`). Ships: furniture fit with bounded stretch + category height ranges, seats face tables /
+backs to the wall behind (`asset_mapper.fit_asset`), `real_dims` for added items, style covers
+(`assets-web/{Style}/{Style}.webp`, uploaded by hand with `gcloud storage cp`; now part of `optimize_catalog.sh` +
+`upload_catalog.sh`), a picked asset sets the box's category, and `PATCH /projects/{id}/mapping {restore: true}`
+(undo a Skip). Existing scenes keep their sizes until the style is picked again. Web not redeployed.
+Then `soraplan-api-00006-jkl`: skipping specific boxes (`skip_missing` with `componentIds`) no longer builds the scene,
+even for the last missing box; only skip-all / Continue builds.
+
+Live URLs: API `https://soraplan-api-va4xv7fowq-as.a.run.app` (= `API_PUBLIC_URL`), worker
+`https://soraplan-plan-parsing-worker-va4xv7fowq-as.a.run.app` (private), web `https://soraplan.web.app`.
+
+Open items:
+- `GEMINI_CHAT_MODEL=gemini-3.8-flash` (location `global`) is **not verified** to exist on Vertex AI. If the chat
+  answers "The assistant is unavailable", check API logs and redeploy with a valid id:
+  `GEMINI_CHAT_MODEL=<id> deploy/deploy.sh api`. Then run `backend/api/.venv/bin/python -m evals.run_chat_tools`.
+- The full upload → crop → parse → style → 3D flow has not been run end to end in production.
+
+Notes for next time:
+- **Code-only change:** `deploy/deploy.sh worker|api|rules|frontend` for the part that changed. Each Cloud Run
+  deploy only adds a revision; it does not touch service accounts, secrets, buckets or queues.
+- **Don't re-run `setup.sh`** unless a new API, role, queue or bucket setting is needed; add one-off `gcloud`
+  commands like the table above instead.
+- Run `gcloud` with `--configuration=trungtin --project=soraplan`. In the maintainer's zsh, `gc` and `g` are git
+  aliases (`gc` = `git commit`), and `$VAR`-style command prefixes don't word-split; type `gcloud` in full.
+- `backend/api/.dockerignore` and `.gcloudignore` exclude `*.json` (keys); new bundled data files need a `!path` exception.
+  Check with `gcloud meta list-files-for-upload backend/api`.
+- This machine has no Application Default Credentials; local scripts use
+  `FIREBASE_CREDENTIALS_PATH=.secrets/serviceAccountKey.json` (from `backend/api`).
+- Catalog models changed → `scripts/optimize_catalog.sh` then `deploy/upload_catalog.sh` (rsync uploads only diffs).
+- `migrate_assets.py --apply` is safe to re-run (system docs upserted, existing user assets untouched).
+
+### 10.5 Troubleshooting
 
 - **Upload fails with `Anonymous caller does not have storage.objects.create`**: the API returned an
   unsigned URL. Check API logs for `signBytes` errors (§9.4).
-- **Parse job stuck in `queued`**: check the queue (`gcloud tasks queues describe plan-parsing --location=asia-southeast1`)
+- **Parse stuck on "Reading your floor plan…"**: check the queue (`gcloud tasks queues describe plan-parsing --location=asia-southeast1`)
   and worker logs; a 403 there means the invoker SA lost `run.invoker` (re-run `deploy/deploy.sh worker`).
+  After 15 min without progress the chat resets to cropping with a "Try again" card.
+- **Uploaded furniture stays at "Generating 3D"**: check `meshy-poll` tasks and `/internal/assets` logs; a 401/403
+  there means `API_PUBLIC_URL` or `TASKS_INVOKER_SA` does not match the token.
+- **Chat replies with "The assistant is unavailable"**: Vertex AI error; check `GEMINI_CHAT_MODEL` exists in
+  `GEMINI_LOCATION` and the API SA has `roles/aiplatform.user`.
+- **Empty sidebar / `Missing or insufficient permissions` in the browser console**: deploy rules and indexes
+  (`deploy/deploy.sh rules`); a new composite index takes a few minutes to build.
 - **Browser CORS error on the API**: add the origin to `HOSTING_ORIGINS`/`LOCAL_ORIGINS` in `deploy/config.sh`
   and redeploy the API. On a bucket: re-run `setup.sh`.
 - Logs: `gcloud --configuration=trungtin logging read 'resource.labels.service_name="soraplan-api"' --limit=50 --freshness=1h`.

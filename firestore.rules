@@ -1,0 +1,37 @@
+rules_version = '2';
+// Browsers only READ (onSnapshot); every write goes through the API (Admin SDK bypasses these rules).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(doc) {
+      return request.auth != null && doc != null && doc.data.ownerUid == request.auth.uid;
+    }
+
+    match /conversations/{id} {
+      allow read: if isOwner(resource);
+      allow write: if false;
+      match /messages/{m} {
+        allow read: if isOwner(get(/databases/$(database)/documents/conversations/$(id)));
+        allow write: if false;
+      }
+    }
+    match /projects/{id} {
+      allow read: if isOwner(resource);
+      allow write: if false;
+    }
+    match /scenes/{id} {
+      allow read: if isOwner(get(/databases/$(database)/documents/projects/$(id)));
+      allow write: if false;
+    }
+    match /assets/{id} {
+      allow read: if request.auth != null && (resource.data.isSystem == true || isOwner(resource));
+      allow write: if false;
+    }
+    match /jobs/{id} {
+      allow read: if isOwner(resource);
+      allow write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

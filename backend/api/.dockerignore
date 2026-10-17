@@ -5,6 +5,8 @@
 .secrets/
 *.json
 !package.json
+# Bundled catalog + style palettes (not credentials)
+!app/data/*.json
 .venv/
 venv/
 __pycache__/

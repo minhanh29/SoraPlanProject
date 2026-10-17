@@ -30,6 +30,12 @@ CATALOG_SRC="${CATALOG_SRC:-$REPO_ROOT/assets}"
 # Cloud Tasks
 TASKS_QUEUE="${TASKS_QUEUE:-plan-parsing}"
 TASKS_QUEUE_PATH="projects/${PROJECT_ID}/locations/${REGION}/queues/${TASKS_QUEUE}"
+MESHY_QUEUE="${MESHY_QUEUE:-meshy-poll}"
+MESHY_QUEUE_PATH="projects/${PROJECT_ID}/locations/${REGION}/queues/${MESHY_QUEUE}"
+
+# Gemini (chat orchestrator) through Vertex AI with the API's service account
+GEMINI_CHAT_MODEL="${GEMINI_CHAT_MODEL:-gemini-3.8-flash}"
+GEMINI_LOCATION="${GEMINI_LOCATION:-global}"
 
 # Secret Manager secret names -> env var they feed
 SECRET_FIREBASE_WEB_API_KEY="firebase-web-api-key"
