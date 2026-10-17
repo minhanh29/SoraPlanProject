@@ -4,10 +4,11 @@ import json
 import logging
 import math
 import re
+import statistics
 import time
 import urllib.request
 import urllib.error
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import httpx
 import importlib
 
@@ -66,12 +67,17 @@ Your job is not to describe the image. Your job is to locate every meaningful ar
 - Do NOT create door or window objects. Wherever a wall has a door or window opening, SPLIT the wall into
   separate segments before and after the opening and leave the opening as a blank gap.
 - Connected walls must share endpoints exactly (corners and T-junctions meet).
+- Only the thick drawn wall lines are walls. Cabinets, closets, shelving, counters and furniture outlines are
+  NOT walls, even when drawn as small rectangles against a wall.
 
 3. FURNITURE & FIXTURES:
 - One entry per symbol actually DRAWN on the plan (each dining chair, each nightstand separately). Never one box
   around a group, and never invent items that are not drawn. Room names and dimension text are not objects.
 - "box_2d" is the TIGHT box around the drawn symbol's outline as it appears in the image: its true drawn size,
   not a standard size, and excluding text labels, door swing arcs and nearby objects.
+- L-shaped or U-shaped counters and sectional sofas: one box per straight run, so no box covers empty floor.
+- A rectangle drawn around a room name is a text frame, not furniture. Rugs are not furniture.
+- Closets and wardrobes (drawn as a rail with zig-zag hanger lines) are "wardrobe" furniture: one box per run.
 - "angle" is 0 for every object drawn parallel to the walls, whichever way it faces (the box already gives its
   extent). Only for objects drawn diagonally give the clockwise angle in degrees; box_2d is still the tight
   axis-aligned box around the drawn symbol.
@@ -144,6 +150,52 @@ Rules:
 }
 """
 
+REVIEW_INSTRUCTION = """You are the quality reviewer of a floor-plan digitisation engine.
+Image 1 is the original floor plan. Image 2 is the same plan with the current parse drawn on top:
+red lines = walls, blue boxes = furniture, green boxes = fixtures, purple outlines = rooms, orange box = footprint.
+Every item is tagged with its id. The current parse is also given as JSON below.
+
+All coordinates are normalized image coordinates: integers 0-1000 over the WHOLE image, [0, 0] top-left,
+[1000, 1000] bottom-right. Boxes are [ymin, xmin, ymax, xmax], points [y, x], lines [y1, x1, y2, x2].
+
+Compare the two images carefully and fix every mistake:
+1. Each furniture/fixture symbol DRAWN in image 1 has exactly one box that tightly covers its drawn outline.
+   Move or resize boxes that are offset, too big or too small. Add missing ones; delete duplicates.
+2. Delete boxes that sit on text labels, dimension strings, door swings, empty floor or outside the building,
+   and boxes for things that are not drawn.
+3. "angle" is 0 for objects drawn parallel to the walls (whichever way they face). Only diagonally drawn objects
+   get their clockwise angle in degrees, with box_2d still the tight axis-aligned box around them.
+4. Fix wrong types and labels (e.g. a nightstand typed as a chair).
+   A box that covers mostly empty floor is wrong: split L-shaped counters/sofas into one box per straight run.
+   A rectangle framing a room name is a text frame and rugs are not furniture: delete those boxes.
+   Closets drawn with zig-zag hanger lines are "wardrobe" furniture: add any that are missing.
+5. Walls lie on the drawn walls' centerlines, connected walls share endpoints, and door/window openings stay as
+   gaps between wall segments. Cabinets, closets, shelving and counters are NOT walls: delete walls drawn on
+   them. Fix, add or delete walls accordingly.
+6. Room outlines follow the inner wall faces and carry the plan's room names.
+7. The footprint box covers the outer faces of the exterior walls, and width/height/units match the overall
+   dimension strings. Correct them with "set_footprint" if not.
+Go through EVERY id in the JSON one by one before answering; do not stop at the first few problems.
+Only change what is wrong. If everything is right, return no edits and "done": true.
+
+Return ONLY a valid JSON object:
+{
+  "edits": [
+    {"op": "update", "id": "<id>", <only the fields to change: box_2d, angle, label, furnitureType, fixtureType, line, thickness, exterior, polygon, name>},
+    {"op": "delete", "id": "<id>"},
+    {"op": "add", "kind": "furniture" | "fixture" | "wall" | "room", <the item's fields, same schema as the JSON>},
+    {"op": "set_footprint", "footprint_box_2d": [ymin, xmin, ymax, xmax], "width": <number>, "height": <number>, "units": "ft" or "m"}
+  ],
+  "done": true/false,
+  "summary": "<one sentence on what you changed>"
+}
+
+Current parse:
+"""
+
+ITEM_KEYS = {"walls": "w", "furniture": "f", "fixtures": "x", "rooms": "r"}
+KIND_LIST = {"wall": "walls", "furniture": "furniture", "fixture": "fixtures", "room": "rooms"}
+
 
 def _pos(v: Any) -> Optional[float]:
     try:
@@ -169,6 +221,22 @@ def _box_px(box: Any, img_w: int, img_h: int) -> Optional[Tuple[float, float, fl
     return (x0 / 1000 * img_w, y0 / 1000 * img_h, x1 / 1000 * img_w, y1 / 1000 * img_h)
 
 
+# Long side of common symbols, in feet: the sanity check for a plan's stated dimensions
+REFERENCE_LONG_SIDE_FT = {"bed": 6.75, "bathtub": 5.0, "toilet": 2.4}
+
+
+def _reference_scale(data: Dict[str, Any], img_w: int, img_h: int) -> Optional[float]:
+    """Feet per image pixel implied by standard-size symbols (beds, bathtubs, toilets), or None."""
+    est = []
+    for key, type_key in (("furniture", "furnitureType"), ("fixtures", "fixtureType")):
+        for o in data.get(key) or []:
+            ref = REFERENCE_LONG_SIDE_FT.get(str(o.get(type_key)))
+            b = _box_px(o.get("box_2d"), img_w, img_h)
+            if ref and b and not float(o.get("angle") or 0) % 90:
+                est.append(ref / max(b[2] - b[0], b[3] - b[1]))
+    return statistics.median(est) if est else None
+
+
 def _dedupe(items: List[Dict[str, Any]], kind_key: str, iou_limit: float = 0.6) -> List[Dict[str, Any]]:
     """Drop a box that mostly overlaps a more confident box of the same type (the model sometimes repeats one)."""
     kept: List[Dict[str, Any]] = []
@@ -191,6 +259,136 @@ def _dedupe(items: List[Dict[str, Any]], kind_key: str, iou_limit: float = 0.6) 
     return kept
 
 
+
+def _assign_ids(data: Dict[str, Any]) -> None:
+    """Give every raw item a short id (w1, f3, ...) the reviewer can refer to."""
+    for key, prefix in ITEM_KEYS.items():
+        items = [o for o in (data.get(key) or []) if isinstance(o, dict)]
+        data[key] = items
+        for i, o in enumerate(items, 1):
+            o["id"] = f"{prefix}{i}"
+
+
+def _is_box(v: Any) -> bool:
+    return isinstance(v, list) and len(v) == 4 and all(isinstance(n, (int, float)) for n in v)
+
+
+def _is_poly(v: Any) -> bool:
+    return isinstance(v, list) and len(v) >= 3 and all(
+        isinstance(p, list) and len(p) == 2 and all(isinstance(n, (int, float)) for n in p) for p in v
+    )
+
+
+REVIEW_FIELDS = {
+    "walls": {"line": _is_box, "thickness": lambda v: isinstance(v, (int, float)) and v > 0,
+              "exterior": lambda v: isinstance(v, bool)},
+    "furniture": {"box_2d": _is_box, "angle": lambda v: isinstance(v, (int, float)), "label": lambda v: isinstance(v, str),
+                  "furnitureType": lambda v: isinstance(v, str)},
+    "fixtures": {"box_2d": _is_box, "angle": lambda v: isinstance(v, (int, float)), "label": lambda v: isinstance(v, str),
+                 "fixtureType": lambda v: isinstance(v, str)},
+    "rooms": {"polygon": _is_poly, "name": lambda v: isinstance(v, str)},
+}
+REQUIRED_FIELD = {"walls": "line", "furniture": "box_2d", "fixtures": "box_2d", "rooms": "polygon"}
+
+
+def _apply_edits(data: Dict[str, Any], edits: Any) -> Dict[str, int]:
+    """Apply the reviewer's edits to the raw (normalized) parse in place. Invalid edits are skipped."""
+    counts = {"update": 0, "delete": 0, "add": 0, "set_footprint": 0, "skipped": 0}
+    index = {o["id"]: (key, o) for key in ITEM_KEYS for o in data.get(key) or []}
+    deleted = set()
+    next_n = {key: len(data.get(key) or []) for key in ITEM_KEYS}
+    for e in edits if isinstance(edits, list) else []:
+        op = e.get("op") if isinstance(e, dict) else None
+        if op in ("update", "delete"):
+            hit = index.get(str(e.get("id")))
+            if not hit or hit[1]["id"] in deleted:
+                counts["skipped"] += 1
+                continue
+            key, item = hit
+            if op == "delete":
+                deleted.add(item["id"])
+            else:
+                changes = {f: v for f, v in e.items() if f in REVIEW_FIELDS[key] and REVIEW_FIELDS[key][f](v)}
+                if not changes:
+                    counts["skipped"] += 1
+                    continue
+                item.update(changes)
+            counts[op] += 1
+        elif op == "add":
+            key = KIND_LIST.get(str(e.get("kind")))
+            if not key or not REVIEW_FIELDS[key][REQUIRED_FIELD[key]](e.get(REQUIRED_FIELD[key])):
+                counts["skipped"] += 1
+                continue
+            item = {f: v for f, v in e.items() if f in REVIEW_FIELDS[key] and REVIEW_FIELDS[key][f](v)}
+            next_n[key] += 1
+            item["id"] = f"{ITEM_KEYS[key]}{next_n[key]}"
+            item["confidence"] = 0.8
+            data.setdefault(key, []).append(item)
+            index[item["id"]] = (key, item)
+            counts["add"] += 1
+        elif op == "set_footprint":
+            if _is_box(e.get("footprint_box_2d")):
+                data["footprint_box_2d"] = e["footprint_box_2d"]
+            for f in ("width", "height"):
+                if _pos(e.get(f)):
+                    data[f] = float(e[f])
+            if e.get("units") in ("ft", "m"):
+                data["units"] = e["units"]
+            counts["set_footprint"] += 1
+        else:
+            counts["skipped"] += 1
+    for key in ITEM_KEYS:
+        data[key] = [o for o in data.get(key) or [] if o["id"] not in deleted]
+    return counts
+
+
+def render_overlay(image_bytes: bytes, data: Dict[str, Any]) -> bytes:
+    """Draw the raw parse (normalized coords) with ids on top of the plan image, as PNG bytes."""
+    from PIL import ImageDraw, ImageFont
+
+    base = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img_w, img_h = base.size
+    overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    font = ImageFont.load_default(size=max(12, img_w // 110))
+    line_w = max(2, img_w // 600)
+
+    def p(y: float, x: float) -> Tuple[float, float]:
+        return (float(x) / 1000 * img_w, float(y) / 1000 * img_h)
+
+    def tag(xy: Tuple[float, float], text: str, color: Tuple[int, int, int]) -> None:
+        l, t, r, b = draw.textbbox(xy, text, font=font)
+        draw.rectangle((l - 2, t - 1, r + 2, b + 1), fill=(255, 255, 255, 230))
+        draw.text(xy, text, fill=color + (255,), font=font)
+
+    fb = data.get("footprint_box_2d")
+    if _is_box(fb):
+        draw.rectangle((*p(fb[0], fb[1]), *p(fb[2], fb[3])), outline=(255, 140, 0, 200), width=line_w)
+    for r in data.get("rooms") or []:
+        if _is_poly(r.get("polygon")):
+            pts = [p(*pt) for pt in r["polygon"]]
+            draw.line(pts + [pts[0]], fill=(150, 60, 200, 200), width=line_w)
+            cx, cy = sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)
+            tag((cx, cy), f'{r["id"]} {r.get("name", "")}', (150, 60, 200))
+    for w in data.get("walls") or []:
+        if _is_box(w.get("line")):
+            a, b = p(w["line"][0], w["line"][1]), p(w["line"][2], w["line"][3])
+            draw.line((a, b), fill=(230, 30, 30, 200), width=line_w * 2)
+            tag(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), w["id"], (230, 30, 30))
+    for key, color in (("furniture", (30, 80, 230)), ("fixtures", (20, 150, 60))):
+        for o in data.get(key) or []:
+            b = o.get("box_2d")
+            if not _is_box(b):
+                continue
+            (x0, y0), (x1, y1) = p(min(b[0], b[2]), min(b[1], b[3])), p(max(b[0], b[2]), max(b[1], b[3]))
+            draw.rectangle((x0, y0, x1, y1), outline=color + (255,), fill=color + (40,), width=line_w)
+            angle = float(o.get("angle") or 0)
+            tag((x0 + 2, y0 + 2), f'{o["id"]} {o.get("label", "")}' + (f" {angle:.0f}°" if angle % 90 else ""), color)
+    out = io.BytesIO()
+    Image.alpha_composite(base.convert("RGBA"), overlay).convert("RGB").save(out, format="PNG")
+    return out.getvalue()
+
+
 class PlanParserService:
     """Service to parse floor plan images with Gemini and normalize geometry."""
 
@@ -200,22 +398,26 @@ class PlanParserService:
 
     @property
     def genai_client(self):
-        """Vertex AI with the worker's service account; GEMINI_API_KEY switches to the Gemini API for local dev."""
+        """Vertex AI with the worker's service account (Application Default Credentials locally)."""
         if self._genai_client is None:
             from google import genai
 
-            if self.settings.GEMINI_API_KEY:
-                self._genai_client = genai.Client(api_key=self.settings.GEMINI_API_KEY)
-            else:
-                self._genai_client = genai.Client(
-                    vertexai=True,
-                    project=self.settings.FIREBASE_PROJECT_ID,
-                    location=self.settings.GEMINI_LOCATION,
-                )
+            self._genai_client = genai.Client(
+                vertexai=True,
+                project=self.settings.FIREBASE_PROJECT_ID,
+                location=self.settings.GEMINI_LOCATION,
+            )
         return self._genai_client
 
-    def _generate_json(self, instruction: str, image_bytes: bytes, media_type: str, timeout_s: int) -> str:
-        """One Gemini call: instruction + plan image -> JSON text."""
+    def _generate_json(
+        self,
+        instruction: str,
+        image_bytes: bytes,
+        media_type: str,
+        timeout_s: int,
+        extra_images: Sequence[Tuple[bytes, str]] = (),
+    ) -> str:
+        """One Gemini call: instruction + plan image (+ extra images) -> JSON text."""
         from google.genai import types
 
         model = self.settings.GEMINI_PARSER_MODEL
@@ -225,6 +427,7 @@ class PlanParserService:
             contents=[types.Content(role="user", parts=[
                 types.Part.from_text(text=instruction),
                 types.Part.from_bytes(data=image_bytes, mime_type=media_type),
+                *(types.Part.from_bytes(data=b, mime_type=m) for b, m in extra_images),
             ])],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -321,6 +524,7 @@ class PlanParserService:
         mime_type: str = "image/png",
         room_corners: Optional[RoomCorners] = None,
         cropped: bool = False,
+        on_review: Optional[Callable[[], None]] = None,
     ) -> FloorPlan:
         """Call Gemini to parse the floor plan image, calibrated to room footprint."""
         # 1. Analyze input image dimensions with PIL if available
@@ -370,13 +574,58 @@ class PlanParserService:
         if not raw_text:
             raise RuntimeError("No structured output received from Gemini model.")
 
-        # 4. Parse JSON from output text
+        # 4. Parse JSON from output text, then let Gemini check its own parse against the image
         parsed_json = self._extract_json(raw_text)
+        _assign_ids(parsed_json)
+        if self.settings.PLAN_REVIEW_ROUNDS > 0:
+            if on_review:
+                on_review()
+            parsed_json["_review"] = self.review_parse(parsed_json, image_bytes, media_type, room_corners=room_corners)
 
         # 5. Image coordinates -> plan units, then normalize and validate geometry
         plan_json = self.to_plan_units(parsed_json, img_w, img_h, room_corners=room_corners)
         floor_plan = self.normalize_floor_plan(plan_json, img_w, img_h, room_corners=room_corners)
         return floor_plan
+
+    def review_parse(
+        self,
+        data: Dict[str, Any],
+        image_bytes: bytes,
+        media_type: str,
+        room_corners: Optional[RoomCorners] = None,
+    ) -> Dict[str, Any]:
+        """Validation & adjustment phase: Gemini compares the drawn parse with the plan and edits it in place.
+
+        Runs up to PLAN_REVIEW_ROUNDS rounds, stopping when the reviewer has nothing left to fix. A failed
+        round keeps the parse as it was: the review can only improve a plan, never fail the job.
+        """
+        report: Dict[str, Any] = {"rounds": 0, "edits": {}, "summaries": []}
+        for round_no in range(1, self.settings.PLAN_REVIEW_ROUNDS + 1):
+            current = {k: data.get(k) for k in ("units", "width", "height", "footprint_box_2d", *ITEM_KEYS)}
+            if room_corners:
+                current.pop("footprint_box_2d", None)  # the corner pass owns the footprint and scale
+            try:
+                overlay = render_overlay(image_bytes, data)
+                raw = self._generate_json(
+                    REVIEW_INSTRUCTION + json.dumps(current, separators=(",", ":")),
+                    image_bytes, media_type, timeout_s=120, extra_images=[(overlay, "image/png")],
+                )
+                answer = self._extract_json(raw)
+            except Exception as e:
+                logger.warning("Plan review round %d failed, keeping the parse as is: %s", round_no, e)
+                break
+            edits = answer.get("edits") or []
+            if room_corners:
+                edits = [e for e in edits if not (isinstance(e, dict) and e.get("op") == "set_footprint")]
+            counts = _apply_edits(data, edits)
+            report["rounds"] = round_no
+            for k, v in counts.items():
+                report["edits"][k] = report["edits"].get(k, 0) + v
+            report["summaries"].append(str(answer.get("summary") or "")[:300])
+            logger.info("Plan review round %d: %s (%s)", round_no, counts, answer.get("summary"))
+            if answer.get("done") or not any(counts[k] for k in ("update", "delete", "add", "set_footprint")):
+                break
+        return report
 
     def to_plan_units(
         self,
@@ -407,6 +656,18 @@ class PlanParserService:
             s = sum(scales) / len(scales) if scales else 40.0 / cw
             sx = sy = s
             width, height = cw * s, ch * s
+
+        # Plans can carry wrong or contradictory dimension strings: trust standard objects when they disagree
+        scale_note: Dict[str, Any] = {"source": "stated"}
+        ref = _reference_scale(data, img_w, img_h)
+        if ref:
+            ref = ref * (0.3048 if units == "m" else 1.0)
+            stated = (sx + sy) / 2
+            if not 0.67 <= stated / ref <= 1.5:
+                logger.warning("Stated plan size is off by x%.2f against standard objects; using their scale", stated / ref)
+                scale_note = {"source": "reference_objects", "statedWidth": round(width, 2), "statedHeight": round(height, 2)}
+                sx = sy = ref
+                width, height = cw * ref, ch * ref
 
         def pt(ny: Any, nx: Any) -> Tuple[float, float]:
             return ((float(nx) / 1000 * img_w - cx) * sx, (float(ny) / 1000 * img_h - cy) * sy)
@@ -464,7 +725,7 @@ class PlanParserService:
                     rot, w_, h_ = angle, bw / k, bh / k
                 mx, my = (cx0 + cx1) / 2, (cy0 + cy1) / 2
                 out.append({
-                    **{k_: v for k_, v in o.items() if k_ not in ("box_2d", "angle")},
+                    **{k_: v for k_, v in o.items() if k_ not in ("box_2d", "angle", "id")},
                     "x": mx - w_ / 2, "y": my - h_ / 2, "width": w_, "height": h_, "rotation": rot,
                 })
             return _dedupe(out, kind_key)
@@ -480,18 +741,20 @@ class PlanParserService:
                         continue
                     poly.append({"x": min(max(x, 0.0), width), "y": min(max(y, 0.0), height)})
             if len(poly) >= 3:
-                rooms.append({**r, "polygon": poly})
+                rooms.append({**{k: v for k, v in r.items() if k != "id"}, "polygon": poly})
 
         return {
             "units": units,
             "width": width,
             "height": height,
-            "scaleConfidence": data.get("scaleConfidence", 0.9),
+            "scaleConfidence": data.get("scaleConfidence", 0.9) if scale_note["source"] == "stated" else 0.5,
             "sourceImage": {"width": img_w, "height": img_h, "cropX": cx, "cropY": cy, "cropWidth": cw, "cropHeight": ch},
             "rooms": rooms,
             "walls": walls,
             "furniture": boxes(data.get("furniture"), "furnitureType"),
             "fixtures": boxes(data.get("fixtures"), "fixtureType"),
+            "_review": data.get("_review"),
+            "_scale": scale_note,
         }
 
     def normalize_floor_plan(
@@ -508,7 +771,7 @@ class PlanParserService:
             units = "ft"
 
         # Plan bounds - use room_corners if available to enforce precise scale matching
-        if room_corners and room_corners.planWidth > 0 and room_corners.planHeight > 0:
+        if room_corners and room_corners.planWidth > 0 and room_corners.planHeight > 0 and not data.get("width"):
             width = float(room_corners.planWidth)
             height = float(room_corners.planHeight)
             units = room_corners.units
@@ -708,7 +971,7 @@ class PlanParserService:
             windows=windows,
             furniture=furniture,
             fixtures=fixtures,
-            metadata={"parsedBy": self.settings.GEMINI_PARSER_MODEL, "parserVersion": "2.0"},
+            metadata={"parsedBy": self.settings.GEMINI_PARSER_MODEL, "parserVersion": "2.1", "review": data.get("_review"), "scale": data.get("_scale")},
         )
 
     def execute_plan_parsing_job(self, task: ParsePlanTaskRequest) -> FloorPlan:
@@ -834,6 +1097,11 @@ class PlanParserService:
                 mime_type=task.contentType or "image/png",
                 room_corners=room_corners,
                 cropped=task.cropped,
+                on_review=lambda: job_ref.update({
+                    "stage": "reviewing_with_ai",
+                    "progress": 80,
+                    "updatedAt": firestore.SERVER_TIMESTAMP,
+                }),
             )
         except Exception as e:
             logger.error("Error during Gemini analysis for job %s: %s", task.jobId, e)

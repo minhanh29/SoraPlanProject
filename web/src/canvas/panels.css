@@ -75,7 +75,7 @@
 .crop-example span { font-size: 12px; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
 .crop-example.good span { color: var(--success); }
 .crop-example.bad span { color: var(--danger); }
-.crop-readout { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); }
+.crop-readout { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); pointer-events: none; white-space: nowrap; }
 .crop-readout .mono { padding: 4px 10px; border-radius: var(--radius-pill); background: var(--surface-glass); backdrop-filter: blur(6px); color: var(--text); }
 .crop-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-3); gap: 8px; }
 

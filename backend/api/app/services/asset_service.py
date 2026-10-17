@@ -34,6 +34,11 @@ PHOTO_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/jpg": ".jpg", "
 STYLES = ("Industrial", "Japandi")
 
 
+def _in_catalog(a: dict) -> bool:
+    """Catalog objects live under assets/…; private uploads under {uid}/assets/…."""
+    return str(a.get("glbPath") or "").startswith("assets/")
+
+
 def system_asset_doc(item: dict, catalog_base_url: str) -> dict:
     """Firestore shape of a preset catalog entry (also used as fallback when Firestore is not seeded)."""
     def url(p: Optional[str]) -> Optional[str]:
@@ -372,6 +377,8 @@ class AssetService:
             raise ForbiddenException(detail="You cannot edit this asset", code="ASSET_ACCESS_DENIED")
 
         fields: Dict[str, Any] = {}
+        stale_private: List[str] = []  # old copies, removed once the doc points at the new ones
+        stale_catalog: List[str] = []
         if patch.get("name"):
             fields["name"] = patch["name"].strip()
         if patch.get("category"):
@@ -388,7 +395,8 @@ class AssetService:
             if not is_admin:
                 raise ForbiddenException(detail="Only admins can change system assets", code="ADMIN_REQUIRED")
             promote = bool(patch["is_system"])
-            if promote and not a.get("isSystem"):
+            # Also catches assets marked system before promotion moved files: they still live in the private bucket
+            if promote and (not a.get("isSystem") or (a.get("ownerUid") and not _in_catalog(a))):
                 style = fields.get("style") or a.get("style")
                 category = fields.get("category") or a.get("category")
                 if style not in STYLES or category not in CATALOG_CATEGORIES:
@@ -397,11 +405,19 @@ class AssetService:
                 if a.get("status") != "ready" or not a.get("glbPath"):
                     raise AppException(status_code=409, code="ASSET_NOT_READY", detail="Only ready assets can be promoted")
                 fields.update(self._publish_to_catalog(a, style))
+                stale_private = [p for p in (a.get("glbPath"), a.get("imagePath")) if p]
+            elif not promote and a.get("isSystem") and a.get("ownerUid") and _in_catalog(a):
+                fields.update(self._unpublish_from_catalog(a))
+                stale_catalog = [p for p in (a.get("glbPath"), a.get("imagePath")) if p]
             fields["isSystem"] = promote
         if not fields:
             return a
         fields["updatedAt"] = SERVER_TIMESTAMP
         self._ref(asset_id).update(fields)
+        for p in stale_private:
+            self.storage.delete_blob(p)
+        for p in stale_catalog:
+            self.storage.delete_catalog_blob(p)
         return {**a, **fields, "updatedAt": utcnow()}
 
     def _publish_to_catalog(self, a: dict, style: str) -> Dict[str, Any]:
@@ -417,6 +433,18 @@ class AssetService:
             out["imagePath"] = f"{base}{ext}"
         return out
 
+    def _unpublish_from_catalog(self, a: dict) -> Dict[str, Any]:
+        """Demoted assets go back to the owner's private folder with signed URLs."""
+        base = f"{a['ownerUid']}/assets/{a['id']}"
+        out: Dict[str, Any] = {"glbPath": f"{base}/model.glb"}
+        self.storage.copy_from_catalog(a["glbPath"], out["glbPath"], "model/gltf-binary")
+        if a.get("imagePath"):
+            ext = os.path.splitext(a["imagePath"])[1] or ".png"
+            out["imagePath"] = f"{base}/source{ext}"
+            self.storage.copy_from_catalog(a["imagePath"], out["imagePath"], mimetypes.guess_type(f"x{ext}")[0] or "image/png")
+        out.update(self._url_fields({**a, **out}))
+        return out
+
     def delete(self, user: UserProfile, asset_id: str) -> None:
         snap = self._ref(asset_id).get()
         if not snap.exists:
@@ -427,6 +455,10 @@ class AssetService:
             raise ForbiddenException(detail="You cannot delete this asset", code="ASSET_ACCESS_DENIED")
         if a.get("ownerUid"):
             self.storage.delete_prefix(f"{a['ownerUid']}/assets/{asset_id}/")
+            if _in_catalog(a):
+                for p in (a.get("glbPath"), a.get("imagePath")):
+                    if p:
+                        self.storage.delete_catalog_blob(p)
         self._ref(asset_id).delete()
 
     # ------------------------------------------------------------------ background removal

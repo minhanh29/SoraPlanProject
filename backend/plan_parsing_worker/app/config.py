@@ -27,10 +27,7 @@ class Settings(BaseSettings):
     # Gemini (floor plan parsing). Vertex AI with the service account by default.
     GEMINI_PARSER_MODEL: str = Field(default="gemini-4-argon", description="Gemini vision model for floor plan parsing")
     GEMINI_LOCATION: str = Field(default="global", description="Vertex AI location for Gemini")
-    GEMINI_API_KEY: Optional[str] = Field(
-        default=None,
-        description="Local dev only: use the Gemini API with a key instead of Vertex AI. Unset on Cloud Run.",
-    )
+    PLAN_REVIEW_ROUNDS: int = Field(default=2, description="Gemini self-review rounds after the parse (0 disables)")
 
     # OpenAI configuration (furniture background removal)
     OPENAI_API_KEY: str = Field(..., description="OpenAI API Key")

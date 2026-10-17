@@ -197,3 +197,18 @@ class StorageService:
         blob.cache_control = "public, max-age=31536000, immutable"
         blob.upload_from_string(data, content_type=content_type)
         return f"{self.settings.catalog_base_url}/{catalog_path}"
+
+    def copy_from_catalog(self, catalog_path: str, blob_path: str, content_type: str) -> None:
+        """Copy a catalog object back into the private bucket (demoting a system asset)."""
+        data = self.catalog_bucket.blob(catalog_path).download_as_bytes()
+        self.bucket.blob(blob_path).upload_from_string(data, content_type=content_type)
+
+    def delete_catalog_blob(self, catalog_path: str) -> bool:
+        try:
+            self.catalog_bucket.blob(catalog_path).delete()
+            return True
+        except NotFound:
+            return False
+        except Exception as e:
+            logger.error("Error deleting catalog blob %s: %s", catalog_path, e)
+            return False

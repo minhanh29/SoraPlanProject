@@ -128,6 +128,28 @@ def test_admin_promotion_requires_style_category_and_ready_model(admin_client, f
     doc = fake_db.doc(f"assets/{asset['id']}")
     assert doc["isSystem"] is True and doc["style"] == "Japandi"
     assert doc["glbUrl"] == f"https://storage.googleapis.com/soraplan-catalog/assets/Japandi/user_{asset['id']}.glb"
+    # moved, not copied: the private originals are gone
+    assert "x/model.glb" not in fake_storage.blobs and not [k for k in fake_storage.blobs if f"/assets/{asset['id']}/" in k]
+    assert f"assets/Japandi/user_{asset['id']}.glb" in fake_storage.catalog
+
+    # demoting moves the files back into the owner's private folder
+    res = admin_client.patch(f"/v1/assets/{asset['id']}", json={"isSystem": False}, headers=AUTH)
+    assert res.status_code == 200, res.text
+    doc = fake_db.doc(f"assets/{asset['id']}")
+    assert doc["isSystem"] is False and doc["glbPath"].endswith(f"/assets/{asset['id']}/model.glb")
+    assert doc["glbPath"] in fake_storage.blobs and doc["imagePath"] in fake_storage.blobs
+    assert doc["glbUrl"].startswith("https://signed.example/")
+    assert not fake_storage.catalog
+
+
+def test_legacy_system_asset_in_private_bucket_moves_on_save(admin_client, fake_db, fake_storage):
+    asset = upload(admin_client, fake_storage)
+    fake_db.docs[f"assets/{asset['id']}"].update({"status": "ready", "glbPath": "x/model.glb", "isSystem": True})
+    fake_storage.blobs["x/model.glb"] = b"glTF"
+    res = admin_client.patch(f"/v1/assets/{asset['id']}", json={"isSystem": True, "style": "Industrial", "category": "Sofa"}, headers=AUTH)
+    assert res.status_code == 200, res.text
+    doc = fake_db.doc(f"assets/{asset['id']}")
+    assert doc["glbPath"] == f"assets/Industrial/user_{asset['id']}.glb" and "x/model.glb" not in fake_storage.blobs
 
 
 @pytest.mark.parametrize("ctype", ["image/gif", "application/pdf"])

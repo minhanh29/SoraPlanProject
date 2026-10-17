@@ -184,6 +184,12 @@ class FakeStorage:
         self.catalog[catalog_path] = self.blobs[blob_path]
         return f"https://storage.googleapis.com/soraplan-catalog/{catalog_path}"
 
+    def copy_from_catalog(self, catalog_path: str, blob_path: str, content_type: str) -> None:
+        self.blobs[blob_path] = self.catalog[catalog_path]
+
+    def delete_catalog_blob(self, catalog_path: str) -> bool:
+        return self.catalog.pop(catalog_path, None) is not None
+
 
 class FakeMeshy:
     is_configured = True

@@ -55,5 +55,6 @@ export const PARSE_STAGES: { key: string; label: string }[] = [
   { key: "queued", label: "Queued" },
   { key: "downloading_image", label: "Fetching your plan" },
   { key: "analyzing_with_ai", label: "Finding walls, rooms and furniture" },
+  { key: "reviewing_with_ai", label: "Checking and correcting the plan" },
   { key: "saving_results", label: "Building the 2D plan" },
 ];

@@ -71,10 +71,11 @@ export default function CropCanvas({ imageUrl, crop, onChange, onImageSize, disa
   const layout = useCallback(() => {
     if (!img || size.w <= 0) return null;
     const pad = 24;
-    const s = Math.min((size.w - pad * 2) / img.naturalWidth, (size.h - pad * 2) / img.naturalHeight);
+    const padTop = 48; // room for the size readout so it never covers the top handles
+    const s = Math.min((size.w - pad * 2) / img.naturalWidth, (size.h - pad - padTop) / img.naturalHeight);
     const dw = img.naturalWidth * s;
     const dh = img.naturalHeight * s;
-    return { s, ox: (size.w - dw) / 2, oy: (size.h - dh) / 2, dw, dh };
+    return { s, ox: (size.w - dw) / 2, oy: padTop + (size.h - pad - padTop - dh) / 2, dw, dh };
   }, [img, size]);
 
   const current: CropRect | null = img ? crop || { x: 0, y: 0, width: img.naturalWidth, height: img.naturalHeight } : null;
