@@ -1,5 +1,7 @@
 .s3d-panel {
   position: relative;
+  /* Breakpoints below follow the panel, not the window: it shares the screen with the chat. */
+  container-type: inline-size;
   width: 100%;
   height: 100%;
   min-height: 320px;
@@ -42,6 +44,10 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
+/* View options wrap when space runs out; the actions (Add, Undo, Redo, Close) always stay on one line. */
+.s3d-toolbar > .s3d-toolbar__group:first-child { min-width: 0; }
+.s3d-toolbar > .s3d-toolbar__group:last-child { flex-wrap: nowrap; flex-shrink: 0; }
+.s3d-tool { white-space: nowrap; flex-shrink: 0; }
 .s3d-tool {
   display: inline-flex;
   align-items: center;
@@ -117,16 +123,23 @@
 /* Bottom-right: Realistic / Tour; the hint (bottom-left) leaves room for it */
 .s3d-corner { position: absolute; right: 12px; bottom: 12px; z-index: 5; }
 .s3d-panel .s3d-hint { right: 230px; }
-@media (max-width: 900px) {
+@container (max-width: 900px) {
   .s3d-panel .s3d-hint { right: 110px; }
 }
 .s3d-hint__legend { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
 .s3d-hint__error { color: var(--danger); }
 .s3d-hint__swatch { width: 12px; height: 12px; border-radius: 3px; opacity: 0.85; }
-@media (max-width: 900px) {
+/* Labelled tools need ~960px; below that they turn into icons (titles keep the names), Add keeps its label longest. */
+@container (max-width: 1000px) {
   .s3d-tool__label { display: none; }
-  .s3d-hint__keys { display: none; }
+  .s3d-tool--primary .s3d-tool__label { display: inline; }
   .s3d-tool { padding: 0 10px; }
+}
+@container (max-width: 900px) {
+  .s3d-hint__keys { display: none; }
+}
+@container (max-width: 560px) {
+  .s3d-tool--primary .s3d-tool__label { display: none; }
 }
 
 /* ---------- labels & chip (drei <Html>) ---------- */

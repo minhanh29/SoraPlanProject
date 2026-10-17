@@ -1,6 +1,7 @@
 // Stage "resolving_missing": matched catalog models shown in their boxes with their real footprint,
 // unmatched boxes pulse amber with Add model / Skip chips (Add model: pick from the assets or upload a photo),
-// a selected skipped box offers Restore (undo the skip), selected matches can be rescaled (§2.4).
+// a selected skipped box offers Restore (undo the skip), selected matches can be rescaled (§2.4), given another
+// model (Change model) or deleted (Delete / Del: a skip, so Restore brings the model back).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PanelProps } from "./panelTypes";
 import type { Dims, MappingEntry } from "../lib/types";
@@ -120,14 +121,22 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
   const selAsset = selEntry?.assetId ? assets[selEntry.assetId] : undefined;
   const selDims = selected ? overrides[selected.id] || selEntry?.dims || null : null;
   const selState = selected ? stateOf(selected.id) : null;
+  const busy = conversation.busy || acting !== null;
 
+  const removable = selState === "matched" || selState === "generating" || selState === "missing" || selState === "failed";
+  const keyRef = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  keyRef.current = (e: KeyboardEvent) => {
+    if (isTypingTarget(e.target)) return;
+    if (e.key === "Escape") setSelectedId(null);
+    else if ((e.key === "Delete" || e.key === "Backspace") && selected && removable && !busy && !resolving && !upload) {
+      e.preventDefault();
+      void deleteBox(selected.id);
+    }
+  };
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target)) return;
-      if (e.key === "Escape") setSelectedId(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const h = (e: KeyboardEvent) => keyRef.current(e);
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
   }, []);
 
   const runAction = async (key: string, type: "skip_missing" | "continue", args: Record<string, unknown> = {}) => {
@@ -140,6 +149,22 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
     } finally {
       setActing(null);
     }
+  };
+
+  /** Delete: the box stays empty in 3D (skipped); selecting it again offers Restore. */
+  const deleteBox = (componentId: string) => runAction(`skip:${componentId}`, "skip_missing", { componentIds: [componentId] });
+
+  /** Pick another model for a box (same dialog as Add model). */
+  const changeModel = (componentId: string) => {
+    const box = boxes.find((b) => b.id === componentId);
+    const entry = mapping[componentId];
+    const current = entry?.assetId ? assets[entry.assetId] : undefined;
+    setResolving({
+      componentId,
+      label: entry?.label || box?.name || "this item",
+      category: entry?.category ?? box?.category ?? null,
+      currentName: current?.name,
+    });
   };
 
   /** Undo a Skip: the box needs a model again. */
@@ -178,7 +203,6 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
     );
   }
 
-  const busy = conversation.busy || acting !== null;
   const planMeta = { width: plan.width, height: plan.height, units: plan.units, rooms: plan.rooms || [], sourceImage: plan.sourceImage };
 
   return (
@@ -186,7 +210,7 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
       <div className="cpanel__head">
         <div className="cpanel__title">
           <strong>Furniture for your {project.style || ""} home</strong>
-          <span>Select a model to resize it · amber boxes still need a model · select a skipped box to restore it</span>
+          <span>Select a model to resize, change or delete it · amber boxes still need a model · select a skipped box to restore it</span>
         </div>
         <span className="hide-sm" style={{ display: "contents" }}>
           <ZoomControls controls={controls} />
@@ -252,11 +276,7 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
                     >
                       <Icon name="plus" size={13} /> Add model
                     </button>
-                    <button
-                      className="map-chip__skip"
-                      disabled={busy}
-                      onClick={() => runAction(`skip:${b.id}`, "skip_missing", { componentIds: [b.id] })}
-                    >
+                    <button className="map-chip__skip" disabled={busy} onClick={() => deleteBox(b.id)}>
                       {acting === `skip:${b.id}` ? <Spinner size={11} /> : "Skip"}
                     </button>
                   </div>
@@ -278,8 +298,10 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
             sameAssetCount={sameAssetIds(mapping, selected.id).length}
             onDims={(d) => setDims(selected.id, d, true)}
             onFit={fitToBox}
+            onChange={() => changeModel(selected.id)}
+            onDelete={() => deleteBox(selected.id)}
             onClose={() => setSelectedId(null)}
-            disabled={conversation.busy}
+            disabled={busy}
           />
         )}
         {selected && selState === "generating" && (
@@ -290,6 +312,14 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
             <span className="subtle">
               <Spinner size={12} /> Generating the 3D model · {Math.round(selAsset?.progress || 0)}%
             </span>
+            <div className="map-actions">
+              <button className="btn btn--sm" onClick={() => changeModel(selected.id)} disabled={busy}>
+                <Icon name="swap" size={15} /> Change model
+              </button>
+              <button className="btn btn--sm pe-danger" onClick={() => deleteBox(selected.id)} disabled={busy} title="Delete (Del)">
+                <Icon name="trash" size={15} /> Delete
+              </button>
+            </div>
           </aside>
         )}
       </div>

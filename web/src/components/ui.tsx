@@ -158,7 +158,7 @@ type IconName =
   | "plus" | "close" | "dots" | "send" | "stop" | "attach" | "sun" | "moon" | "logout" | "box" | "chat"
   | "menu" | "undo" | "redo" | "trash" | "upload" | "check" | "back" | "search" | "cube" | "rotate"
   | "fit" | "zoomIn" | "zoomOut" | "lock" | "unlock" | "grid" | "image" | "sidebar" | "swap" | "layers" | "move" | "expand"
-  | "sparkle" | "film" | "play" | "pause" | "download";
+  | "sparkle" | "film" | "play" | "pause" | "download" | "wall";
 
 const PATHS: Record<IconName, string> = {
   plus: "M12 5v14M5 12h14",
@@ -181,6 +181,7 @@ const PATHS: Record<IconName, string> = {
   back: "M15 6l-6 6 6 6",
   search: "M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-4-4",
   cube: "M12 2l9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10",
+  wall: "M3 5h18v14H3zM3 9.7h18M3 14.3h18M12 5v4.7M7.5 9.7v4.6M16.5 9.7v4.6M12 14.3V19",
   rotate: "M20 12a8 8 0 11-2.3-5.7M20 4v5h-5",
   fit: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5",
   zoomIn: "M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-4-4M8 11h6M11 8v6",

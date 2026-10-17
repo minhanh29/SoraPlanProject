@@ -114,6 +114,13 @@ def test_full_flow_to_scene_and_ui_edits(client, fake_db, fake_storage, worker_c
     assert desk["assetId"] == "sys_japandi_Ja_kitchen_table" and desk["category"] == "Dining Table" and desk["dims"]
     assert {m["componentId"] for m in fake_db.doc(f"projects/{cid}")["missing"]} == {"fix_006"}
 
+    # a matched box can be deleted (skipped) too, and restored with its model
+    client.post(f"/v1/conversations/{cid}/actions", json={"type": "skip_missing", "args": {"componentIds": ["fur_002"]}}, headers=AUTH)
+    assert fake_db.doc(f"projects/{cid}")["mapping"]["fur_002"]["skipped"] is True
+    res = client.patch(f"/v1/projects/{cid}/mapping", json={"componentId": "fur_002", "restore": True}, headers=AUTH)
+    restored = res.json()["mapping"]["fur_002"]
+    assert restored["skipped"] is False and restored["assetId"]
+
     # skipping a single box never builds, even the last one (it can still be restored); Continue builds
     client.post(f"/v1/conversations/{cid}/actions", json={"type": "skip_missing", "args": {"componentIds": ["fix_006"]}}, headers=AUTH)
     assert fake_db.doc(f"conversations/{cid}")["stage"] == "resolving_missing"

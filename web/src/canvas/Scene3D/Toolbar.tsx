@@ -95,7 +95,7 @@ export default function Toolbar(p: Props) {
           <span className="s3d-tool__label">{p.perspective ? "Perspective" : "Orthographic"}</span>
         </button>
         <button className={`s3d-tool ${p.cutaway ? "is-active" : ""}`} onClick={p.onToggleCutaway} title="Cut walls at 1 m" aria-pressed={p.cutaway}>
-          <Icon name="cube" />
+          <Icon name="wall" />
           <span className="s3d-tool__label">{p.cutaway ? "Cutaway" : "Full walls"}</span>
         </button>
         {p.canOverlay && (

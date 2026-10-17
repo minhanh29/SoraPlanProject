@@ -1,6 +1,6 @@
 // Camera rig: perspective (default, natural depth) or orthographic (parallel lines stay parallel; best for
 // checking the plan overlay). Fits the scene bounds, animates between views (intro top-down → iso,
-// Reset view, Top view, focus on an item) and clamps orbiting to 20°–89.9° elevation.
+// Reset view, Top view, focus on an item) and clamps orbiting to 2°–89.9° elevation (down to eye level).
 //
 // A view is (elevation, azimuth, target, zoom) where zoom = CSS pixels per meter at the target, for both
 // projections: orthographic uses it as camera.zoom, perspective turns it into a camera distance. Switching
@@ -9,7 +9,8 @@
 // Navigation (same conventions as Figma / Blender / SketchUp):
 //   orbit  left-drag · Alt + two-finger scroll
 //   pan    middle-drag · right-drag (two-finger click-drag) · Space/Shift + left-drag · two-finger scroll
-//   zoom   mouse wheel · pinch
+//   zoom   mouse wheel · pinch; in perspective, zooming in past FLY_DISTANCE moves forward instead of
+//          stalling at the orbit target, so the camera can travel anywhere (into rooms, through doors)
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
@@ -18,7 +19,7 @@ import * as THREE from "three";
 
 export const ISO_ELEVATION = THREE.MathUtils.degToRad(35.26);
 export const ISO_AZIMUTH = THREE.MathUtils.degToRad(45);
-const MIN_ELEVATION = THREE.MathUtils.degToRad(20);
+const MIN_ELEVATION = THREE.MathUtils.degToRad(2);
 const TOP_ELEVATION = THREE.MathUtils.degToRad(89.9); // exactly 90° makes lookAt degenerate
 const MAX_ELEVATION = TOP_ELEVATION;
 const RADIUS = 80; // orthographic camera distance (any value outside the scene works)
@@ -26,6 +27,12 @@ export const FOV = 35; // perspective vertical field of view, degrees: natural, 
 
 export type Projection = "perspective" | "orthographic";
 const ORBIT_PER_PX = 0.006;
+/** Perspective: closer than this to the orbit target (m), zoom-in moves camera and target forward together. */
+const FLY_DISTANCE = 1.2;
+/** Meters moved per wheel pixel while flying (a mouse wheel notch is ~100 px). */
+const FLY_PER_PX = 0.006;
+const MIN_EYE_HEIGHT = 0.15;
+const MAX_DISTANCE = 2000;
 
 /** True while Space is held: left-drag pans instead of grabbing items. */
 let spaceHeld = false;
@@ -157,8 +164,8 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
       camera.up.set(0, 1, 0);
       camera.lookAt(v.target);
       camera.zoom = perspective ? 1 : v.zoom;
-      camera.near = perspective ? Math.max(0.05, dist / 400) : 0.1;
-      camera.far = perspective ? dist + 300 : RADIUS * 4;
+      camera.near = perspective ? Math.max(0.02, dist / 400) : 0.1;
+      camera.far = perspective ? dist + 500 : RADIUS * 4;
       camera.updateProjectionMatrix();
       controlsRef.current?.target.copy(v.target);
       lastView.current = { ...v, target: v.target.clone() };
@@ -239,11 +246,36 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
     const el = gl.domElement.parentElement ?? gl.domElement;
     let mode: "pan" | "zoom" = "zoom";
     let last = 0;
+    const raycaster = new THREE.Raycaster();
+    /** Close to the target, zoom-in flies toward the cursor; false lets OrbitControls dolly as usual. */
+    const flyForward = (e: WheelEvent) => {
+      const controls = controlsRef.current;
+      if (!perspective || !controls || e.deltaY >= 0 || e.shiftKey || e.altKey) return false;
+      if (camera.position.distanceTo(controls.target) > FLY_DISTANCE) return false;
+      const rect = gl.domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(ndc, camera);
+      const px = Math.min(-e.deltaY * (e.deltaMode === 1 ? 33 : 1) * (e.ctrlKey ? 4 : 1), 120); // pinch deltas are small
+      const step = raycaster.ray.direction.multiplyScalar(px * FLY_PER_PX);
+      // Stay above the floor: drop the downward part of the move at eye level
+      if (camera.position.y + step.y < MIN_EYE_HEIGHT) step.y = Math.max(0, MIN_EYE_HEIGHT - camera.position.y);
+      anim.current = null;
+      camera.position.add(step);
+      controls.target.add(step);
+      controls.update();
+      return true;
+    };
     const onWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) return; // pinch / ctrl+wheel = zoom
+      const pinch = e.ctrlKey || e.metaKey; // pinch / ctrl+wheel = zoom
       const now = performance.now();
-      if (now - last > 200) mode = isTrackpad(e) ? "pan" : "zoom"; // classify once per gesture
-      last = now;
+      if (!pinch && now - last > 200) mode = isTrackpad(e) ? "pan" : "zoom"; // classify once per gesture
+      if (!pinch) last = now;
+      if ((pinch || mode === "zoom") && flyForward(e)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      if (pinch) return;
       if (mode !== "pan" && !e.shiftKey) return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -255,7 +287,7 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
     };
     el.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => el.removeEventListener("wheel", onWheel, { capture: true });
-  }, [gl, panBy, orbitBy]);
+  }, [gl, panBy, orbitBy, camera, perspective]);
 
   // Hold Space to pan with the left button (and to drag "through" items).
   useEffect(() => {
@@ -314,6 +346,17 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
         controls.minPolarAngle = Math.PI / 2 - MAX_ELEVATION;
       }
       if (started.current) lastView.current = current(); // follows user orbit/zoom/pan
+      if (perspective) {
+        // Keep the clip planes around the user's own dolly (near enough to fly through doors, far enough when zoomed out)
+        const dist = camera.position.distanceTo(controls?.target ?? camera.position);
+        const near = Math.max(0.02, dist / 400);
+        const far = dist + 500;
+        if (Math.abs(camera.near - near) > 1e-4 || Math.abs(camera.far - far) > 1) {
+          camera.near = near;
+          camera.far = far;
+          camera.updateProjectionMatrix();
+        }
+      }
       return;
     }
     if (controls) {
@@ -341,7 +384,7 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
   return (
     <>
       {projection === "perspective" ? (
-        <PerspectiveCamera makeDefault fov={FOV} near={0.1} far={500} position={[30, 30, 30]} />
+        <PerspectiveCamera makeDefault fov={FOV} near={0.1} far={MAX_DISTANCE + 500} position={[30, 30, 30]} />
       ) : (
         <OrthographicCamera makeDefault zoom={40} near={0.1} far={RADIUS * 4} position={[40, 40, 40]} />
       )}
@@ -352,10 +395,10 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
         dampingFactor={0.12}
         minPolarAngle={Math.PI / 2 - MAX_ELEVATION}
         maxPolarAngle={Math.PI / 2 - MIN_ELEVATION}
-        minZoom={4}
-        maxZoom={1200}
-        minDistance={0.5}
-        maxDistance={250}
+        minZoom={0.5}
+        maxZoom={20000}
+        minDistance={0.1}
+        maxDistance={MAX_DISTANCE}
         zoomToCursor
         screenSpacePanning
         mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }}

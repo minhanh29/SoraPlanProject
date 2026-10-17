@@ -6,6 +6,7 @@ import { api, ApiError } from "../lib/api";
 import { Spinner, toast } from "../components/ui";
 import { STAGE_SCENE, useBackdrop } from "../components/Backdrop";
 import CanvasPane, { CANVAS_STAGES } from "../canvas/CanvasPane";
+import { useSidebarFocus } from "../layout/sidebarFocus";
 import UploadAssetDialog from "../assets/UploadAssetDialog";
 import Composer from "./Composer";
 import EmptyState from "./EmptyState";
@@ -72,6 +73,15 @@ function ProjectChat({ id }: { id: string }) {
       if (!needs) setCanvasOpen(false);
     }
   }, [stage, mobile]);
+
+  // The user starts working in the canvas (first click in it): collapse the app sidebar to give it the room,
+  // until the canvas closes. Just opening it keeps the sidebar, so other projects stay one click away.
+  const [canvasEngaged, setCanvasEngaged] = useState(false);
+  const canvasShown = canvasOpen && !!stage && CANVAS_STAGES.includes(stage);
+  useEffect(() => {
+    if (!canvasShown) setCanvasEngaged(false);
+  }, [canvasShown]);
+  useSidebarFocus(canvasShown && canvasEngaged);
 
   const openCanvas = useCallback(() => {
     if (stage && CANVAS_STAGES.includes(stage)) setCanvasOpen(true);
@@ -149,7 +159,8 @@ function ProjectChat({ id }: { id: string }) {
       </div>
       {showCanvas && !mobile && <div className="chat__divider" onPointerDown={startDrag} role="separator" aria-orientation="vertical" />}
       {showCanvas && (
-        <CanvasPane conversation={conversation} project={project} files={files} onClose={() => setCanvasOpen(false)} mobile={mobile} />
+        <CanvasPane
+          onEngage={() => setCanvasEngaged(true)} conversation={conversation} project={project} files={files} onClose={() => setCanvasOpen(false)} mobile={mobile} />
       )}
       <UploadAssetDialog open={attachOpen} onClose={() => setAttachOpen(false)}
         onUploaded={() => toast("Added to Your assets — it will turn 3D in a few minutes", "success")} />

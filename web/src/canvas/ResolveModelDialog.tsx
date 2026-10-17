@@ -1,5 +1,5 @@
-// Mapping step: give an unmatched plan box a model, either picked from the asset library or made from a
-// photo (the upload dialog takes over for that path).
+// Mapping step: give a plan box a model (an unmatched one, or swap a matched one's), either picked from the
+// asset library or made from a photo (the upload dialog takes over for that path).
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../lib/api";
 import type { Asset, StyleId } from "../lib/types";
@@ -10,6 +10,8 @@ export interface ResolveTarget {
   componentId: string;
   label: string;
   category: string | null;
+  /** Name of the model the box has now (Change model); absent for an unmatched box. */
+  currentName?: string;
 }
 
 interface Props {
@@ -50,6 +52,8 @@ export default function ResolveModelDialog({ target, projectId, style, assets, o
         </button>
         Choose a model for “{target?.label}”
       </span>
+    ) : target?.currentName ? (
+      `Change the model for “${target.label}”`
     ) : (
       `Add a model for “${target?.label || "this item"}”`
     );

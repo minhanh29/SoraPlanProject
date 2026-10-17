@@ -28,12 +28,11 @@ const CARDS: Partial<Record<Message["kind"], (p: CardProps) => JSX.Element | nul
   error: ErrorCard,
 };
 
-/** The house, by day or at dusk to match the theme. */
+/** The app logo, same mark as the sidebar. */
 export function AssistantAvatar() {
   return (
     <div className="msg__avatar" aria-hidden="true">
-      <img className="only-light" src="/art/avatar-day.webp" alt="" width={30} height={30} />
-      <img className="only-dark" src="/art/avatar-dusk.webp" alt="" width={30} height={30} />
+      <img src="/favicon.svg" alt="" width={30} height={30} />
     </div>
   );
 }

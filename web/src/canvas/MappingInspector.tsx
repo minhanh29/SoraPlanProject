@@ -1,5 +1,5 @@
 // Scale inspector for a matched object in the mapping step (§2.4): 3D preview, W/D/H, ratio lock,
-// 50–200 % slider relative to the automatic fit, Fit to box, Apply to all, Stretched warning.
+// 50–200 % slider relative to the automatic fit, Fit to box, Apply to all, Stretched warning, Change model, Delete.
 import { useEffect, useState } from "react";
 import type { Asset, Dims, MappingEntry, PlanUnits } from "../lib/types";
 import { formatLength } from "../lib/units";
@@ -21,6 +21,10 @@ interface Props {
   sameAssetCount: number;
   onDims: (d: Dims) => void;
   onFit: () => void;
+  /** Swap the model in this box (assets or a photo upload). */
+  onChange: () => void;
+  /** Leave this box empty (a skip: the selected box offers Restore). */
+  onDelete: () => void;
   onClose: () => void;
   disabled?: boolean;
 }
@@ -127,6 +131,15 @@ export default function MappingInspector(props: Props) {
         <span className="subtle" style={{ alignSelf: "center" }}>
           {formatLength(dims.w, display)} × {formatLength(dims.d, display)}
         </span>
+      </div>
+
+      <div className="map-actions">
+        <button className="btn btn--sm" onClick={props.onChange} disabled={props.disabled}>
+          <Icon name="swap" size={15} /> Change model
+        </button>
+        <button className="btn btn--sm pe-danger" onClick={props.onDelete} disabled={props.disabled} title="Delete (Del)">
+          <Icon name="trash" size={15} /> Delete
+        </button>
       </div>
     </aside>
   );

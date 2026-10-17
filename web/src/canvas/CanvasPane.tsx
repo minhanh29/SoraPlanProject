@@ -15,12 +15,15 @@ export default function CanvasPane({
   project,
   files,
   onClose,
+  onEngage,
   mobile,
 }: {
   conversation: Conversation;
   project: Project;
   files: ProjectFiles | null;
   onClose: () => void;
+  /** The user clicked into the pane (captured, so panels that stop pointer events still count). */
+  onEngage?: () => void;
   mobile: boolean;
 }) {
   const props = { conversation, project, files, onClose };
@@ -44,7 +47,7 @@ export default function CanvasPane({
       break;
   }
   return (
-    <section className="canvas-pane" aria-label="Canvas">
+    <section className="canvas-pane" aria-label="Canvas" onPointerDownCapture={onEngage}>
       {mobile && (
         <div className="canvas-pane__back">
           <button className="btn btn--sm btn--ghost" onClick={onClose}><Icon name="back" size={16} /> Back to chat</button>

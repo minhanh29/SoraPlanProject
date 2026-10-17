@@ -490,7 +490,8 @@ class Workflow:
         mapping = dict(project.get("mapping") or {})
         ids = component_ids or [m["componentId"] for m in unresolved(mapping)]
         for cid in ids:
-            if cid in mapping and not mapping[cid].get("assetId"):
+            # Chosen boxes are skipped even when matched (the mapping step's Delete; Restore brings the model back)
+            if cid in mapping and (component_ids or not mapping[cid].get("assetId")):
                 mapping[cid] = {**mapping[cid], "skipped": True}
         missing = unresolved(mapping)
         self._project_ref(project["id"]).update({"mapping": mapping, "missing": missing, "updatedAt": SERVER_TIMESTAMP})

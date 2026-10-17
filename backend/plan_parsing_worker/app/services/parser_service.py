@@ -82,6 +82,8 @@ Your job is not to describe the image. Your job is to locate every meaningful ar
   extent). Only for objects drawn diagonally give the clockwise angle in degrees; box_2d is still the tight
   axis-aligned box around the drawn symbol.
 - Every object lies inside the footprint.
+- Objects never overlap: no two boxes on the same spot and no box on top of or inside another. A sink or stove
+  set into a counter splits the counter into separate runs on either side of it.
 
 4. ROOMS:
 - "polygon": the room's inner wall faces as [y, x] points, clockwise. "name" comes from the plan label.
@@ -169,6 +171,8 @@ Compare the two images carefully and fix every mistake:
    A box that covers mostly empty floor is wrong: split L-shaped counters/sofas into one box per straight run.
    A rectangle framing a room name is a text frame and rugs are not furniture: delete those boxes.
    Closets drawn with zig-zag hanger lines are "wardrobe" furniture: add any that are missing.
+   Boxes never overlap: where two boxes share a spot or one sits on top of / inside another, keep the one that
+   matches the drawing and delete or shrink the other (split a counter around a sink or stove set into it).
 5. Walls lie on the drawn walls' centerlines, connected walls share endpoints, and door/window openings stay as
    gaps between wall segments. Cabinets, closets, shelving and counters are NOT walls: delete walls drawn on
    them. Fix, add or delete walls accordingly.
@@ -258,6 +262,100 @@ def _dedupe(items: List[Dict[str, Any]], kind_key: str, iou_limit: float = 0.6) 
             kept.append(o)
     return kept
 
+
+
+OVERLAP_EPS = 0.02  # plan units; boxes that just touch (after rounding) do not overlap
+
+
+def _aabb(o: Dict[str, Any]) -> Tuple[float, float, float, float]:
+    """Axis-aligned bounds of a plan box (x/y/width/height is the unrotated box, rotation in degrees about its center)."""
+    cx, cy = o["x"] + o["width"] / 2, o["y"] + o["height"] / 2
+    r = math.radians(float(o.get("rotation") or 0))
+    hw = (abs(math.cos(r)) * o["width"] + abs(math.sin(r)) * o["height"]) / 2
+    hh = (abs(math.sin(r)) * o["width"] + abs(math.cos(r)) * o["height"]) / 2
+    return cx - hw, cy - hh, cx + hw, cy + hh
+
+
+def _straight(o: Dict[str, Any]) -> bool:
+    """Its x/y/width/height is also its axis-aligned footprint (so it can be trimmed or split)."""
+    return float(o.get("rotation") or 0) % 180 == 0
+
+
+def _carve(outer: Dict[str, Any], inner: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+    """Split a long run (counter, wardrobe, bench) around an object set into it: the pieces on either side.
+    None when `outer` is not a run that `inner` cuts across."""
+    if not (_straight(outer) and _straight(inner)):
+        return None
+    horiz = outer["width"] >= outer["height"]
+    long_, short = (outer["width"], outer["height"]) if horiz else (outer["height"], outer["width"])
+    if long_ < 1.8 * short:
+        return None
+    a0, a1 = (outer["x"], outer["x"] + outer["width"]) if horiz else (outer["y"], outer["y"] + outer["height"])
+    i0, i1 = (inner["x"], inner["x"] + inner["width"]) if horiz else (inner["y"], inner["y"] + inner["height"])
+    s0, s1 = (outer["y"], outer["y"] + outer["height"]) if horiz else (outer["x"], outer["x"] + outer["width"])
+    j0, j1 = (inner["y"], inner["y"] + inner["height"]) if horiz else (inner["x"], inner["x"] + inner["width"])
+    if min(s1, j1) - max(s0, j0) < 0.6 * short:
+        return None  # the inner box does not cut across the run's depth
+    pieces = []
+    for lo, hi in ((a0, min(i0, a1)), (max(i1, a0), a1)):
+        if hi - lo >= 0.5 * short:
+            pieces.append({**outer, "x": lo, "width": hi - lo} if horiz else {**outer, "y": lo, "height": hi - lo})
+    return pieces
+
+
+def _resolve_overlaps(items: List[Dict[str, Any]], contain_limit: float = 0.4, min_keep: float = 0.4) -> List[Dict[str, Any]]:
+    """Plan objects never share floor (furniture and fixtures together, in plan units).
+
+    The more confident box wins. Where one box sits on the same spot / on top of / inside another (overlap above
+    `contain_limit` of the smaller one), the less confident one is dropped, except that a long run (counter,
+    wardrobe) is split around an object set into it. A partial overlap trims the less confident box along the
+    shallower axis so the two just touch; one trimmed below `min_keep` of its size is dropped instead.
+    """
+    area = lambda o: o["width"] * o["height"]
+    kept: List[Dict[str, Any]] = []
+    pending = sorted((dict(o) for o in items), key=lambda o: (-float(o.get("confidence") or 0), -area(o)))
+    pending.reverse()  # pop() takes the most confident first
+    while pending:
+        o = pending.pop()
+        orig_w, orig_h = o["width"], o["height"]
+        alive, i = True, 0
+        while alive and i < len(kept):
+            k = kept[i]
+            ax0, ay0, ax1, ay1 = _aabb(o)
+            bx0, by0, bx1, by1 = _aabb(k)
+            px, py = min(ax1, bx1) - max(ax0, bx0), min(ay1, by1) - max(ay0, by0)
+            if px <= OVERLAP_EPS or py <= OVERLAP_EPS:
+                i += 1
+                continue
+            if px * py > contain_limit * min(area(o), area(k)):
+                if area(k) >= area(o) and (pieces := _carve(k, o)) is not None:
+                    kept[i:i + 1] = pieces  # pieces lie inside k: they cannot touch the other kept boxes
+                    i += len(pieces)
+                    continue
+                if area(o) > area(k) and (pieces := _carve(o, k)) is not None:
+                    pending.extend(pieces)  # each piece is checked on its own
+                alive = False
+                break
+            if not (_straight(o) and _straight(k)):
+                alive = False  # a diagonal box cannot be trimmed square: the less confident one goes
+                break
+            if px <= py:
+                if (ax0 + ax1) < (bx0 + bx1):
+                    o["width"] = bx0 - o["x"]
+                else:
+                    o["width"], o["x"] = o["x"] + o["width"] - bx1, bx1
+            else:
+                if (ay0 + ay1) < (by0 + by1):
+                    o["height"] = by0 - o["y"]
+                else:
+                    o["height"], o["y"] = o["y"] + o["height"] - by1, by1
+            if o["width"] < min_keep * orig_w or o["height"] < min_keep * orig_h:
+                alive = False
+                break
+            i = 0  # trimming moved an edge: check against every kept box again
+        if alive:
+            kept.append(o)
+    return kept
 
 
 def _assign_ids(data: Dict[str, Any]) -> None:
@@ -743,6 +841,13 @@ class PlanParserService:
             if len(poly) >= 3:
                 rooms.append({**{k: v for k, v in r.items() if k != "id"}, "polygon": poly})
 
+        # Furniture and fixtures share the floor: nothing on the same spot or on top of another object
+        objects = [{**o, "_kind": "furniture"} for o in boxes(data.get("furniture"), "furnitureType")]
+        objects += [{**o, "_kind": "fixtures"} for o in boxes(data.get("fixtures"), "fixtureType")]
+        objects = _resolve_overlaps(objects)
+        placed = {kind: [{k: v for k, v in o.items() if k != "_kind"} for o in objects if o["_kind"] == kind]
+                  for kind in ("furniture", "fixtures")}
+
         return {
             "units": units,
             "width": width,
@@ -751,8 +856,8 @@ class PlanParserService:
             "sourceImage": {"width": img_w, "height": img_h, "cropX": cx, "cropY": cy, "cropWidth": cw, "cropHeight": ch},
             "rooms": rooms,
             "walls": walls,
-            "furniture": boxes(data.get("furniture"), "furnitureType"),
-            "fixtures": boxes(data.get("fixtures"), "fixtureType"),
+            "furniture": placed["furniture"],
+            "fixtures": placed["fixtures"],
             "_review": data.get("_review"),
             "_scale": scale_note,
         }

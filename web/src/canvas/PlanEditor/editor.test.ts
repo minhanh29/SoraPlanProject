@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FloorPlan } from "../../lib/types";
-import { buildEditorObjects, exportFloorPlan, type BoxObj, type WallObj } from "./model";
+import { boxesOverlap, buildEditorObjects, exportFloorPlan, findNewOverlap, type BoxObj, type WallObj } from "./model";
 import { fitView, toScreen, toWorld, zoomAt } from "./view";
 import { distanceToSegment, hitTest, pointInBox, rectHandleAt } from "./hitTest";
 import { History } from "./history";
@@ -173,5 +173,28 @@ describe("box symbol (boxKind)", () => {
     expect(boxKind({ subtype: "bathtub", category: null })).toBe("bath");
     // nothing known: plain box (a label like "Bed linen closet" is not consulted at all)
     expect(boxKind({ subtype: "unknown", category: null })).toBe("other");
+  });
+});
+
+describe("object overlap", () => {
+  const box = (id: string, x: number, y: number, w = 2, h = 2, rotation = 0): BoxObj => ({
+    id, type: "furniture", name: id, subtype: "unknown", category: null, x, y, w, h, rotation, confidence: 1, addedBy: "user",
+  });
+  it("touching is fine, sharing floor is not", () => {
+    expect(boxesOverlap(box("a", 0, 0), box("b", 2, 0))).toBe(false);
+    expect(boxesOverlap(box("a", 0, 0), box("b", 1.5, 0))).toBe(true);
+    expect(boxesOverlap(box("a", 0, 0, 6, 6), box("b", 2, 2))).toBe(true); // on top / inside
+  });
+  it("uses the rotated footprint", () => {
+    // A 45° square's corner reaches 1.41 from its center: clear at a 2.5 gap on the diagonal, not at 1.9
+    expect(boxesOverlap(box("a", 0, 0), box("b", 2.5, 2.5, 2, 2, 45))).toBe(false);
+    expect(boxesOverlap(box("a", 0, 0), box("b", 1.9, 0, 2, 2, 45))).toBe(true);
+  });
+  it("blocks only edits that create an overlap", () => {
+    const prev = [box("a", 0, 0), box("b", 3, 0), box("c", 10, 0), box("d", 10.5, 0)];
+    expect(findNewOverlap(prev, [box("a", 0, 0), box("b", 1, 0), prev[2], prev[3]])?.map((o) => o.id)).toEqual(["b", "a"]);
+    expect(findNewOverlap(prev, [...prev, box("e", 0.5, 0.5)])?.[0].id).toBe("e");
+    // c and d already overlapped (older parse): renaming c is still allowed
+    expect(findNewOverlap(prev, [prev[0], prev[1], { ...prev[2], name: "Sofa" }, prev[3]])).toBeNull();
   });
 });
