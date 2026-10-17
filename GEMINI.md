@@ -339,7 +339,7 @@ npm run dev                                                    # http://localhos
 npm test && npm run typecheck
 ```
 
-### 9.7 Realistic render and cinematic tour (web only)
+### 9.7 Realistic render and cinematic tour
 
 - **Realistic** (3D toolbar, remembered per browser): `RealisticEffects` (N8AO ambient occlusion, bloom, SMAA, ACES
   tone mapping, vignette; the composer does tone mapping because three.js skips it for render targets), warmer sun
@@ -349,7 +349,8 @@ npm test && npm run typecheck
   furniture: own furniture in clear view, depth, penalties for a near wall / furniture in the lens / looking out
   through gaps in the parsed walls). The browser renders a 384×216 preview of each candidate (`renderStills`) and
   `POST /v1/projects/{id}/tour/plan` lets **Gemini direct** (`services/tour_planner.py`: it picks, orders and
-  chooses moves among candidate ids only; the answer is validated). 502 → the automatic choice
+  chooses moves among candidate ids only; the answer is validated; model = `GEMINI_CHAT_MODEL`, today
+  `gemini-3.8-flash`, shared with the chat). Captions show the room name only. 502 → the automatic choice
   (`defaultChoices`). The plan is cached per scene version in localStorage; "Re-plan" asks again. `sampleTour(t)`
   is pure, so preview and export see the same frames. Full walls, ceilings and room lights (`Interior.tsx`,
   lights only change intensity: adding lights recompiles every material).
@@ -357,6 +358,25 @@ npm test && npm run typecheck
   R3F resets an imperatively changed dpr on re-render), `TourDirector` renders each frame with `advance()`, captions
   and fades are drawn on a 2D canvas, WebCodecs encodes H.264 (VP9/AV1 fallback) and `mp4-muxer` writes the MP4.
   1080p30 of a 33 s tour renders in ~11 s on an M-series Mac (≈ 45 MB). Needs WebCodecs (Chrome, Edge, Safari 16.4+).
+
+### 9.8 Editor behaviour worth knowing (web)
+
+- **3D view** (`canvas/Scene3D`): opens in cutaway (walls cut at 1 m), perspective camera (toggle orthographic).
+  Navigation follows 3D-app conventions: orbit = left-drag / Alt+two-finger scroll; pan = middle- or right-drag,
+  Space/Shift+drag, two-finger scroll, arrows (nothing selected); zoom = wheel / pinch; F frames. Selection handles:
+  corners scale uniformly, white side dots stretch one side (the opposite side stays put), the top diamond sets
+  the height; the label sits above the item's on-screen top edge. Add (asset picker), ⌘/Ctrl+D duplicate, Del.
+  Plan overlay (toolbar) draws the plan image + parsed boxes on the floor for validation; Top view.
+  Realistic / Tour sit bottom-right.
+- **Mapping step**: an unmatched box offers *Add model* (choose from the style's assets or the user's own →
+  `PATCH /mapping {assetId}`, the box takes the asset's category; or upload a photo) and *Skip*. Selecting a
+  skipped box offers *Restore* (`{restore: true}`). Skipping single boxes never builds the scene; Continue /
+  Skip remaining does.
+- **2D editor**: box symbols come from the (mapped) category, then the parsed type, never the label; the selected
+  box is drawn see-through so the plan image stays readable.
+- **Chat**: the drop screen asks for a project name (applied with the rename endpoint right after create); every
+  chat image opens in a viewer (`ZoomableImage` / `viewImage` in `components/ui.tsx`); style cards show
+  `assets-web/{Style}/{Style}.webp` renders; the composer re-measures its height on width/placeholder/font changes.
 
 ---
 
@@ -439,6 +459,9 @@ backs to the wall behind (`asset_mapper.fit_asset`), `real_dims` for added items
 Then `soraplan-api-00006-jkl`: skipping specific boxes (`skip_missing` with `componentIds`) no longer builds the scene,
 even for the last missing box; only skip-all / Continue builds.
 Then `soraplan-api-00007-d98`: `POST /projects/{id}/tour/plan` (Gemini tour director, `services/tour_planner.py`).
+Web: `deploy/deploy.sh frontend` run by the maintainer after commit `58a4e23` (realistic render, AI-directed tour +
+MP4 export, editor handles, mapping Add model / Restore, chat project name + image viewer). Local dev
+(`npm run dev`) talks to this Cloud Run API through `web/public/config.js`.
 
 Live URLs: API `https://soraplan-api-va4xv7fowq-as.a.run.app` (= `API_PUBLIC_URL`), worker
 `https://soraplan-plan-parsing-worker-va4xv7fowq-as.a.run.app` (private), web `https://soraplan.web.app`.
