@@ -8,9 +8,36 @@ interface Props {
   palette: Palette;
   /** Clip height for the cutaway view (null = full height). */
   cutHeight: number | null;
+  /** Realistic render: glass in window openings. */
+  realistic?: boolean;
 }
 
-function Wall({ wall, openings, color, cutHeight }: { wall: SceneWall; openings: SceneOpening[]; color: string; cutHeight: number | null }) {
+/** Thin glass pane filling a window opening (wall-local coordinates). */
+function WindowGlass({ opening, length, cutHeight }: { opening: SceneOpening; length: number; cutHeight: number | null }) {
+  const y0 = opening.sillHeight;
+  const y1 = Math.min(opening.sillHeight + opening.height, cutHeight ?? Infinity);
+  if (y1 - y0 < 0.05) return null;
+  return (
+    <mesh position={[opening.offset - length / 2, (y0 + y1) / 2, 0]} renderOrder={2}>
+      <boxGeometry args={[Math.max(0.05, opening.width - 0.04), y1 - y0, 0.015]} />
+      <meshPhysicalMaterial color="#dfe9ee" transparent opacity={0.16} roughness={0.04} metalness={0} envMapIntensity={1.4} depthWrite={false} />
+    </mesh>
+  );
+}
+
+function Wall({
+  wall,
+  openings,
+  color,
+  cutHeight,
+  realistic,
+}: {
+  wall: SceneWall;
+  openings: SceneOpening[];
+  color: string;
+  cutHeight: number | null;
+  realistic: boolean;
+}) {
   const [x1, z1] = wall.start;
   const [x2, z2] = wall.end;
   const length = Math.hypot(x2 - x1, z2 - z1);
@@ -33,11 +60,15 @@ function Wall({ wall, openings, color, cutHeight }: { wall: SceneWall; openings:
           <meshStandardMaterial color={color} roughness={0.92} metalness={0} />
         </mesh>
       ))}
+      {realistic &&
+        openings
+          .filter((o) => o.type === "window")
+          .map((o) => <WindowGlass key={o.id} opening={o} length={length} cutHeight={cutHeight} />)}
     </group>
   );
 }
 
-export default function Walls({ walls, openings, palette, cutHeight }: Props) {
+export default function Walls({ walls, openings, palette, cutHeight, realistic = false }: Props) {
   const byWall = useMemo(() => {
     const m = new Map<string, SceneOpening[]>();
     for (const o of openings) m.set(o.wallId, [...(m.get(o.wallId) || []), o]);
@@ -46,7 +77,7 @@ export default function Walls({ walls, openings, palette, cutHeight }: Props) {
   return (
     <group>
       {walls.map((w) => (
-        <Wall key={w.id} wall={w} openings={byWall.get(w.id) || EMPTY} color={w.color || palette.wall} cutHeight={cutHeight} />
+        <Wall key={w.id} wall={w} openings={byWall.get(w.id) || EMPTY} color={w.color || palette.wall} cutHeight={cutHeight} realistic={realistic} />
       ))}
     </group>
   );

@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { Icon } from "../components/ui";
+
+const LINE = 24; // px, matches .composer textarea line-height
+const MAX_LINES = 6;
 
 export default function Composer({
   onSend,
@@ -21,14 +24,38 @@ export default function Composer({
   const [text, setText] = useState("");
   const ta = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-grow 1–6 lines
+  // Auto-grow 1–6 lines. Re-measured when the text, the placeholder, the width or the web font changes: on a
+  // reload the composer mounts before the conversation (short placeholder, final width unknown).
+  const fit = useCallback(() => {
+    const el = ta.current;
+    if (!el) return;
+    const max = LINE * MAX_LINES + 12;
+    el.style.height = "auto";
+    let h = el.scrollHeight;
+    if (!el.value && el.placeholder) {
+      // An empty box is as tall as its (possibly wrapping) placeholder
+      el.value = el.placeholder;
+      h = el.scrollHeight;
+      el.value = "";
+    }
+    el.style.height = `${Math.min(h, max)}px`;
+    el.style.overflowY = h > max ? "auto" : "hidden"; // scrollbar only past the 6-line cap
+  }, []);
+  useLayoutEffect(fit, [text, placeholder, fit]);
   useEffect(() => {
     const el = ta.current;
     if (!el) return;
-    el.style.height = "auto";
-    const line = 24;
-    el.style.height = `${Math.min(el.scrollHeight, line * 6 + 12)}px`;
-  }, [text]);
+    let width = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth !== width) {
+        width = el.clientWidth;
+        fit();
+      }
+    });
+    ro.observe(el);
+    document.fonts?.ready.then(fit).catch(() => undefined);
+    return () => ro.disconnect();
+  }, [fit]);
 
   const send = () => {
     const t = text.trim();

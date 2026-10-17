@@ -139,7 +139,7 @@ body.is-resizing iframe, body.is-resizing canvas { pointer-events: none; }
 .composer.is-disabled { opacity: 0.6; }
 .composer textarea {
   flex: 1; resize: none; border: none; outline: none; background: transparent;
-  min-height: 36px; max-height: 156px; padding: 6px 4px; line-height: 24px;
+  min-height: 36px; max-height: 156px; padding: 6px 4px; line-height: 24px; overflow-y: hidden;
 }
 .composer textarea::placeholder { color: var(--text-3); }
 .composer .icon-btn { width: 36px; height: 36px; flex: none; }

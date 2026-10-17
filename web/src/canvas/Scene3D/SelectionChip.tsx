@@ -10,14 +10,17 @@ interface Props {
   warning: string | null;
   wallGap: number | null;
   dragging: boolean;
+  /** Corner / side / height handle in use: show the live size. */
+  resizing?: boolean;
   onReplace: () => void;
   onDelete: () => void;
 }
 
-export default function SelectionChip({ item, name, units, warning, wallGap, dragging, onReplace, onDelete }: Props) {
+export default function SelectionChip({ item, name, units, warning, wallGap, dragging, resizing, onReplace, onDelete }: Props) {
   if (dragging) {
     return (
       <div className={`s3d-chip s3d-chip--live ${warning ? "is-warn" : ""}`}>
+        {resizing && <span>{formatDims(item.dims, units)}</span>}
         {wallGap !== null && <span>{wallGap <= 0 ? "Touching wall" : `${formatLength(wallGap, units)} to wall`}</span>}
         {warning && <span className="s3d-chip__warn">{warning}</span>}
       </div>

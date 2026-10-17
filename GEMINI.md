@@ -339,6 +339,20 @@ npm run dev                                                    # http://localhos
 npm test && npm run typecheck
 ```
 
+### 9.7 Realistic render and cinematic tour (web only)
+
+- **Realistic** (3D toolbar, remembered per browser): `RealisticEffects` (N8AO ambient occlusion, bloom, SMAA, ACES
+  tone mapping, vignette; the composer does tone mapping because three.js skips it for render targets), warmer sun
+  with low fill light (strong fill washes the shadows out), procedural wood / tile floors (`materials.ts`), window glass.
+- **Tour**: `cinematic.ts` plans shots from the scene graph (aerial title orbit → one eye-height dolly/slide per room,
+  living spaces first, cameras kept inside the room and clear of walls and tall furniture → aerial outro, dips to
+  black) and `sampleTour(t)` is pure, so preview and export see the same frames. Full walls, ceilings and room lights
+  (`Interior.tsx`, lights only change intensity: adding lights recompiles every material).
+- **Export** (`exportVideo.ts`): the panel sets the Canvas to `frameloop="never"` and the export pixel ratio (as props:
+  R3F resets an imperatively changed dpr on re-render), `TourDirector` renders each frame with `advance()`, captions
+  and fades are drawn on a 2D canvas, WebCodecs encodes H.264 (VP9/AV1 fallback) and `mp4-muxer` writes the MP4.
+  1080p30 of a 33 s tour renders in ~11 s on an M-series Mac (≈ 45 MB). Needs WebCodecs (Chrome, Edge, Safari 16.4+).
+
 ---
 
 ## 10. Deployment

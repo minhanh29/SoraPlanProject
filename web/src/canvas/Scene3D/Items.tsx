@@ -40,19 +40,21 @@ export function BoxOutline({ dims, color, pad = 0.02 }: { dims: Dims; color: str
   );
 }
 
-function Placeholder({ dims, color, label, status }: { dims: Dims; color: string; label: string; status: string }) {
+function Placeholder({ dims, color, label, status, showLabel }: { dims: Dims; color: string; label: string; status: string; showLabel: boolean }) {
   const r = Math.min(0.06, dims.w / 4, dims.d / 4, dims.h / 4);
   return (
     <group>
       <RoundedBox args={[dims.w, dims.h, dims.d]} radius={r} smoothness={3} position={[0, dims.h / 2, 0]} castShadow>
         <meshStandardMaterial color={color} transparent opacity={0.5} roughness={0.6} />
       </RoundedBox>
-      <Html position={[0, dims.h + 0.05, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-        <div className="s3d-tag">
-          {label}
-          {status && <span className="s3d-tag__status">{status}</span>}
-        </div>
-      </Html>
+      {showLabel && (
+        <Html position={[0, dims.h + 0.05, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+          <div className="s3d-tag">
+            {label}
+            {status && <span className="s3d-tag__status">{status}</span>}
+          </div>
+        </Html>
+      )}
     </group>
   );
 }
@@ -69,6 +71,8 @@ interface ItemProps {
   /** Load GLBs only once walls are on screen. */
   loadModels: boolean;
   accent: string;
+  /** Name tag over placeholder boxes (off during the cinematic tour). */
+  showLabel?: boolean;
   onPointerDown: (item: ItemInstance, e: ThreeEvent<PointerEvent>) => void;
   onDoubleClick: (item: ItemInstance) => void;
 }
@@ -81,7 +85,7 @@ function statusLabel(asset: Asset | undefined, item: ItemInstance): string {
   return "";
 }
 
-export const ItemView = memo(function ItemView({ item, asset, loadModels, accent, onPointerDown, onDoubleClick }: ItemProps) {
+export const ItemView = memo(function ItemView({ item, asset, loadModels, accent, showLabel = true, onPointerDown, onDoubleClick }: ItemProps) {
   const ready = asset?.status === "ready";
   const urls = useMemo(() => (ready ? assetModelUrls(asset) : []), [ready, asset?.glbWebUrl, asset?.glbUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   const model = useModel(urls, loadModels && ready);
@@ -108,6 +112,7 @@ export const ItemView = memo(function ItemView({ item, asset, loadModels, accent
           color={accent}
           label={item.label || asset?.name || "Item"}
           status={model === "error" ? "Model unavailable" : ready ? "Loading…" : statusLabel(asset, item)}
+          showLabel={showLabel}
         />
       )}
     </group>

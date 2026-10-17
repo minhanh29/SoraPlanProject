@@ -22,7 +22,7 @@ const MIN_ELEVATION = THREE.MathUtils.degToRad(20);
 const TOP_ELEVATION = THREE.MathUtils.degToRad(89.9); // exactly 90° makes lookAt degenerate
 const MAX_ELEVATION = TOP_ELEVATION;
 const RADIUS = 80; // orthographic camera distance (any value outside the scene works)
-const FOV = 35; // perspective vertical field of view, degrees: natural, little wall lean in top view
+export const FOV = 35; // perspective vertical field of view, degrees: natural, little wall lean in top view
 
 export type Projection = "perspective" | "orthographic";
 const ORBIT_PER_PX = 0.006;

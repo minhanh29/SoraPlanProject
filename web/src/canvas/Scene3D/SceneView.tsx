@@ -1,17 +1,26 @@
 // The 3D viewport: isometric camera, lights, floors, walls, items and direct manipulation
 // (select, drag-move on the floor, rotate ring, corner scale, keyboard shortcuts), plus the optional
-// plan overlay used to validate the parse.
+// plan overlay used to validate the parse, the realistic render (post-processing, textured floors, glass)
+// and the cinematic tour (camera driven by TourDirector, editing off, full walls, interior ceilings).
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { ContactShadows, Environment, Html } from "@react-three/drei";
 import * as THREE from "three";
+import type { EffectComposer as EffectComposerImpl } from "postprocessing";
 import type { Asset, Dims, FloorPlan, ItemInstance, PlanUnits, SceneGraph, SceneOp, Vec3 } from "../../lib/types";
+import { assetModelUrls } from "../../hooks/useAssets";
+import { loadModel } from "../../three/loadModel";
 import IsoCamera, { isPanKeyHeld, type CameraApi, type Projection } from "./IsoCamera";
 import Walls from "./Walls";
 import Floors from "./Floors";
 import { ItemView } from "./Items";
 import Gizmo, { ringRadius } from "./Gizmo";
+import { worldPerPixel } from "./cameraScale";
 import PlanOverlay, { type OverlayImageStatus } from "./PlanOverlay";
+import RealisticEffects from "./RealisticEffects";
+import Interior from "./Interior";
+import TourDirector, { type TourApi } from "./TourDirector";
+import type { Tour, TourFrame } from "./cinematic";
 import SelectionChip from "./SelectionChip";
 import {
   clamp,
@@ -43,6 +52,22 @@ export interface SceneViewProps {
   undo: () => void;
   redo: () => void;
   onRequestReplace: (item: ItemInstance) => void;
+  /** Realistic render (always on during the tour). */
+  realistic: boolean;
+  /** Cinematic tour in progress (camera driven, editing off), or null. */
+  tour: TourSetup | null;
+  /** Canvas pixel ratio and frame loop: the video export renders at its own resolution, frame by frame. */
+  renderDpr?: number;
+  frameloop?: "always" | "never";
+}
+
+export interface TourSetup {
+  plan: Tour;
+  playing: boolean;
+  timeRef: MutableRefObject<number>;
+  apiRef: MutableRefObject<TourApi | null>;
+  onFrame: (f: TourFrame) => void;
+  onEnd: () => void;
 }
 
 type Preview = { id: string; position?: Vec3; rotationY?: number; dims?: Dims };
@@ -50,7 +75,15 @@ type Preview = { id: string; position?: Vec3; rotationY?: number; dims?: Dims };
 type Drag =
   | { mode: "pending" | "move"; id: string; startX: number; startY: number; offset: [number, number] }
   | { mode: "rotate"; id: string; center: [number, number]; startAngle: number; startRot: number }
-  | { mode: "scale"; id: string; center: [number, number]; rot: number; startDims: Dims };
+  | { mode: "scale"; id: string; center: [number, number]; rot: number; startDims: Dims }
+  /** Side handle: the opposite side (`fixed`, floor coords) stays put while the dragged side follows the pointer. */
+  | { mode: "edge"; id: string; axis: "w" | "d"; sign: 1 | -1; rot: number; fixed: [number, number]; y: number; startDims: Dims }
+  /** Height handle: vertical screen motion → meters (scale at the item, corrected for camera tilt). */
+  | { mode: "height"; id: string; startY: number; metersPerPx: number; startDims: Dims };
+
+const MIN_SIDE = 0.05; // m
+const MAX_SIDE = 12;
+const MAX_HEIGHT = 4;
 
 const CUTAWAY_HEIGHT = 1;
 const isTyping = () => {
@@ -58,6 +91,8 @@ const isTyping = () => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 };
 const round = (v: number, step = 0.01) => Math.round(v / step) * step;
+const noop = () => undefined;
+const mm = (v: number) => Math.round(v * 1000) / 1000; // no float noise in stored positions
 const PAN_STEP_PX = 80;
 
 /**
@@ -90,20 +125,33 @@ function AboveItem({ item, children }: { item: ItemInstance; children: ReactNode
 
 function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(() => void) | null> }) {
   const { graph, assets, units, colors, cutaway, cameraRef, apply, undo, redo, onRequestReplace, missedRef } = props;
-  const { selectedId, onSelect: setSelectedId, overlay, projection } = props;
+  const { selectedId: rawSelectedId, onSelect: setSelectedId, overlay: rawOverlay, projection, tour } = props;
+  const touring = !!tour;
+  const realistic = props.realistic || touring;
+  // The tour shows the finished home: no selection, overlays or cutaway
+  const selectedId = touring ? null : rawSelectedId;
+  const overlay = touring ? null : rawOverlay;
+  const wallsCut = cutaway && !touring;
+  const interiorRef = useRef(false);
+  const composerRef = useRef<EffectComposerImpl | null>(null);
   const level = graph.levels[0];
   const { camera, gl } = useThree();
+  const size = useThree((s) => s.size);
   const controls = useThree((st) => st.controls) as { enabled: boolean } | null;
   /** Stop OrbitControls at once (IsoCamera re-enables it when the drag ends). */
   const holdControls = useCallback(() => {
     if (controls) controls.enabled = false;
   }, [controls]);
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [preview, setPreviewState] = useState<Preview | null>(null);
   const [dragMode, setDragMode] = useState<Drag["mode"] | null>(null);
   const [loadModels, setLoadModels] = useState(false);
   const drag = useRef<Drag | null>(null);
   const previewRef = useRef<Preview | null>(null);
-  previewRef.current = preview;
+  /** The ref is updated at once: a pointerup right after the last move must commit that move, not the one before. */
+  const setPreview = useCallback((p: Preview | null) => {
+    previewRef.current = p;
+    setPreviewState(p);
+  }, []);
 
   // Lazy-load GLBs once the walls have painted.
   useEffect(() => {
@@ -182,7 +230,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
       ops.push({ op: "item.rotate", id: d.id, rotationY: p.rotationY });
     if (base && p.dims && (p.dims.w !== base.dims.w || p.dims.d !== base.dims.d || p.dims.h !== base.dims.h))
       ops.push({ op: "item.resize", id: d.id, dims: p.dims });
-    const label = d.mode === "rotate" ? "Rotate" : d.mode === "scale" ? "Resize" : "Move";
+    const label = d.mode === "rotate" ? "Rotate" : d.mode === "move" || d.mode === "pending" ? "Move" : "Resize";
     if (ops.length) apply(ops, `${label} ${base?.label || "item"}`);
     setPreview(null);
   }, [apply, graph]);
@@ -230,6 +278,22 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
           dims = { w: round(s0.w * f), d: round(s0.d * f), h: round(s0.h * f) };
         }
         setPreview({ id: cur.id, dims });
+      } else if (cur.mode === "edge") {
+        const hit = hitPlane(e.clientX, e.clientY, cur.y);
+        if (!hit) return;
+        const { ax, az } = itemAxes(cur.rot);
+        const [dx, dz] = cur.axis === "w" ? ax : az;
+        const ux = dx * cur.sign; // unit vector from the fixed side toward the dragged side
+        const uz = dz * cur.sign;
+        const len = round(clamp((hit.x - cur.fixed[0]) * ux + (hit.z - cur.fixed[1]) * uz, MIN_SIDE, MAX_SIDE), 0.005);
+        setPreview({
+          id: cur.id,
+          dims: { ...cur.startDims, [cur.axis]: len },
+          position: [mm(cur.fixed[0] + (ux * len) / 2), item.position[1], mm(cur.fixed[1] + (uz * len) / 2)],
+        });
+      } else if (cur.mode === "height") {
+        const h = round(clamp(cur.startDims.h + (cur.startY - e.clientY) * cur.metersPerPx, MIN_SIDE, MAX_HEIGHT), 0.005);
+        setPreview({ id: cur.id, dims: { ...cur.startDims, h } });
       }
     },
     [hitPlane],
@@ -253,7 +317,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
 
   const onItemDown = useCallback(
     (item: ItemInstance, e: ThreeEvent<PointerEvent>) => {
-      if (e.button !== 0 || isPanKeyHeld()) return; // middle/right-drag and Space+drag pan the view
+      if (touring || e.button !== 0 || isPanKeyHeld()) return; // middle/right-drag and Space+drag pan the view
       e.stopPropagation();
       holdControls();
       setSelectedId(item.id);
@@ -267,7 +331,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
       };
       setDragMode("pending");
     },
-    [hitPlane, holdControls, setSelectedId],
+    [hitPlane, holdControls, setSelectedId, touring],
   );
 
   const onRotateStart = useCallback(
@@ -296,6 +360,49 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
     };
     setDragMode("scale");
   }, [selected, holdControls]);
+
+  const onEdgeStart = useCallback(
+    (axis: "w" | "d", sign: 1 | -1) => {
+      if (!selected) return;
+      holdControls();
+      const { ax, az } = itemAxes(selected.rotationY);
+      const [dx, dz] = axis === "w" ? ax : az;
+      const half = selected.dims[axis] / 2;
+      drag.current = {
+        mode: "edge",
+        id: selected.id,
+        axis,
+        sign,
+        rot: selected.rotationY,
+        fixed: [selected.position[0] - dx * sign * half, selected.position[2] - dz * sign * half],
+        y: selected.dims.h, // the handles sit on the top face
+        startDims: { ...selected.dims },
+      };
+      setDragMode("edge");
+    },
+    [selected, holdControls],
+  );
+
+  const onHeightStart = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      if (!selected) return;
+      holdControls();
+      const top = new THREE.Vector3(selected.position[0], selected.dims.h, selected.position[2]);
+      const look = new THREE.Vector3();
+      camera.getWorldDirection(look);
+      // A vertical segment of h meters shows as h·cos(elevation) on screen; near top-down, cap the gain
+      const cosEl = Math.max(Math.hypot(look.x, look.z), 0.35);
+      drag.current = {
+        mode: "height",
+        id: selected.id,
+        startY: e.nativeEvent.clientY,
+        metersPerPx: worldPerPixel(camera, top, size.height) / cosEl,
+        startDims: { ...selected.dims },
+      };
+      setDragMode("height");
+    },
+    [selected, holdControls, camera, size.height],
+  );
 
   const focusItem = useCallback(
     (item: ItemInstance) => {
@@ -337,7 +444,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
   // ---------------------------------------------------------------- keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTyping()) return;
+      if (isTyping() || touring) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -401,7 +508,17 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, setSelectedId, apply, undo, redo, removeItem, duplicateItem, focusItem, cameraRef, camera]);
+  }, [selectedId, setSelectedId, apply, undo, redo, removeItem, duplicateItem, focusItem, cameraRef, camera, touring]);
+
+  /** Every item's GLB loaded (the video must not show placeholder boxes). */
+  const preloadModels = useCallback(async () => {
+    setLoadModels(true);
+    const urls = (level?.items || []).flatMap((it) => {
+      const a = it.assetId ? assets[it.assetId] : undefined;
+      return a?.status === "ready" ? [assetModelUrls(a)] : [];
+    });
+    await Promise.allSettled(urls.map((u) => loadModel(u)));
+  }, [level?.items, assets]);
 
   // ---------------------------------------------------------------- render
   const center = useMemo(() => bounds.min.clone().add(bounds.max).multiplyScalar(0.5), [bounds]);
@@ -419,16 +536,19 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
   return (
     <>
       <color attach="background" args={[colors.background]} />
-      <IsoCamera ref={cameraRef} bounds={bounds} locked={dragMode !== null} projection={projection} />
-      <hemisphereLight args={["#ffffff", "#b9b2a6", 0.75]} />
-      <ambientLight intensity={0.25} />
+      <IsoCamera ref={cameraRef} bounds={bounds} locked={dragMode !== null || touring} projection={touring ? "perspective" : projection} />
+      {/* Realistic: warmer, stronger sun and less flat fill, so form comes from light and AO */}
+      <hemisphereLight args={["#ffffff", "#b9b2a6", realistic ? 0.25 : 0.75]} />
+      <ambientLight intensity={realistic ? 0.04 : 0.25} />
       <primitive object={lightTarget} />
       <directionalLight
         position={[center.x - extent * 0.45, extent * 1.1, center.z + extent * 0.7]}
         target={lightTarget}
-        intensity={1.9}
+        color={realistic ? "#fff1dc" : "#ffffff"}
+        intensity={realistic ? 3 : 1.9}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        // Fixed size: three.js keeps the shadow map it allocated first, so a runtime change would not apply
+        shadow-mapSize={[4096, 4096]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.02}
         shadow-radius={4}
@@ -440,11 +560,32 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
         shadow-camera-far={extent * 4}
       />
       <Suspense fallback={null}>
-        <Environment preset="apartment" environmentIntensity={0.45} />
+        <Environment preset="apartment" environmentIntensity={realistic ? 0.35 : 0.45} />
       </Suspense>
+      {realistic && <RealisticEffects ref={composerRef} high={props.frameloop === "never"} />}
+      {touring && <Interior rooms={level?.rooms || []} height={level?.ceilingHeight || 2.7} interiorRef={interiorRef} />}
+      {tour && (
+        <TourDirector
+          ref={tour.apiRef}
+          tour={tour.plan}
+          playing={tour.playing}
+          timeRef={tour.timeRef}
+          interiorRef={interiorRef}
+          composerRef={composerRef}
+          preload={preloadModels}
+          onFrame={tour.onFrame}
+          onEnd={tour.onEnd}
+        />
+      )}
 
-      <Floors bounds={graph.meta.bounds} rooms={level?.rooms || []} palette={graph.meta.palette} />
-      <Walls walls={level?.walls || []} openings={level?.openings || []} palette={graph.meta.palette} cutHeight={cutaway ? CUTAWAY_HEIGHT : null} />
+      <Floors bounds={graph.meta.bounds} rooms={level?.rooms || []} palette={graph.meta.palette} realistic={realistic} />
+      <Walls
+        walls={level?.walls || []}
+        openings={level?.openings || []}
+        palette={graph.meta.palette}
+        cutHeight={wallsCut ? CUTAWAY_HEIGHT : null}
+        realistic={realistic}
+      />
       <ContactShadows position={[center.x, 0.004, center.z]} scale={extent * 1.6} opacity={0.32} blur={2.2} far={2.5} resolution={1024} />
       {overlay && <PlanOverlay plan={overlay.plan} imageUrl={overlay.imageUrl} color={colors.parsed} onImageStatus={overlay.onImageStatus} />}
 
@@ -455,6 +596,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
           asset={it.assetId ? assets[it.assetId] : undefined}
           loadModels={loadModels}
           accent={graph.meta.palette.accent}
+          showLabel={!touring}
           onPointerDown={onItemDown}
           onDoubleClick={focusItem}
         />
@@ -462,9 +604,9 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
 
       {/* Overlap warnings stay on dropped items */}
       {items
-        .filter((it) => overlaps.has(it.id) && it.id !== selectedId)
+        .filter((it) => !touring && overlaps.has(it.id) && it.id !== selectedId)
         .map((it) => (
-          <Gizmo key={`w-${it.id}`} item={it} color={colors.danger} warnColor={colors.danger} warning showHandles={false} onRotateStart={() => undefined} onScaleStart={() => undefined} />
+          <Gizmo key={`w-${it.id}`} item={it} color={colors.danger} warnColor={colors.danger} warning showHandles={false} onRotateStart={noop} onScaleStart={noop} onEdgeStart={noop} onHeightStart={noop} />
         ))}
 
       {selected && (
@@ -477,6 +619,8 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
             showHandles={dragMode !== "move"}
             onRotateStart={onRotateStart}
             onScaleStart={onScaleStart}
+            onEdgeStart={onEdgeStart}
+            onHeightStart={onHeightStart}
           />
           <AboveItem item={selected}>
             <Html zIndexRange={[30, 10]}>
@@ -487,7 +631,8 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
                   units={units}
                   warning={selectedWarning}
                   wallGap={wallGap}
-                  dragging={dragMode === "move" || dragMode === "rotate" || dragMode === "scale"}
+                  dragging={dragMode !== null && dragMode !== "pending"}
+                  resizing={dragMode === "scale" || dragMode === "edge" || dragMode === "height"}
                   onReplace={() => onRequestReplace(selected)}
                   onDelete={() => removeItem(selected)}
                 />
@@ -506,7 +651,8 @@ export default function SceneView(props: SceneViewProps) {
     <Canvas
       onPointerMissed={() => missedRef.current?.()}
       shadows="soft"
-      dpr={[1, 2]}
+      dpr={props.renderDpr ?? [1, 2]}
+      frameloop={props.frameloop ?? "always"}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, preserveDrawingBuffer: false }}
       onContextMenu={(e) => e.preventDefault()}
       style={{ touchAction: "none" }}

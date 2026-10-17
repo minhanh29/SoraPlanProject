@@ -157,7 +157,8 @@ export function Menu({
 type IconName =
   | "plus" | "close" | "dots" | "send" | "stop" | "attach" | "sun" | "moon" | "logout" | "box" | "chat"
   | "menu" | "undo" | "redo" | "trash" | "upload" | "check" | "back" | "search" | "cube" | "rotate"
-  | "fit" | "zoomIn" | "zoomOut" | "lock" | "unlock" | "grid" | "image" | "sidebar" | "swap" | "layers" | "move" | "expand";
+  | "fit" | "zoomIn" | "zoomOut" | "lock" | "unlock" | "grid" | "image" | "sidebar" | "swap" | "layers" | "move" | "expand"
+  | "sparkle" | "film" | "play" | "pause" | "download";
 
 const PATHS: Record<IconName, string> = {
   plus: "M12 5v14M5 12h14",
@@ -193,6 +194,11 @@ const PATHS: Record<IconName, string> = {
   layers: "M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5",
   move: "M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3",
   expand: "M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7",
+  sparkle: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z",
+  film: "M4 5h16v14H4zM8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4",
+  play: "M7 5l12 7-12 7z",
+  pause: "M8 5v14M16 5v14",
+  download: "M12 4v12M7 11l5 5 5-5M4 20h16",
 };
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
