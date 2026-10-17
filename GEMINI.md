@@ -411,6 +411,15 @@ so `setup.sh` was NOT re-run. Done, in order:
 | Web | `deploy/deploy.sh frontend` | `https://soraplan.web.app` (web/dist) |
 | Asset library | `cd backend/api && FIREBASE_CREDENTIALS_PATH=.secrets/serviceAccountKey.json .venv/bin/python ../../scripts/migrate_assets.py --apply` | 41 system + 2 user assets in `assets/` |
 
+**2026-10-17 — mapping/3D fixes.** `deploy/deploy.sh api` → revision `soraplan-api-00005-ccz` (rollback target:
+`soraplan-api-00004-hlh`). Ships: furniture fit with bounded stretch + category height ranges, seats face tables /
+backs to the wall behind (`asset_mapper.fit_asset`), `real_dims` for added items, style covers
+(`assets-web/{Style}/{Style}.webp`, uploaded by hand with `gcloud storage cp`; now part of `optimize_catalog.sh` +
+`upload_catalog.sh`), a picked asset sets the box's category, and `PATCH /projects/{id}/mapping {restore: true}`
+(undo a Skip). Existing scenes keep their sizes until the style is picked again. Web not redeployed.
+Then `soraplan-api-00006-jkl`: skipping specific boxes (`skip_missing` with `componentIds`) no longer builds the scene,
+even for the last missing box; only skip-all / Continue builds.
+
 Live URLs: API `https://soraplan-api-va4xv7fowq-as.a.run.app` (= `API_PUBLIC_URL`), worker
 `https://soraplan-plan-parsing-worker-va4xv7fowq-as.a.run.app` (private), web `https://soraplan.web.app`.
 

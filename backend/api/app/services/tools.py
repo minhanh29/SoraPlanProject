@@ -112,7 +112,9 @@ def _select_style(t: ToolContext, args: Dict[str, Any]) -> ToolResult:
 
 def _skip_missing(t: ToolContext, args: Dict[str, Any]) -> ToolResult:
     ids = [str(i) for i in args.get("componentIds") or []] or None
-    return ToolResult(t.workflow.skip_missing(t.ctx, ids))
+    # Skipping chosen boxes never builds (even the last one: the user may still Restore it); skipping all
+    # remaining boxes ("Skip all" / "Skip remaining") builds the scene.
+    return ToolResult(t.workflow.skip_missing(t.ctx, ids, build_when_done=ids is None))
 
 
 def _continue(t: ToolContext, args: Dict[str, Any]) -> ToolResult:
@@ -342,8 +344,8 @@ _register(ToolSpec("edit_plan", "Go back to the 2D plan editor. From the 3D stag
 _register(ToolSpec("select_style", "Apply an interior style: places catalog furniture into the plan. From the 3D stage it rebuilds "
                    "the scene: ask first there.", _obj({"style": {"type": "string", "enum": ["Industrial", "Japandi"]}}, ["style"]),
                    ["choosing_style", "resolving_missing", "scene_ready"], _select_style))
-_register(ToolSpec("skip_missing", "Skip plan objects that have no 3D model (all of them when componentIds is empty) and build "
-                   "the 3D scene once nothing is missing.", _obj({"componentIds": {"type": "array", "items": STR}}),
+_register(ToolSpec("skip_missing", "Skip plan objects that have no 3D model. With componentIds: skip just those (the scene is "
+                   "not built yet). Without: skip all remaining ones and build the 3D scene.", _obj({"componentIds": {"type": "array", "items": STR}}),
                    ["resolving_missing"], _skip_missing))
 _register(ToolSpec("continue", "Continue to 3D (objects still without a model are skipped).", _obj({}), ["resolving_missing"],
                    _continue, ui_only=True))

@@ -10,7 +10,8 @@ import type {
   StylePickerPayload,
 } from "../../lib/types";
 import { useJob } from "../../hooks/useConversations";
-import { ConfirmDialog, Icon, Spinner, toast } from "../../components/ui";
+import { ConfirmDialog, Icon, Spinner, ZoomableImage, toast, viewImage } from "../../components/ui";
+import { catalogUrl } from "../../lib/config";
 import { PARSE_STAGES } from "../messageTemplates";
 
 export interface CardProps {
@@ -38,8 +39,8 @@ export function CropRequestCard({ conversation, isLatest, openCanvas }: CardProp
   return (
     <>
       <div className="crop-examples">
-        <figure><img src="/examples/crop-good.png" alt="Good crop: tight around the walls" /><figcaption>Good: tight around the walls</figcaption></figure>
-        <figure><img src="/examples/crop-bad.png" alt="Bad crop: margins and labels included" /><figcaption>Bad: margins, labels, tilted</figcaption></figure>
+        <figure><ZoomableImage src="/examples/crop-good.png" alt="Good crop: tight around the walls" /><figcaption>Good: tight around the walls</figcaption></figure>
+        <figure><ZoomableImage src="/examples/crop-bad.png" alt="Bad crop: margins and labels included" /><figcaption>Bad: margins, labels, tilted</figcaption></figure>
       </div>
       {isLatest && conversation.stage === "cropping" && (
         <CardActions>
@@ -116,6 +117,21 @@ export function PlanFailedCard({ message, conversation, isLatest, openCanvas }: 
   );
 }
 
+/**
+ * Top-down render of a whole home in the style (assets-web/{Style}/{Style}.webp, made by
+ * scripts/optimize_catalog.sh). Derived from the id so older messages, whose coverUrl is a sofa
+ * thumbnail, show it too; the message's coverUrl is the fallback.
+ */
+function StyleCover({ id, name, fallback }: { id: string; name: string; fallback: string }) {
+  const [src, setSrc] = useState(() => catalogUrl(`assets-web/${id}/${id}.webp`) || fallback);
+  return (
+    <button type="button" className="style-card__media" onClick={() => viewImage(src, `${name} style`)} aria-label={`View the ${name} style larger`}>
+      <img src={src} alt={`A home furnished in the ${name} style`} loading="lazy" onError={() => src !== fallback && setSrc(fallback)} />
+      <span className="style-card__zoom" aria-hidden="true"><Icon name="expand" size={14} /></span>
+    </button>
+  );
+}
+
 export function StylePickerCard({ message, conversation }: CardProps) {
   const p = message.payload as StylePickerPayload;
   const [pending, setPending] = useState<StyleId | null>(null);
@@ -131,12 +147,20 @@ export function StylePickerCard({ message, conversation }: CardProps) {
     <>
       <div className="style-cards">
         {(p.styles || []).map((s) => (
-          <button key={s.id} className={`style-card ${p.selected === s.id ? "is-selected" : ""}`}
-            disabled={!selectable || conversation.busy || pending !== null} onClick={() => choose(s.id)}>
-            <img src={s.coverUrl} alt="" loading="lazy" />
-            <span className="style-card__name">{pending === s.id ? <Spinner /> : null} {s.name}</span>
-            {s.blurb && <span className="style-card__blurb">{s.blurb}</span>}
-          </button>
+          <div key={s.id} className={`style-card ${p.selected === s.id ? "is-selected" : ""}`}>
+            <StyleCover id={s.id} name={s.name} fallback={s.coverUrl} />
+            <button className="style-card__pick" disabled={!selectable || conversation.busy || pending !== null} onClick={() => choose(s.id)}
+              aria-pressed={p.selected === s.id}>
+              <span className="style-card__text">
+                <span className="style-card__name">{s.name}</span>
+                {s.blurb && <span className="style-card__blurb">{s.blurb}</span>}
+              </span>
+              <span className={`btn btn--sm ${p.selected === s.id ? "" : "btn--primary"}`} aria-hidden="true">
+                {pending === s.id ? <Spinner /> : p.selected === s.id ? <Icon name="check" size={14} /> : null}
+                {p.selected === s.id ? "Selected" : "Use"}
+              </span>
+            </button>
+          </div>
         ))}
       </div>
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)} title="Change the style?" danger={false}

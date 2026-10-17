@@ -1,10 +1,11 @@
 // Selection gizmo drawn around the selected item: outline, rotate ring (with a front marker) and
-// four top-corner scale handles. Handles keep a constant on-screen size in the orthographic view.
+// four top-corner scale handles. Handles keep a constant on-screen size in either projection.
 import { useMemo, useRef } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { ItemInstance } from "../../lib/types";
 import { BoxOutline } from "./Items";
+import { worldPerPixel } from "./cameraScale";
 
 interface Props {
   item: ItemInstance;
@@ -27,10 +28,11 @@ export default function Gizmo({ item, color, warnColor, warning, showHandles, on
   const handles = useRef<THREE.Group>(null);
   const knob = useRef<THREE.Mesh>(null);
 
-  useFrame(({ camera }) => {
-    const s = HANDLE_PX / Math.max((camera as THREE.OrthographicCamera).zoom || 1, 1e-3);
-    handles.current?.children.forEach((c) => c.scale.setScalar(s));
-    knob.current?.scale.setScalar(s * 1.2);
+  const tmp = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera, size }) => {
+    const px = (o: THREE.Object3D) => HANDLE_PX * worldPerPixel(camera, o.getWorldPosition(tmp), size.height);
+    handles.current?.children.forEach((c) => c.scale.setScalar(px(c)));
+    if (knob.current) knob.current.scale.setScalar(px(knob.current) * 1.2);
   });
 
   const ring = useMemo(() => new THREE.RingGeometry(radius - 0.025, radius + 0.025, 96), [radius]);

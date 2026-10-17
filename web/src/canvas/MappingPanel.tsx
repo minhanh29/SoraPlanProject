@@ -1,5 +1,6 @@
 // Stage "resolving_missing": matched catalog models shown in their boxes with their real footprint,
-// unmatched boxes pulse amber with Upload / Skip chips, selected matches can be rescaled (§2.4).
+// unmatched boxes pulse amber with Add model / Skip chips (Add model: pick from the assets or upload a photo),
+// a selected skipped box offers Restore (undo the skip), selected matches can be rescaled (§2.4).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PanelProps } from "./panelTypes";
 import type { Dims, MappingEntry } from "../lib/types";
@@ -8,6 +9,7 @@ import { planScale } from "../lib/units";
 import { useAssetIndex } from "../hooks/useAssets";
 import { Icon, Spinner, toast } from "../components/ui";
 import UploadAssetDialog, { type UploadAssetPreset } from "../assets/UploadAssetDialog";
+import ResolveModelDialog, { type ResolveTarget } from "./ResolveModelDialog";
 import PlanCanvas, { type PlanCanvasControls } from "./PlanEditor/PlanEditor";
 import { LayersMenu, ZoomControls, isTypingTarget } from "./PlanEditor/Toolbar";
 import { buildEditorObjects, isBox, type BoxObj } from "./PlanEditor/model";
@@ -50,6 +52,7 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
   const [applyToAll, setApplyToAll] = useState(true);
   const [overrides, setOverrides] = useState<Record<string, Dims>>({});
   const [upload, setUpload] = useState<UploadAssetPreset | null>(null);
+  const [resolving, setResolving] = useState<ResolveTarget | null>(null);
   const [acting, setActing] = useState<string | null>(null);
   const controls = useRef<PlanCanvasControls | null>(null);
   const sendTimer = useRef<number | null>(null);
@@ -139,6 +142,18 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
     }
   };
 
+  /** Undo a Skip: the box needs a model again. */
+  const restore = async (componentId: string) => {
+    setActing(`restore:${componentId}`);
+    try {
+      await api.updateMapping(project.id, { componentId, restore: true });
+    } catch (e: any) {
+      toast(e?.message || "Could not restore this item", "error");
+    } finally {
+      setActing(null);
+    }
+  };
+
   const fitToBox = async () => {
     if (!selected) return;
     pendingSend.current = null;
@@ -171,7 +186,7 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
       <div className="cpanel__head">
         <div className="cpanel__title">
           <strong>Furniture for your {project.style || ""} home</strong>
-          <span>Select a model to resize it · amber boxes still need a model</span>
+          <span>Select a model to resize it · amber boxes still need a model · select a skipped box to restore it</span>
         </div>
         <span className="hide-sm" style={{ display: "contents" }}>
           <ZoomControls controls={controls} />
@@ -209,7 +224,7 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
             boxes
               .filter((b) => {
                 const s = stateOf(b.id);
-                return s === "missing" || s === "failed";
+                return s === "missing" || s === "failed" || (s === "skipped" && b.id === selectedId);
               })
               .map((b) => {
                 const c = projectPt(b.x + b.w / 2, b.y + b.h / 2);
@@ -218,14 +233,24 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
                 const label = entry?.label || miss?.label || b.name;
                 const category = entry?.category ?? miss?.category ?? b.category ?? null;
                 const tall = b.h * scale > 64;
+                const style = { left: c.x, top: c.y + (tall ? 14 : 0), flexDirection: tall ? "column" : "row" } as const;
+                if (stateOf(b.id) === "skipped") {
+                  return (
+                    <div key={b.id} className="map-chip map-chip--skipped" style={style}>
+                      <button disabled={busy} onClick={() => restore(b.id)} title={`Undo Skip: ${label} needs a model again`}>
+                        {acting === `restore:${b.id}` ? <Spinner size={11} /> : <Icon name="undo" size={13} />} Restore
+                      </button>
+                    </div>
+                  );
+                }
                 return (
-                  <div key={b.id} className="map-chip" style={{ left: c.x, top: c.y + (tall ? 14 : 0), flexDirection: tall ? "column" : "row" }}>
+                  <div key={b.id} className="map-chip" style={style}>
                     <button
                       disabled={busy}
-                      onClick={() => setUpload({ name: label, category, projectId: project.id, componentId: b.id })}
-                      title={`Upload a photo of your ${label}`}
+                      onClick={() => setResolving({ componentId: b.id, label, category })}
+                      title={`Pick a model from the assets or upload a photo of your ${label}`}
                     >
-                      <Icon name="upload" size={13} /> Upload
+                      <Icon name="plus" size={13} /> Add model
                     </button>
                     <button
                       className="map-chip__skip"
@@ -284,6 +309,14 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
         </button>
       </div>
 
+      <ResolveModelDialog
+        target={resolving}
+        projectId={project.id}
+        style={project.style}
+        assets={assets}
+        onUpload={(t) => setUpload({ name: t.label, category: t.category, projectId: project.id, componentId: t.componentId })}
+        onClose={() => setResolving(null)}
+      />
       <UploadAssetDialog
         open={upload !== null}
         onClose={() => setUpload(null)}

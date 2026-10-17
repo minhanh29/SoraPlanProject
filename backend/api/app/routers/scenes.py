@@ -35,7 +35,7 @@ def save_plan(
 
 
 @router.patch("/{project_id}/mapping", response_model=MappingResponse,
-              summary="Rescale a matched model, reset it to the box, or assign an asset to a plan box")
+              summary="Rescale a matched model, reset it to the box, assign an asset to a plan box, or restore a skipped box")
 def update_mapping(
     project_id: str,
     body: UpdateMappingRequest,
@@ -50,6 +50,7 @@ def update_mapping(
         body.asset_id,
         body.apply_to_same_asset,
         body.reset,
+        restore=body.restore,
     )
     return {"mapping": mapping}
 

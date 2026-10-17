@@ -38,6 +38,18 @@ if [ -d "$WEB_SRC" ]; then
     --exclude='.*(?<!\.glb)$' \
     --cache-control='public, max-age=31536000, immutable' \
     ${extra[@]+"${extra[@]}"}
+  # Style previews (styles.json "cover"): same name may be re-rendered, so no immutable caching
+  for style in Industrial Japandi; do
+    preview="$WEB_SRC/$style/$style.webp"
+    [ -f "$preview" ] || continue
+    log "Uploading style preview $style.webp"
+    if [ "${DRY_RUN:-0}" = "1" ]; then
+      echo "would copy $preview -> gs://$CATALOG_BUCKET/assets-web/$style/$style.webp"
+    else
+      gc storage cp "$preview" "gs://$CATALOG_BUCKET/assets-web/$style/$style.webp" \
+        --content-type=image/webp --cache-control='public, max-age=3600' >/dev/null
+    fi
+  done
 else
   warn "No $WEB_SRC (run scripts/optimize_catalog.sh); skipping assets-web"
 fi

@@ -100,8 +100,24 @@ def test_full_flow_to_scene_and_ui_edits(client, fake_db, fake_storage, worker_c
     res = client.patch(f"/v1/projects/{cid}/mapping", json={"componentId": "fur_006", "reset": True}, headers=AUTH)
     assert res.json()["mapping"]["fur_007"]["dims"] == res.json()["mapping"]["fur_007"]["autoDims"]
 
+    # a misclicked Skip can be undone
+    client.post(f"/v1/conversations/{cid}/actions", json={"type": "skip_missing", "args": {"componentIds": ["fur_008"]}}, headers=AUTH)
+    assert fake_db.doc(f"projects/{cid}")["mapping"]["fur_008"]["skipped"] is True
+    res = client.patch(f"/v1/projects/{cid}/mapping", json={"componentId": "fur_008", "restore": True}, headers=AUTH)
+    assert res.status_code == 200 and res.json()["mapping"]["fur_008"]["skipped"] is False
+    assert {m["componentId"] for m in fake_db.doc(f"projects/{cid}")["missing"]} == {"fur_008", "fix_006"}
+
+    # the desk had no match: pick a library model for it ("Choose from assets")
+    res = client.patch(f"/v1/projects/{cid}/mapping", json={"componentId": "fur_008", "assetId": "sys_japandi_Ja_kitchen_table"}, headers=AUTH)
+    assert res.status_code == 200
+    desk = res.json()["mapping"]["fur_008"]
+    assert desk["assetId"] == "sys_japandi_Ja_kitchen_table" and desk["category"] == "Dining Table" and desk["dims"]
+    assert {m["componentId"] for m in fake_db.doc(f"projects/{cid}")["missing"]} == {"fix_006"}
+
+    # skipping a single box never builds, even the last one (it can still be restored); Continue builds
     client.post(f"/v1/conversations/{cid}/actions", json={"type": "skip_missing", "args": {"componentIds": ["fix_006"]}}, headers=AUTH)
     assert fake_db.doc(f"conversations/{cid}")["stage"] == "resolving_missing"
+    assert fake_db.doc(f"projects/{cid}")["missing"] == []
     client.post(f"/v1/conversations/{cid}/actions", json={"type": "continue"}, headers=AUTH)
     assert fake_db.doc(f"conversations/{cid}")["stage"] == "scene_ready"
     assert fake_db.messages(cid)[-1]["kind"] == "scene_ready"

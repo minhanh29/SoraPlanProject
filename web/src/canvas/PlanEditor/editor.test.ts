@@ -160,3 +160,18 @@ describe("mapping helpers", () => {
     expect(isStretched({ w: 2.6, d: 1, h: 1 }, null)).toBe(false);
   });
 });
+
+describe("box symbol (boxKind)", () => {
+  it("comes from the category, then the parsed type, never the label", async () => {
+    const { boxKind } = await import("./render");
+    // mapped category wins over the parsed type
+    expect(boxKind({ subtype: "unknown", category: null }, "Wardrobe & Storage")).toBe("closet");
+    expect(boxKind({ subtype: "bed", category: null }, "Nightstand")).toBe("closet");
+    // the box's own category (Add box tool)
+    expect(boxKind({ subtype: "unknown", category: "Dining Chair" })).toBe("chair");
+    // parsed type
+    expect(boxKind({ subtype: "bathtub", category: null })).toBe("bath");
+    // nothing known: plain box (a label like "Bed linen closet" is not consulted at all)
+    expect(boxKind({ subtype: "unknown", category: null })).toBe("other");
+  });
+});

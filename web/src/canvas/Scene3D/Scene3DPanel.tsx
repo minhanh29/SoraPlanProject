@@ -10,7 +10,7 @@ import SceneView from "./SceneView";
 import Toolbar from "./Toolbar";
 import ReplacePicker from "./ReplacePicker";
 import AddPicker from "./AddPicker";
-import type { CameraApi } from "./IsoCamera";
+import type { CameraApi, Projection } from "./IsoCamera";
 import type { OverlayImageStatus } from "./PlanOverlay";
 import { freeSpot, pointInPolygon } from "./geometry";
 import { useSceneColors } from "./useSceneColors";
@@ -21,7 +21,8 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
   const assets = useAssetIndex();
   const colors = useSceneColors();
   const cameraRef = useRef<CameraApi | null>(null);
-  const [cutaway, setCutaway] = useState(false);
+  const [cutaway, setCutaway] = useState(true); // walls cut at 1 m so rooms are visible from the start
+  const [projection, setProjection] = useState<Projection>("perspective");
   const [overlay, setOverlay] = useState(false);
   const [imageStatus, setImageStatus] = useState<OverlayImageStatus>("none");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -95,6 +96,7 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
         units={units}
         colors={colors}
         cutaway={cutaway}
+        projection={projection}
         cameraRef={cameraRef}
         selectedId={selectedId}
         onSelect={setSelectedId}
@@ -108,6 +110,7 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
         wallColor={graph.meta.palette.wall}
         floorColor={graph.meta.palette.floor}
         cutaway={cutaway}
+        perspective={projection === "perspective"}
         overlay={overlay}
         canOverlay={!!plan}
         canUndo={scene.canUndo}
@@ -115,6 +118,7 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
         onReset={() => cameraRef.current?.reset()}
         onTop={() => cameraRef.current?.top()}
         onToggleCutaway={() => setCutaway((c) => !c)}
+        onToggleProjection={() => setProjection((p) => (p === "perspective" ? "orthographic" : "perspective"))}
         onToggleOverlay={() => {
           // Validation mode: walls cut low and a top-down view, so the plan is visible under everything
           if (!overlay) {

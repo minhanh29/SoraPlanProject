@@ -110,6 +110,8 @@ class UpdateMappingRequest(BaseSchema):
     asset_id: Optional[str] = None
     apply_to_same_asset: bool = True
     reset: bool = False
+    # Undo a Skip: the box needs a model again (mapping step only)
+    restore: bool = False
 
 
 class MappingResponse(BaseSchema):

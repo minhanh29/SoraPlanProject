@@ -408,7 +408,7 @@ class Workflow:
                 self.conversations.set_busy(ctx.conversation_id, False)
 
     def update_mapping(self, project_id: str, uid: str, component_id: str, dims: Optional[dict], asset_id: Optional[str],
-                       apply_to_same_asset: bool, reset: bool) -> Dict[str, Any]:
+                       apply_to_same_asset: bool, reset: bool, restore: bool = False) -> Dict[str, Any]:
         project = get_owned(self.db, "projects", project_id, uid)
         conv = self.conversations.get(project.get("conversationId") or project_id, uid)
         self._require_stage(conv, ["resolving_missing", "scene_ready"], "change a mapped model")
@@ -418,9 +418,17 @@ class Workflow:
             raise AppException(status_code=404, code="COMPONENT_NOT_FOUND", detail=f"No plan object '{component_id}'")
         entry = dict(entry)
 
+        if restore:
+            # Undo a Skip: back to "needs a model" (only meaningful before the 3D build)
+            self._require_stage(conv, ["resolving_missing"], "restore a skipped item")
+            mapping[component_id] = {**entry, "skipped": False}
+            self._project_ref(project_id).update({"mapping": mapping, "missing": unresolved(mapping), "updatedAt": SERVER_TIMESTAMP})
+            return mapping
+
         if asset_id:
             asset = self.assets.get_readable(asset_id, uid)
-            entry.update({"assetId": asset_id, "category": entry.get("category") or asset.get("category"), "skipped": False,
+            # The chosen model defines what the box is (symbol, height range, seat orientation)
+            entry.update({"assetId": asset_id, "category": asset.get("category") or entry.get("category"), "skipped": False,
                           "dimsSource": "auto"})
             entry = refit_entry(project["floorPlan"], component_id, entry, asset, project.get("mapping"))
             mapping[component_id] = entry

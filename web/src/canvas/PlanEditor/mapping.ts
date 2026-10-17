@@ -38,7 +38,7 @@ export function buildDecorations(
     const asset = entry?.assetId ? assets[entry.assetId] : undefined;
     const state = entryState(entry, asset, missingIds.has(o.id));
     const dims = dimsOverride[o.id] || entry?.dims || null;
-    const dec: Decoration = { kind: state };
+    const dec: Decoration = { kind: state, category: entry?.category ?? o.category ?? null };
     if (state === "matched" || state === "generating") {
       dec.image = asset?.imageUrl ? imageFor(asset.imageUrl) : null;
       dec.progress = asset?.progress || 0;

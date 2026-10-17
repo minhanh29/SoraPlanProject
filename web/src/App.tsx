@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
-import { Toaster, Spinner } from "./components/ui";
+import { ImageViewerHost, Toaster, Spinner } from "./components/ui";
 import Shell from "./layout/Shell";
 import LoginPage from "./pages/LoginPage";
 import ChatView from "./chat/ChatView";
@@ -43,6 +43,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
       <Toaster />
+      <ImageViewerHost />
     </AuthProvider>
   );
 }

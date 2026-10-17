@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, uploadToSignedUrl } from "../lib/api";
-import { Icon, Spinner } from "../components/ui";
+import { Icon, Spinner, ZoomableImage } from "../components/ui";
 
 const ACCEPT = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -11,6 +11,14 @@ function contentTypeOf(file: File): string {
   const ext = file.name.split(".").pop()?.toLowerCase();
   return ext === "pdf" ? "application/pdf" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
 }
+
+/** Default project name from a file name (same rule as backend workflow.title_from_filename). */
+export function titleFromFilename(name: string): string {
+  const stem = (name.split(/[\\/]/).pop() || "").replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+  return stem ? (stem[0].toUpperCase() + stem.slice(1)).slice(0, 80) : "New project";
+}
+
+export const MAX_TITLE = 120;
 
 export function validatePlanFile(file: File): string | null {
   if (!ACCEPT.includes(contentTypeOf(file))) return "Use a PNG, JPEG, WebP or PDF file.";
@@ -23,6 +31,7 @@ export default function EmptyState() {
   const navigate = useNavigate();
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [step, setStep] = useState<null | "creating" | "uploading" | "processing">(null);
@@ -35,6 +44,7 @@ export default function EmptyState() {
     setError(err);
     if (err) return;
     setFile(f);
+    setName(titleFromFilename(f.name));
     setPreview((old) => {
       if (old) URL.revokeObjectURL(old);
       return f.type.startsWith("image/") ? URL.createObjectURL(f) : null;
@@ -87,6 +97,9 @@ export default function EmptyState() {
       setStep("creating");
       const ctype = contentTypeOf(file);
       const res = await api.createConversation({ fileName: file.name, contentType: ctype, sizeBytes: file.size });
+      // The API names new projects after the file; apply the name typed here (renames project + conversation).
+      const title = name.trim();
+      if (title && title !== titleFromFilename(file.name)) await api.updateConversation(res.conversationId, { title });
       setStep("uploading");
       await uploadToSignedUrl(res.signedUploadUrl, file, res.contentType, setProgress);
       setStep("processing");
@@ -117,16 +130,28 @@ export default function EmptyState() {
         ) : (
           <div className="pick card">
             <div className="pick__preview">
-              {preview ? <img src={preview} alt="Selected floor plan" /> : <span className="pick__pdf">PDF</span>}
+              {preview ? <ZoomableImage src={preview} alt="Selected floor plan" /> : <span className="pick__pdf">PDF</span>}
             </div>
             <div className="pick__meta">
-              <strong title={file.name}>{file.name}</strong>
-              <span className="subtle">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
+              <label className="pick__name">
+                <span>Project name</span>
+                <input
+                  className="input"
+                  value={name}
+                  maxLength={MAX_TITLE}
+                  placeholder="e.g. Riverside apartment"
+                  disabled={!!step}
+                  autoFocus
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !step && create()}
+                />
+              </label>
+              <span className="subtle pick__file" title={file.name}>{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span>
               {step === "uploading" && <div className="progress"><span style={{ width: `${progress}%` }} /></div>}
               {step && <span className="subtle">{step === "creating" ? "Creating project…" : step === "uploading" ? `Uploading ${progress}%` : "Preparing the image…"}</span>}
             </div>
             <div className="pick__actions">
-              <button className="btn btn--ghost" disabled={!!step} onClick={() => { setFile(null); setPreview(null); }}>Change</button>
+              <button className="btn btn--ghost" disabled={!!step} onClick={() => { setFile(null); setPreview(null); setName(""); }}>Change file</button>
               <button className="btn btn--primary" disabled={!!step} onClick={create}>
                 {step ? <Spinner /> : <Icon name="plus" size={16} />} Create project
               </button>

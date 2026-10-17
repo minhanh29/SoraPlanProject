@@ -6,7 +6,7 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber"
 import { ContactShadows, Environment, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { Asset, Dims, FloorPlan, ItemInstance, PlanUnits, SceneGraph, SceneOp, Vec3 } from "../../lib/types";
-import IsoCamera, { isPanKeyHeld, type CameraApi } from "./IsoCamera";
+import IsoCamera, { isPanKeyHeld, type CameraApi, type Projection } from "./IsoCamera";
 import Walls from "./Walls";
 import Floors from "./Floors";
 import { ItemView } from "./Items";
@@ -33,6 +33,7 @@ export interface SceneViewProps {
   units: PlanUnits;
   colors: SceneColors;
   cutaway: boolean;
+  projection: Projection;
   cameraRef: MutableRefObject<CameraApi | null>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
@@ -60,33 +61,36 @@ const round = (v: number, step = 0.01) => Math.round(v / step) * step;
 const PAN_STEP_PX = 80;
 
 /**
- * Group placed at the item's top edge *on screen* (highest projected point of its bbox and rotate ring),
- * so an <Html> label inside it, shifted up by its own height, never covers the item.
+ * Group placed at the item's top edge *on screen* (highest projected point of its bbox top and rotate ring),
+ * horizontally centered on the item, so an <Html> label inside it, lifted by its own height, never covers it.
+ * Works in screen space, so it holds for perspective and orthographic cameras alike.
  */
 function AboveItem({ item, children }: { item: ItemInstance; children: ReactNode }) {
   const ref = useRef<THREE.Group>(null);
-  const up = useMemo(() => new THREE.Vector3(), []);
+  const v = useMemo(() => new THREE.Vector3(), []);
   useFrame(({ camera }) => {
     const g = ref.current;
     if (!g) return;
-    up.set(0, 1, 0).applyQuaternion(camera.quaternion); // screen-up in world space (orthographic: linear)
     const { ax, az } = itemAxes(item.rotationY);
     const [px, , pz] = item.position;
     const { w, d, h } = item.dims;
-    const along = (x: number, y: number, z: number) => x * up.x + y * up.y + z * up.z;
-    let top = along(px, 0, pz) + ringRadius(item.dims) * Math.hypot(up.x, up.z);
+    let top = -Infinity;
+    const consider = (x: number, y: number, z: number) => {
+      top = Math.max(top, v.set(x, y, z).project(camera).y);
+    };
     for (const sx of [-1, 1])
-      for (const sz of [-1, 1])
-        top = Math.max(top, along(px + (ax[0] * w * sx + az[0] * d * sz) / 2, h, pz + (ax[1] * w * sx + az[1] * d * sz) / 2));
-    const k = top - along(px, h, pz);
-    g.position.set(px + up.x * k, h + up.y * k, pz + up.z * k);
+      for (const sz of [-1, 1]) consider(px + (ax[0] * w * sx + az[0] * d * sz) / 2, h, pz + (ax[1] * w * sx + az[1] * d * sz) / 2);
+    const r = ringRadius(item.dims);
+    for (let i = 0; i < 16; i++) consider(px + r * Math.cos((i * Math.PI) / 8), 0.02, pz + r * Math.sin((i * Math.PI) / 8));
+    const center = v.set(px, h, pz).project(camera); // NDC of the top center
+    g.position.copy(center.setY(top).unproject(camera));
   });
   return <group ref={ref}>{children}</group>;
 }
 
 function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(() => void) | null> }) {
   const { graph, assets, units, colors, cutaway, cameraRef, apply, undo, redo, onRequestReplace, missedRef } = props;
-  const { selectedId, onSelect: setSelectedId, overlay } = props;
+  const { selectedId, onSelect: setSelectedId, overlay, projection } = props;
   const level = graph.levels[0];
   const { camera, gl } = useThree();
   const controls = useThree((st) => st.controls) as { enabled: boolean } | null;
@@ -415,7 +419,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
   return (
     <>
       <color attach="background" args={[colors.background]} />
-      <IsoCamera ref={cameraRef} bounds={bounds} locked={dragMode !== null} />
+      <IsoCamera ref={cameraRef} bounds={bounds} locked={dragMode !== null} projection={projection} />
       <hemisphereLight args={["#ffffff", "#b9b2a6", 0.75]} />
       <ambientLight intensity={0.25} />
       <primitive object={lightTarget} />
@@ -501,10 +505,8 @@ export default function SceneView(props: SceneViewProps) {
   return (
     <Canvas
       onPointerMissed={() => missedRef.current?.()}
-      orthographic
       shadows="soft"
       dpr={[1, 2]}
-      camera={{ position: [40, 40, 40], zoom: 40, near: 0.1, far: 400 }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, preserveDrawingBuffer: false }}
       onContextMenu={(e) => e.preventDefault()}
       style={{ touchAction: "none" }}

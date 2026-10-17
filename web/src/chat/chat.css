@@ -71,6 +71,7 @@ body.is-resizing iframe, body.is-resizing canvas { pointer-events: none; }
 .card-detail { margin: 8px 0 0; font-size: 13px; color: var(--text-3); }
 .crop-examples { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; max-width: 460px; }
 .crop-examples figure { margin: 0; }
+.crop-examples .zoomable { border-radius: var(--radius-sm); }
 .crop-examples img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); }
 .crop-examples figcaption { font-size: 12px; color: var(--text-3); margin-top: 4px; }
 
@@ -85,18 +86,35 @@ body.is-resizing iframe, body.is-resizing canvas { pointer-events: none; }
 .parse-progress { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
 .parse-progress span { display: block; height: 100%; background: var(--accent); transition: width 0.6s var(--ease); }
 
-.style-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-top: 12px; }
+.style-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
 .style-card {
-  display: flex; flex-direction: column; gap: 4px; padding: 8px; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; overflow: hidden;
   border: 1.5px solid var(--border); border-radius: var(--radius); background: var(--surface);
-  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.style-card:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.style-card:disabled { cursor: default; opacity: 0.7; }
-.style-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); opacity: 1; }
-.style-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; border-radius: 8px; background: var(--surface-2); }
-.style-card__name { font-weight: 600; display: flex; align-items: center; gap: 6px; padding: 2px 2px 0; }
-.style-card__blurb { font-size: 13px; color: var(--text-3); padding: 0 2px 2px; }
+.style-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+.style-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
+.style-card__media { position: relative; display: block; padding: 0; border: none; background: var(--surface-2); cursor: zoom-in; }
+.style-card__media img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; transition: transform 0.3s var(--ease); }
+.style-card__media:hover img { transform: scale(1.03); }
+.style-card__media:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.style-card__zoom {
+  position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 50%; background: var(--surface-glass); color: var(--text); box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(6px); opacity: 0; transition: opacity 0.15s;
+}
+.style-card__media:hover .style-card__zoom, .style-card__media:focus-visible .style-card__zoom { opacity: 1; }
+.style-card__pick {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border: none; background: none; text-align: left; cursor: pointer; color: inherit; font: inherit;
+}
+.style-card__pick:disabled { cursor: default; }
+.style-card__pick:disabled .btn { opacity: 0.6; }
+.style-card.is-selected .style-card__pick:disabled .btn { opacity: 1; }
+.style-card__text { display: grid; gap: 2px; min-width: 0; }
+.style-card__name { font-weight: 600; }
+.style-card__blurb { font-size: 13px; color: var(--text-3); }
+.style-card__pick .btn { flex: none; pointer-events: none; }
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .scene-change { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 14px; min-height: 30px; }
@@ -158,10 +176,13 @@ body.is-resizing iframe, body.is-resizing canvas { pointer-events: none; }
 }
 .pick { display: grid; grid-template-columns: 120px 1fr; gap: 16px; padding: 14px; text-align: left; align-items: center; }
 .pick__preview { width: 120px; height: 90px; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-2); display: grid; place-items: center; }
+.pick__preview .zoomable { height: 100%; }
 .pick__preview img { width: 100%; height: 100%; object-fit: cover; }
 .pick__pdf { font-weight: 700; color: var(--danger); }
 .pick__meta { display: grid; gap: 4px; min-width: 0; }
-.pick__meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick__name { display: grid; gap: 4px; font-size: 13px; font-weight: 500; color: var(--text-2); }
+.pick__name .input { width: 100%; }
+.pick__file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick__actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
 .progress { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
 .progress span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }

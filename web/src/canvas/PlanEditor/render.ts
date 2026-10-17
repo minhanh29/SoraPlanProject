@@ -55,6 +55,8 @@ export function readPalette(): Palette {
 /** Per-box decoration in mapping mode. Footprint sizes are in plan units; rotation in plan degrees. */
 export interface Decoration {
   kind: "matched" | "missing" | "skipped" | "generating" | "failed";
+  /** Catalog category the box was mapped to (drives the box's symbol; the label is display text only). */
+  category?: string | null;
   image?: HTMLImageElement | null;
   footprint?: { w: number; d: number; rotation: number } | null;
   progress?: number;
@@ -237,16 +239,61 @@ function drawWall(ctx: CanvasRenderingContext2D, w: WallObj, st: DrawState) {
   ctx.restore();
 }
 
-function boxKind(o: BoxObj): "closet" | "bed" | "sofa" | "table" | "bath" | "toilet" | "sink" | "other" {
-  const t = `${o.subtype} ${o.category || ""} ${o.name}`.toLowerCase();
-  if (/wardrobe|closet|storage|cabinet|dresser|cupboard/.test(t)) return "closet";
-  if (/\bbeds?\b/.test(t)) return "bed";
-  if (/sofa|couch/.test(t)) return "sofa";
-  if (/bath ?tub|bathtub|\bbath\b/.test(t)) return "bath";
-  if (/toilet|\bwc\b/.test(t)) return "toilet";
-  if (/sink|vanity/.test(t)) return "sink";
-  if (/table|desk|island|counter/.test(t)) return "table";
-  return "other";
+type BoxKind = "closet" | "bed" | "sofa" | "chair" | "table" | "bath" | "toilet" | "sink" | "other";
+
+/** Symbol per catalog category (backend asset_mapper.CATALOG_CATEGORIES). */
+const CATEGORY_KIND: Record<string, BoxKind> = {
+  Sofa: "sofa",
+  Armchair: "sofa",
+  "Coffee Table": "table",
+  "TV Stand": "closet",
+  "Dining Table": "table",
+  "Dining Chair": "chair",
+  "Dining Bench": "chair",
+  Stool: "chair",
+  Bed: "bed",
+  Nightstand: "closet",
+  "Wardrobe & Storage": "closet",
+  "Kitchen Counter": "table",
+  "Kitchen Sink": "sink",
+  "Kitchen Appliance": "other",
+  Appliance: "other",
+  Bathtub: "bath",
+  Toilet: "toilet",
+  "Bathroom Vanity": "sink",
+  Sink: "sink",
+  Lighting: "other",
+  Other: "other",
+};
+
+/** Symbol per parsed furnitureType / fixtureType (used until a category is known). */
+const SUBTYPE_KIND: Record<string, BoxKind> = {
+  bed: "bed",
+  sofa: "sofa",
+  armchair: "sofa",
+  chair: "chair",
+  table: "table",
+  coffee_table: "table",
+  dining_table: "table",
+  desk: "table",
+  kitchen_island: "table",
+  counter: "table",
+  nightstand: "closet",
+  wardrobe: "closet",
+  cabinet: "closet",
+  bathtub: "bath",
+  toilet: "toilet",
+  sink: "sink",
+};
+
+/**
+ * Which symbol to draw: the mapped category, else the box's own category (Add box tool), else the parsed
+ * type. Never the label: it is free text for people ("Bed linen closet" is a closet, not a bed).
+ */
+export function boxKind(o: Pick<BoxObj, "subtype" | "category">, mappedCategory?: string | null): BoxKind {
+  const category = mappedCategory || o.category;
+  if (category && CATEGORY_KIND[category]) return CATEGORY_KIND[category];
+  return SUBTYPE_KIND[(o.subtype || "").toLowerCase()] || "other";
 }
 
 function boxFrame(ctx: CanvasRenderingContext2D, o: BoxObj, st: DrawState) {
@@ -257,10 +304,9 @@ function boxFrame(ctx: CanvasRenderingContext2D, o: BoxObj, st: DrawState) {
   return { w: o.w * k, h: o.h * k };
 }
 
-function drawAccents(ctx: CanvasRenderingContext2D, o: BoxObj, w: number, h: number) {
-  const kind = boxKind(o);
+function drawAccents(ctx: CanvasRenderingContext2D, kind: BoxKind, w: number, h: number, alpha = 1) {
   ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.45;
+  ctx.globalAlpha = 0.45 * alpha;
   if (kind === "closet") {
     const n = 3;
     const vertical = h >= w;
@@ -302,6 +348,13 @@ function drawAccents(ctx: CanvasRenderingContext2D, o: BoxObj, w: number, h: num
     ctx.stroke();
   } else if (kind === "table") {
     ctx.strokeRect(-w / 2 + w * 0.12, -h / 2 + h * 0.12, w * 0.76, h * 0.76);
+  } else if (kind === "chair") {
+    // seat + backrest along the top edge
+    ctx.strokeRect(-w / 2 + w * 0.15, -h / 2 + h * 0.3, w * 0.7, h * 0.6);
+    ctx.beginPath();
+    ctx.moveTo(-w / 2 + w * 0.1, -h / 2 + h * 0.14);
+    ctx.lineTo(w / 2 - w * 0.1, -h / 2 + h * 0.14);
+    ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }
@@ -316,22 +369,28 @@ function label(ctx: CanvasRenderingContext2D, st: DrawState, text: string, w: nu
   ctx.fillText(text, 0, 0, Math.max(20, w - 8));
 }
 
+/** Fill opacity of the selected box, so the reference image underneath stays readable. */
+const SELECTED_FILL_ALPHA = 0.3;
+
 function drawBox(ctx: CanvasRenderingContext2D, o: BoxObj, st: DrawState) {
   const p = st.palette;
   const fixture = o.type === "fixture";
   const fill = fixture ? p.fixture : p.furniture;
   const stroke = fixture ? p.fixtureStroke : p.furnitureStroke;
   const hover = st.hoverId === o.id && st.selectedId !== o.id;
+  const fade = st.selectedId === o.id ? SELECTED_FILL_ALPHA : 1; // see the plan image through the selection
   ctx.save();
   const { w, h } = boxFrame(ctx, o, st);
   ctx.fillStyle = fill;
   ctx.strokeStyle = stroke;
   ctx.lineWidth = hover ? 2 : 1.2;
   rr(ctx, -w / 2, -h / 2, w, h, Math.min(5, Math.min(w, h) / 6));
+  ctx.globalAlpha = fade;
   ctx.fill();
+  ctx.globalAlpha = 1;
   ctx.stroke();
   ctx.strokeStyle = stroke;
-  drawAccents(ctx, o, w, h);
+  drawAccents(ctx, boxKind(o), w, h, fade);
   if (o.addedBy === "user") {
     ctx.fillStyle = p.select;
     ctx.beginPath();
@@ -346,6 +405,7 @@ function drawMappedBox(ctx: CanvasRenderingContext2D, o: BoxObj, st: DrawState) 
   const p = st.palette;
   const dec = st.decorations?.[o.id];
   const k = scaleOf(st.view);
+  const fade = st.selectedId === o.id ? SELECTED_FILL_ALPHA : 1; // see the plan image through the selection
   ctx.save();
   const { w, h } = boxFrame(ctx, o, st);
   const kind = dec?.kind || "missing";
@@ -366,7 +426,7 @@ function drawMappedBox(ctx: CanvasRenderingContext2D, o: BoxObj, st: DrawState) 
   if (kind === "missing" || kind === "failed") {
     const a = 0.35 + 0.65 * st.pulse;
     ctx.fillStyle = p.missing;
-    ctx.globalAlpha = 0.1 + 0.1 * st.pulse;
+    ctx.globalAlpha = (0.1 + 0.1 * st.pulse) * fade;
     rr(ctx, -w / 2, -h / 2, w, h, 5);
     ctx.fill();
     ctx.globalAlpha = a;
@@ -379,9 +439,9 @@ function drawMappedBox(ctx: CanvasRenderingContext2D, o: BoxObj, st: DrawState) 
     return;
   }
 
-  // matched / generating: faint box, thumbnail, real footprint
+  // matched / generating: faint box, category symbol, thumbnail, real footprint
   ctx.fillStyle = p.surface;
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.85 * fade;
   rr(ctx, -w / 2, -h / 2, w, h, 5);
   ctx.fill();
   ctx.globalAlpha = 0.5;
@@ -396,10 +456,14 @@ function drawMappedBox(ctx: CanvasRenderingContext2D, o: BoxObj, st: DrawState) 
     const img = dec.image;
     const s = Math.min((w - 6) / img.naturalWidth, (h - 6) / img.naturalHeight);
     if (s > 0) {
-      ctx.globalAlpha = kind === "generating" ? 0.4 : 0.95;
+      ctx.globalAlpha = (kind === "generating" ? 0.4 : 0.95) * fade;
       ctx.drawImage(img, (-img.naturalWidth * s) / 2, (-img.naturalHeight * s) / 2, img.naturalWidth * s, img.naturalHeight * s);
       ctx.globalAlpha = 1;
     }
+  } else {
+    // no thumbnail yet: the category's symbol
+    ctx.strokeStyle = p.furnitureStroke;
+    drawAccents(ctx, boxKind(o, dec?.category), w, h, fade);
   }
   if (kind === "generating") {
     const fs = Math.max(9, Math.min(12, w / 6));

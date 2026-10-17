@@ -157,7 +157,7 @@ export function Menu({
 type IconName =
   | "plus" | "close" | "dots" | "send" | "stop" | "attach" | "sun" | "moon" | "logout" | "box" | "chat"
   | "menu" | "undo" | "redo" | "trash" | "upload" | "check" | "back" | "search" | "cube" | "rotate"
-  | "fit" | "zoomIn" | "zoomOut" | "lock" | "unlock" | "grid" | "image" | "sidebar" | "swap" | "layers" | "move";
+  | "fit" | "zoomIn" | "zoomOut" | "lock" | "unlock" | "grid" | "image" | "sidebar" | "swap" | "layers" | "move" | "expand";
 
 const PATHS: Record<IconName, string> = {
   plus: "M12 5v14M5 12h14",
@@ -192,6 +192,7 @@ const PATHS: Record<IconName, string> = {
   swap: "M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7",
   layers: "M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5",
   move: "M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3",
+  expand: "M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7",
 };
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
@@ -200,6 +201,49 @@ export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={PATHS[name]} />
     </svg>
+  );
+}
+
+/** Image viewer: call viewImage(src, caption) from anywhere; <ImageViewerHost /> is mounted once in App. */
+type ViewedImage = { src: string; alt: string };
+let showImage: ((img: ViewedImage | null) => void) | null = null;
+export function viewImage(src: string, alt = "") {
+  showImage?.({ src, alt });
+}
+export function ImageViewerHost() {
+  const [img, setImg] = useState<ViewedImage | null>(null);
+  useEffect(() => {
+    showImage = setImg;
+    return () => {
+      showImage = null;
+    };
+  }, []);
+  useEffect(() => {
+    if (!img) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setImg(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [img]);
+  if (!img) return null;
+  return createPortal(
+    <div className="viewer-backdrop" role="dialog" aria-modal="true" aria-label={img.alt || "Image"} onClick={() => setImg(null)}>
+      <button className="icon-btn viewer-backdrop__close" onClick={() => setImg(null)} aria-label="Close">
+        <Icon name="close" />
+      </button>
+      <figure className="viewer-figure" onClick={(e) => e.stopPropagation()}>
+        <img src={img.src} alt={img.alt} />
+        {img.alt && <figcaption>{img.alt}</figcaption>}
+      </figure>
+    </div>,
+    document.body,
+  );
+}
+/** An image that opens in the viewer when clicked. `alt` doubles as the viewer caption. */
+export function ZoomableImage({ src, alt, className, loading }: { src: string; alt: string; className?: string; loading?: "lazy" | "eager" }) {
+  return (
+    <button type="button" className={`zoomable ${className || ""}`} onClick={() => viewImage(src, alt)} aria-label={`View ${alt || "image"} larger`}>
+      <img src={src} alt={alt} loading={loading} />
+    </button>
   );
 }
 

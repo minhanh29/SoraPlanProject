@@ -7,6 +7,8 @@
 #   UPLOAD=1 scripts/optimize_catalog.sh             # also rsync to gs://$CATALOG_BUCKET/assets-web/
 #
 # Target: <= 3 MB per model. Originals stay in assets/{Style}/ (upload with deploy/upload_catalog.sh).
+# Also writes the style preview shown in the chat's style picker: assets/{Style}/{Style}.png (8 MB render)
+# -> catalog/out/assets-web/{Style}/{Style}.webp (1600 px wide, ~150 KB; needs cwebp).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -41,6 +43,19 @@ for style in Industrial Japandi; do
   done
 done
 printf '\n%d models: %s -> %s (%d over 3 MB)\n' "$count" "$(mb "$total_in")" "$(mb "$total_out")" "$over"
+
+# Style previews (styles.json "cover")
+for style in Industrial Japandi; do
+  in_file="$SRC/$style/$style.png"
+  out_file="$OUT/$style/$style.webp"
+  [ -f "$in_file" ] || { echo "No style preview $in_file" >&2; continue; }
+  if [ ! -f "$out_file" ] || [ "${FORCE:-0}" = "1" ]; then
+    command -v cwebp >/dev/null || { echo "cwebp not found (brew install webp); skipping previews" >&2; break; }
+    mkdir -p "$OUT/$style"
+    cwebp -quiet -q 80 -resize 1600 0 "$in_file" -o "$out_file"
+  fi
+  printf '%-28s %10s -> %10s\n' "$style/$style (preview)" "$(mb "$(fsize "$in_file")")" "$(mb "$(fsize "$out_file")")"
+done
 
 if [ "${UPLOAD:-0}" = "1" ]; then
   source "$REPO_ROOT/deploy/config.sh"

@@ -95,7 +95,7 @@ export const api = {
     request<{ floorPlanVersion: number }>("PUT", `/projects/${id}/plan`, { floorPlan }),
   updateMapping: (
     id: string,
-    body: { componentId: string; dims?: Dims | null; assetId?: string | null; applyToSameAsset?: boolean; reset?: boolean },
+    body: { componentId: string; dims?: Dims | null; assetId?: string | null; applyToSameAsset?: boolean; reset?: boolean; restore?: boolean },
   ) => request<{ mapping: Record<string, MappingEntry> }>("PATCH", `/projects/${id}/mapping`, body),
 
   // scene

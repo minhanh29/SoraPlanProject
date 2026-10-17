@@ -55,6 +55,7 @@ interface Props {
   wallColor: string;
   floorColor: string;
   cutaway: boolean;
+  perspective: boolean;
   overlay: boolean;
   /** False when the project has no parsed plan (overlay unavailable). */
   canOverlay: boolean;
@@ -63,6 +64,7 @@ interface Props {
   onReset: () => void;
   onTop: () => void;
   onToggleCutaway: () => void;
+  onToggleProjection: () => void;
   onToggleOverlay: () => void;
   onAdd: () => void;
   onWallColor: (hex: string) => void;
@@ -83,6 +85,14 @@ export default function Toolbar(p: Props) {
         <button className="s3d-tool" onClick={p.onTop} title="Top view">
           <Icon name="grid" />
           <span className="s3d-tool__label">Top</span>
+        </button>
+        <button
+          className="s3d-tool"
+          onClick={p.onToggleProjection}
+          title={p.perspective ? "Switch to orthographic (parallel lines, no depth)" : "Switch to perspective (natural depth)"}
+        >
+          <Icon name="box" />
+          <span className="s3d-tool__label">{p.perspective ? "Perspective" : "Orthographic"}</span>
         </button>
         <button className={`s3d-tool ${p.cutaway ? "is-active" : ""}`} onClick={p.onToggleCutaway} title="Cut walls at 1 m" aria-pressed={p.cutaway}>
           <Icon name="cube" />

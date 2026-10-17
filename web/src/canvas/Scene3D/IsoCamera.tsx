@@ -1,5 +1,10 @@
-// Orthographic isometric camera rig: fits the scene bounds, animates between views
-// (intro top-down → iso, Reset view, Top view, focus on an item) and clamps orbiting to 20°–89.9° elevation.
+// Camera rig: perspective (default, natural depth) or orthographic (parallel lines stay parallel; best for
+// checking the plan overlay). Fits the scene bounds, animates between views (intro top-down → iso,
+// Reset view, Top view, focus on an item) and clamps orbiting to 20°–89.9° elevation.
+//
+// A view is (elevation, azimuth, target, zoom) where zoom = CSS pixels per meter at the target, for both
+// projections: orthographic uses it as camera.zoom, perspective turns it into a camera distance. Switching
+// projection therefore keeps the framing.
 //
 // Navigation (same conventions as Figma / Blender / SketchUp):
 //   orbit  left-drag · Alt + two-finger scroll
@@ -7,7 +12,7 @@
 //   zoom   mouse wheel · pinch
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 
@@ -16,7 +21,10 @@ export const ISO_AZIMUTH = THREE.MathUtils.degToRad(45);
 const MIN_ELEVATION = THREE.MathUtils.degToRad(20);
 const TOP_ELEVATION = THREE.MathUtils.degToRad(89.9); // exactly 90° makes lookAt degenerate
 const MAX_ELEVATION = TOP_ELEVATION;
-const RADIUS = 80;
+const RADIUS = 80; // orthographic camera distance (any value outside the scene works)
+const FOV = 35; // perspective vertical field of view, degrees: natural, little wall lean in top view
+
+export type Projection = "perspective" | "orthographic";
 const ORBIT_PER_PX = 0.006;
 
 /** True while Space is held: left-drag pans instead of grabbing items. */
@@ -72,8 +80,13 @@ const ease = (t: number) => 1 - Math.pow(1 - t, 3);
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-function offset(el: number, az: number): THREE.Vector3 {
-  return new THREE.Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)).multiplyScalar(RADIUS);
+function direction(el: number, az: number): THREE.Vector3 {
+  return new THREE.Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+}
+
+/** Perspective distance at which the target is drawn at `zoom` px per meter. */
+function distanceFor(zoom: number, viewportHeight: number): number {
+  return viewportHeight / (2 * Math.tan(THREE.MathUtils.degToRad(FOV) / 2) * Math.max(zoom, 1e-3));
 }
 
 function shortestAngle(from: number, to: number): number {
@@ -87,22 +100,26 @@ interface Props {
   bounds: Box3Like;
   /** True while a gizmo drag is active (controls disabled). */
   locked: boolean;
+  projection: Projection;
 }
 
-const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, locked }, ref) {
-  const camera = useThree((s) => s.camera) as THREE.OrthographicCamera;
+const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, locked, projection }, ref) {
+  const camera = useThree((s) => s.camera) as THREE.OrthographicCamera | THREE.PerspectiveCamera;
+  const perspective = (camera as THREE.PerspectiveCamera).isPerspectiveCamera === true;
   const size = useThree((s) => s.size);
   const gl = useThree((s) => s.gl);
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const anim = useRef<Anim | null>(null);
   const started = useRef(false);
+  /** Last placed/observed view, re-applied when the projection (camera object) changes. */
+  const lastView = useRef<ViewState | null>(null);
 
   /** Zoom that frames `box` when viewed from (el, az). */
   const fitZoom = useCallback(
     (box: Box3Like, el: number, az: number, margin = 0.82) => {
       const target = new THREE.Vector3().addVectors(box.min, box.max).multiplyScalar(0.5);
       const probe = new THREE.Object3D();
-      probe.position.copy(target).add(offset(el, az));
+      probe.position.copy(target).add(direction(el, az).multiplyScalar(RADIUS));
       probe.up.set(0, 1, 0);
       probe.lookAt(target);
       probe.updateMatrixWorld();
@@ -119,30 +136,34 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
           }
       const w = Math.max(maxX - minX, 0.5);
       const h = Math.max(maxY - minY, 0.5);
-      return { target, zoom: Math.min(size.width / w, size.height / h) * margin };
+      // Perspective draws the near half of the box larger than the target plane: leave more room.
+      return { target, zoom: Math.min(size.width / w, size.height / h) * margin * (perspective ? 0.85 : 1) };
     },
-    [size.width, size.height],
+    [size.width, size.height, perspective],
   );
 
   const current = useCallback((): ViewState => {
     const target = controlsRef.current?.target.clone() ?? new THREE.Vector3();
     const off = camera.position.clone().sub(target);
     const len = Math.max(off.length(), 1e-6);
-    return { el: Math.asin(THREE.MathUtils.clamp(off.y / len, -1, 1)), az: Math.atan2(off.x, off.z), target, zoom: camera.zoom };
-  }, [camera]);
+    const zoom = perspective ? size.height / (2 * Math.tan(THREE.MathUtils.degToRad(FOV) / 2) * len) : camera.zoom;
+    return { el: Math.asin(THREE.MathUtils.clamp(off.y / len, -1, 1)), az: Math.atan2(off.x, off.z), target, zoom };
+  }, [camera, perspective, size.height]);
 
   const place = useCallback(
     (v: ViewState) => {
-      camera.position.copy(v.target).add(offset(v.el, v.az));
+      const dist = perspective ? distanceFor(v.zoom, size.height) : RADIUS;
+      camera.position.copy(v.target).add(direction(v.el, v.az).multiplyScalar(dist));
       camera.up.set(0, 1, 0);
       camera.lookAt(v.target);
-      camera.zoom = v.zoom;
-      camera.near = 0.1;
-      camera.far = RADIUS * 4;
+      camera.zoom = perspective ? 1 : v.zoom;
+      camera.near = perspective ? Math.max(0.05, dist / 400) : 0.1;
+      camera.far = perspective ? dist + 300 : RADIUS * 4;
       camera.updateProjectionMatrix();
       controlsRef.current?.target.copy(v.target);
+      lastView.current = { ...v, target: v.target.clone() };
     },
-    [camera],
+    [camera, perspective, size.height],
   );
 
   const animateTo = useCallback(
@@ -170,13 +191,13 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
       anim.current = null;
       const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
       const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
-      // R3F's orthographic frustum is in pixels / zoom, so one CSS pixel = 1 / zoom world units.
-      const delta = right.multiplyScalar(dxPx / camera.zoom).add(up.multiplyScalar(-dyPx / camera.zoom));
+      const zoom = current().zoom; // px per meter at the target, both projections
+      const delta = right.multiplyScalar(dxPx / zoom).add(up.multiplyScalar(-dyPx / zoom));
       camera.position.add(delta);
       controls.target.add(delta);
       controls.update();
     },
-    [camera],
+    [camera, current],
   );
 
   const orbitBy = useCallback(
@@ -262,6 +283,14 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
     };
   }, [gl]);
 
+  // Projection switched: the new camera takes over the last view (same framing).
+  useEffect(() => {
+    // A running animation (e.g. the intro, while drei's camera replaces R3F's default one) carries on by itself.
+    if (!started.current || !lastView.current || anim.current) return;
+    place(lastView.current);
+    controlsRef.current?.update();
+  }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // First mount: start top-down, then glide to iso (800 ms).
   useEffect(() => {
     if (started.current || size.width === 0) return;
@@ -284,6 +313,7 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
         controls.enabled = !locked;
         controls.minPolarAngle = Math.PI / 2 - MAX_ELEVATION;
       }
+      if (started.current) lastView.current = current(); // follows user orbit/zoom/pan
       return;
     }
     if (controls) {
@@ -309,20 +339,29 @@ const IsoCamera = forwardRef<CameraApi, Props>(function IsoCamera({ bounds, lock
   });
 
   return (
-    <OrbitControls
-      ref={controlsRef}
-      makeDefault
-      enableDamping
-      dampingFactor={0.12}
-      minPolarAngle={Math.PI / 2 - MAX_ELEVATION}
-      maxPolarAngle={Math.PI / 2 - MIN_ELEVATION}
-      minZoom={4}
-      maxZoom={1200}
-      zoomToCursor
-      screenSpacePanning
-      mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }}
-      touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
-    />
+    <>
+      {projection === "perspective" ? (
+        <PerspectiveCamera makeDefault fov={FOV} near={0.1} far={500} position={[30, 30, 30]} />
+      ) : (
+        <OrthographicCamera makeDefault zoom={40} near={0.1} far={RADIUS * 4} position={[40, 40, 40]} />
+      )}
+      <OrbitControls
+        ref={controlsRef}
+        makeDefault
+        enableDamping
+        dampingFactor={0.12}
+        minPolarAngle={Math.PI / 2 - MAX_ELEVATION}
+        maxPolarAngle={Math.PI / 2 - MIN_ELEVATION}
+        minZoom={4}
+        maxZoom={1200}
+        minDistance={0.5}
+        maxDistance={250}
+        zoomToCursor
+        screenSpacePanning
+        mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }}
+        touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+      />
+    </>
   );
 });
 
