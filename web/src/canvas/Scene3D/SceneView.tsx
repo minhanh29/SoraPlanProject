@@ -1,7 +1,8 @@
 // The 3D viewport: isometric camera, lights, floors, walls, items and direct manipulation
 // (select, drag-move on the floor, rotate ring, corner scale, keyboard shortcuts), plus the optional
 // plan overlay used to validate the parse, the realistic render (post-processing, textured floors, glass)
-// and the cinematic tour (camera driven by TourDirector, editing off, full walls, interior ceilings).
+// and the cinematic tour (camera driven by TourDirector, editing off, cutaway walls on the aerial shots, full walls
+// and interior ceilings inside).
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { ContactShadows, Environment, Html } from "@react-three/drei";
@@ -11,7 +12,7 @@ import type { Asset, Dims, FloorPlan, ItemInstance, PlanUnits, SceneGraph, Scene
 import { assetModelUrls } from "../../hooks/useAssets";
 import { loadModel } from "../../three/loadModel";
 import IsoCamera, { isPanKeyHeld, type CameraApi, type Projection } from "./IsoCamera";
-import Walls from "./Walls";
+import Walls, { TourWalls } from "./Walls";
 import Floors from "./Floors";
 import { ItemView } from "./Items";
 import Gizmo, { ringRadius } from "./Gizmo";
@@ -155,7 +156,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
   const { selectedId: rawSelectedId, onSelect: setSelectedId, overlay: rawOverlay, projection, tour } = props;
   const touring = !!tour;
   const realistic = props.realistic || touring;
-  // The tour shows the finished home: no selection, overlays or cutaway
+  // The tour shows the finished home: no selection or overlays; its own walls (TourWalls) ignore the cutaway toggle
   const selectedId = touring ? null : rawSelectedId;
   const overlay = touring ? null : rawOverlay;
   const wallsCut = cutaway && !touring;
@@ -654,13 +655,24 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
       )}
 
       <Floors bounds={graph.meta.bounds} rooms={level?.rooms || []} palette={graph.meta.palette} realistic={realistic} />
-      <Walls
-        walls={level?.walls || []}
-        openings={level?.openings || []}
-        palette={graph.meta.palette}
-        cutHeight={wallsCut ? CUTAWAY_HEIGHT : null}
-        realistic={realistic}
-      />
+      {touring ? (
+        <TourWalls
+          walls={level?.walls || []}
+          openings={level?.openings || []}
+          palette={graph.meta.palette}
+          cutHeight={CUTAWAY_HEIGHT}
+          interiorRef={interiorRef}
+          realistic={realistic}
+        />
+      ) : (
+        <Walls
+          walls={level?.walls || []}
+          openings={level?.openings || []}
+          palette={graph.meta.palette}
+          cutHeight={wallsCut ? CUTAWAY_HEIGHT : null}
+          realistic={realistic}
+        />
+      )}
       <ContactShadows position={[center.x, 0.004, center.z]} scale={extent * 1.6} opacity={0.32} blur={2.2} far={2.5} resolution={1024} />
       {overlay && <PlanOverlay plan={overlay.plan} imageUrl={overlay.imageUrl} color={colors.parsed} onImageStatus={overlay.onImageStatus} />}
 

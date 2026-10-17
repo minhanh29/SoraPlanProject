@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useRef, type MutableRefObject } from "react";
+import { useFrame } from "@react-three/fiber";
+import type * as THREE from "three";
 import type { Palette, SceneOpening, SceneWall } from "../../lib/types";
 import { wallPieces } from "./geometry";
 
@@ -84,3 +86,28 @@ export default function Walls({ walls, openings, palette, cutHeight, realistic =
 }
 
 const EMPTY: SceneOpening[] = [];
+
+/**
+ * Tour walls: the cutaway on aerial shots (the opening and closing views look down into the rooms), full walls on
+ * interior shots. Both stay mounted and are switched per frame from `interiorRef`, like the tour's ceilings, so a
+ * cut needs no React re-render (and the video export, which drives frames itself, gets the same walls).
+ */
+export function TourWalls({ interiorRef, cutHeight, ...props }: Props & { interiorRef: MutableRefObject<boolean>; cutHeight: number }) {
+  const full = useRef<THREE.Group>(null);
+  const cut = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const inside = interiorRef.current;
+    if (full.current) full.current.visible = inside;
+    if (cut.current) cut.current.visible = !inside;
+  });
+  return (
+    <>
+      <group ref={full} visible={false}>
+        <Walls {...props} cutHeight={null} />
+      </group>
+      <group ref={cut}>
+        <Walls {...props} cutHeight={cutHeight} />
+      </group>
+    </>
+  );
+}

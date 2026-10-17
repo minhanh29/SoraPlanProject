@@ -1,6 +1,6 @@
 // Stage "reviewing_plan": edit the parsed plan. Every committed change is saved (debounced PUT /plan);
-// "Looks right" flushes the save and runs the confirm_plan action. A change that puts an object on the same spot
-// as another or on top of it is not committed: the plan snaps back to the last committed state.
+// "Looks right" flushes the save and runs the confirm_plan action. Manual edits may overlap objects for a while
+// (rotate now, resize later): only the automatic parse keeps objects apart.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PanelProps } from "./panelTypes";
 import { CATALOG_CATEGORIES, type FloorPlan } from "../lib/types";
@@ -9,7 +9,7 @@ import { Icon, Spinner, toast } from "../components/ui";
 import PlanCanvas, { type PlanCanvasControls } from "./PlanEditor/PlanEditor";
 import Inspector from "./PlanEditor/Inspector";
 import { LayersMenu, ZoomControls, isTypingTarget } from "./PlanEditor/Toolbar";
-import { buildEditorObjects, cloneObjects, exportFloorPlan, findNewOverlap, fmtPlan, isWall, type EditorObject } from "./PlanEditor/model";
+import { buildEditorObjects, cloneObjects, exportFloorPlan, fmtPlan, isWall, type EditorObject } from "./PlanEditor/model";
 import { DEFAULT_LAYERS, type LayerVisibility } from "./PlanEditor/hitTest";
 import { History } from "./PlanEditor/history";
 import { makeUserBox } from "./PlanEditor/AddBoxTool";
@@ -70,24 +70,14 @@ export default function PlanReviewPanel({ conversation, project, files, onClose 
 
   useEffect(() => () => void flush(), [flush]);
 
-  /** Save a change; false (and the last committed state restored) when it makes two objects overlap. */
   const commit = useCallback(
     (objs: EditorObject[]) => {
-      const prev = historyRef.current.current();
-      const clash = prev && findNewOverlap(prev, objs);
-      if (prev && clash) {
-        setObjects(prev);
-        toast(`Objects can't overlap: “${clash[0].name}” would sit on “${clash[1].name}”.`, "error");
-        force((n) => n + 1);
-        return false;
-      }
       historyRef.current.push(objs);
       dirtyRef.current = objs;
       setSaving("pending");
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
       saveTimer.current = window.setTimeout(() => void flush(), SAVE_DELAY);
       force((n) => n + 1);
-      return true;
     },
     [flush],
   );
@@ -185,7 +175,8 @@ export default function PlanReviewPanel({ conversation, project, files, onClose 
     const box = makeUserBox(addPop.rect, addCategory, addLabel || addCategory);
     const objs = [...cloneObjects(objects), box];
     setObjects(objs);
-    if (commit(objs)) setSelectedId(box.id);
+    commit(objs);
+    setSelectedId(box.id);
     setAddPop(null);
     setAddLabel("");
     setTool("select");

@@ -138,58 +138,6 @@ export function newBoxId(): string {
   return `box_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function corners(b: BoxObj) {
-  const c = boxCenter(b);
-  const r = ((b.rotation || 0) * Math.PI) / 180;
-  const cos = Math.cos(r);
-  const sin = Math.sin(r);
-  return [
-    [-b.w / 2, -b.h / 2],
-    [b.w / 2, -b.h / 2],
-    [b.w / 2, b.h / 2],
-    [-b.w / 2, b.h / 2],
-  ].map(([x, y]) => ({ x: c.x + x * cos - y * sin, y: c.y + x * sin + y * cos }));
-}
-
-/** True when two (rotated) boxes share floor by more than `eps` plan units (touching is fine). Separating axes. */
-export function boxesOverlap(a: BoxObj, b: BoxObj, eps = 0.02): boolean {
-  const ca = corners(a);
-  const cb = corners(b);
-  for (const pts of [ca, cb]) {
-    for (let i = 0; i < 2; i++) {
-      const ax = pts[i + 1].x - pts[i].x;
-      const ay = pts[i + 1].y - pts[i].y;
-      const len = Math.hypot(ax, ay) || 1;
-      const proj = (p: { x: number; y: number }) => (p.x * ax + p.y * ay) / len;
-      const pa = ca.map(proj);
-      const pb = cb.map(proj);
-      if (Math.min(Math.max(...pa), Math.max(...pb)) - Math.max(Math.min(...pa), Math.min(...pb)) <= eps) return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Objects may not sit on the same spot or on top of each other: the first pair where a box added or changed
- * since `prev` overlaps another box, or null. Pairs that already overlapped in `prev` (e.g. an older parse)
- * do not block unrelated edits.
- */
-export function findNewOverlap(prev: EditorObject[], next: EditorObject[]): [BoxObj, BoxObj] | null {
-  const before = new Map(prev.filter(isBox).map((o) => [o.id, o as BoxObj]));
-  const boxes = next.filter(isBox) as BoxObj[];
-  for (const a of boxes) {
-    const old = before.get(a.id);
-    if (old && JSON.stringify(old) === JSON.stringify(a)) continue;
-    for (const b of boxes) {
-      if (b.id === a.id || !boxesOverlap(a, b)) continue;
-      const oldB = before.get(b.id);
-      if (old && oldB && boxesOverlap(old, oldB)) continue;
-      return [a, b];
-    }
-  }
-  return null;
-}
-
 /** Normalize a dragged rectangle (any corner order) into a box. */
 export function rectFromDrag(ax: number, ay: number, bx: number, by: number) {
   return { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) };

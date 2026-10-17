@@ -16,12 +16,6 @@ export class History<T> {
     this.redoStack = [];
   }
 
-  /** The latest committed snapshot. */
-  current(): T | null {
-    const top = this.undoStack[this.undoStack.length - 1];
-    return top ? JSON.parse(top) : null;
-  }
-
   get canUndo() {
     return this.undoStack.length > 1;
   }
