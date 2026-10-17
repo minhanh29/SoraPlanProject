@@ -61,7 +61,7 @@ export default function MappingInspector(props: Props) {
   const { entry, asset, dims, units, lock } = props;
   const auto = entry.autoDims || entry.dims || dims;
   const pct = auto.w > 0 ? Math.round((dims.w / auto.w) * 100) : 100;
-  const stretched = isStretched(dims, asset?.dims || null);
+  const stretched = isStretched(dims, entry.autoDims || asset?.dims || null);
   const display: PlanUnits = units === "ft" ? "ft" : "m";
   const setAx = (axis: keyof Dims) => (v: number) => props.onDims(clampDims(setAxis(dims, axis, v, lock)));
 
@@ -111,7 +111,7 @@ export default function MappingInspector(props: Props) {
         />
       </div>
 
-      {stretched && <div className="map-warn">Stretched — this differs more than 20 % from the model's own proportions.</div>}
+      {stretched && <div className="map-warn">Stretched — this differs more than 20 % from the auto fit's proportions.</div>}
 
       {props.sameAssetCount > 1 && (
         <label className="check" style={{ fontSize: 13 }}>

@@ -1,5 +1,15 @@
 /* Assets page, cards and asset dialogs. Tokens only. */
+/* Fills the shell's main column and owns the scroll (the shell itself never scrolls). */
+.assets-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+/* width: 100% so the page never shrinks to its content (e.g. an empty "Your assets" tab). */
 .assets-page {
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
   padding: 28px 24px 64px;

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from ..errors import AppException
-from .asset_mapper import CATEGORY_HEIGHT_M
+from .asset_mapper import real_dims
 from .common import get_owned
 from .geometry import obb_corners, obb_overlap, point_in_polygon, polygon_centroid
 from .workflow import Ctx, NeedsConfirmation, Workflow
@@ -221,13 +221,7 @@ def _add_item(t: ToolContext, args: Dict[str, Any]) -> ToolResult:
     level = t.level()
     room = next((r for r in level["rooms"] if r["id"] == args.get("roomId")), None)
     near = next((i for i in level["items"] if i["id"] == args.get("near")), None) if args.get("near") else None
-    native = asset.get("dims") or {}
-    cat_h = CATEGORY_HEIGHT_M.get(asset.get("category") or "", 0.8)
-    if native.get("h"):
-        s = cat_h / float(native["h"])
-        dims = {k: round(float(native[k]) * s, 3) for k in ("w", "d", "h")}
-    else:
-        dims = {"w": 0.8, "d": 0.8, "h": cat_h}
+    dims = real_dims(asset, asset.get("category"))
     item = {
         "id": f"itm_ai_{t.workflow.db.collection('scenes').document().id[:8]}",
         "assetId": asset["id"],

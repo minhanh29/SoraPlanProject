@@ -5,6 +5,8 @@ export interface SceneColors {
   background: string;
   select: string;
   danger: string;
+  /** Parsed plan boxes in the validation overlay (the 2D editor's furniture blue). */
+  parsed: string;
 }
 
 function read(): SceneColors {
@@ -12,6 +14,7 @@ function read(): SceneColors {
     background: cssVar("--scene-bg", "#eef1f5"),
     select: cssVar("--plan-select", "#7048e8"),
     danger: cssVar("--danger", "#d6336c"),
+    parsed: cssVar("--plan-furniture-stroke", "#4263eb"),
   };
 }
 

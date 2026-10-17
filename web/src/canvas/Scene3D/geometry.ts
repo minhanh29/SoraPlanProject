@@ -86,6 +86,35 @@ export function overlappingIds<T extends Footprint & { id: string }>(items: T[])
   return out;
 }
 
+/**
+ * Nearest position to `start` (x, z) where `f` overlaps none of `others`, searched on rings of `step` m
+ * (same idea as the backend add_item tool). Falls back to `start`.
+ */
+export function freeSpot(f: Omit<Footprint, "position">, start: [number, number], others: Footprint[], step = 0.15, rings = 25): [number, number] {
+  for (let ring = 0; ring < rings; ring++) {
+    const n = ring === 0 ? 1 : 8 * ring;
+    for (let i = 0; i < n; i++) {
+      const a = (2 * Math.PI * i) / n;
+      const x = snap(start[0] + ring * step * Math.cos(a));
+      const z = snap(start[1] + ring * step * Math.sin(a));
+      const mine = { ...f, position: [x, 0, z] as Vec3 };
+      if (!others.some((o) => footprintsOverlap(mine, o))) return [x, z];
+    }
+  }
+  return start;
+}
+
+/** Even-odd point-in-polygon test on the floor plane. */
+export function pointInPolygon(x: number, z: number, poly: { x: number; z: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (a.z > z !== b.z > z && x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z || 1e-12) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
 /** Half extent of a footprint along a unit direction (nx, nz). */
 function halfExtentAlong(f: Footprint, nx: number, nz: number): number {
   const { ax, az } = itemAxes(f.rotationY);

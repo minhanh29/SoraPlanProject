@@ -95,6 +95,11 @@ export const ItemView = memo(function ItemView({ item, asset, loadModels, accent
         onDoubleClick(item);
       }}
     >
+      {/* Invisible bbox: the whole volume is grabbable, not just the mesh (thin legs, gaps between cushions) */}
+      <mesh position={[0, item.dims.h / 2, 0]}>
+        <boxGeometry args={[item.dims.w + 0.04, item.dims.h, item.dims.d + 0.04]} />
+        <meshBasicMaterial visible={false} />
+      </mesh>
       {model && model !== "error" ? (
         <Model model={model} dims={item.dims} />
       ) : (

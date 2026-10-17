@@ -79,6 +79,20 @@ def nearest_wall_direction(p: Vec2, walls: Iterable[Tuple[Vec2, Vec2]]) -> Optio
     return best
 
 
+def ray_segment_distance(origin: Vec2, direction: Vec2, a: Vec2, b: Vec2) -> Optional[float]:
+    """Distance along the unit ray origin + t·direction (t ≥ 0) to segment ab; None when it misses."""
+    ex, ez = b[0] - a[0], b[1] - a[1]
+    denom = direction[0] * ez - direction[1] * ex
+    if abs(denom) < 1e-12:
+        return None  # parallel
+    ox, oz = a[0] - origin[0], a[1] - origin[1]
+    t = (ox * ez - oz * ex) / denom
+    u = (ox * direction[1] - oz * direction[0]) / denom
+    if t < 0 or u < -1e-9 or u > 1 + 1e-9:
+        return None
+    return t
+
+
 def front_vector(rotation_y: float) -> Vec2:
     """Scene direction (x, z) of a model's local +Z after a yaw of rotation_y (three.js convention)."""
     return (math.sin(rotation_y), math.cos(rotation_y))

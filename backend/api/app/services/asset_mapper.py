@@ -8,34 +8,51 @@ import math
 import re
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-from .geometry import nearest_wall_direction, front_vector, plan_scale, point_in_polygon
+from .geometry import front_vector, nearest_wall_direction, plan_scale, point_in_polygon, ray_segment_distance
 
 logger = logging.getLogger("api.asset_mapper")
 
-# Height (m) used when an asset's own proportions are unknown, and for sizing added items.
-CATEGORY_HEIGHT_M: Dict[str, float] = {
-    "Sofa": 0.85,
-    "Armchair": 0.85,
-    "Coffee Table": 0.45,
-    "TV Stand": 0.55,
-    "Dining Table": 0.75,
-    "Dining Chair": 0.9,
-    "Dining Bench": 0.45,
-    "Stool": 0.65,
-    "Bed": 0.5,
-    "Nightstand": 0.55,
-    "Wardrobe & Storage": 2.0,
-    "Kitchen Counter": 0.9,
-    "Kitchen Sink": 0.9,
-    "Kitchen Appliance": 1.8,
-    "Appliance": 0.85,
-    "Bathtub": 0.55,
-    "Toilet": 0.75,
-    "Bathroom Vanity": 0.85,
-    "Sink": 0.85,
-    "Lighting": 1.6,
-    "Other": 0.8,
+# Plausible real-world height (m) per category: (min, typical, max). Catalog models are only proportions
+# (longest side ~1.9 units), so a fit that lands outside the range is pulled back into it.
+CATEGORY_HEIGHT_RANGE_M: Dict[str, Tuple[float, float, float]] = {
+    "Sofa": (0.7, 0.85, 1.0),
+    "Armchair": (0.7, 0.9, 1.15),
+    "Coffee Table": (0.3, 0.45, 0.55),
+    "TV Stand": (0.35, 0.55, 0.8),
+    "Dining Table": (0.7, 0.75, 0.8),
+    "Dining Chair": (0.75, 0.9, 1.05),
+    "Dining Bench": (0.4, 0.45, 0.55),
+    "Stool": (0.45, 0.65, 0.8),
+    "Bed": (0.45, 0.9, 1.3),
+    "Nightstand": (0.45, 0.55, 0.7),
+    "Wardrobe & Storage": (0.8, 2.0, 2.4),
+    "Kitchen Counter": (0.85, 0.9, 2.3),
+    "Kitchen Sink": (0.85, 0.9, 1.0),
+    "Kitchen Appliance": (0.8, 1.8, 2.0),
+    "Appliance": (0.8, 0.85, 1.1),
+    "Bathtub": (0.4, 0.55, 0.7),
+    "Toilet": (0.65, 0.75, 0.85),
+    "Bathroom Vanity": (0.8, 0.85, 0.95),
+    "Sink": (0.8, 0.85, 1.0),
+    "Lighting": (0.4, 1.6, 2.0),
+    "Other": (0.3, 0.8, 2.4),
 }
+# Typical height (m), used when an asset's own proportions are unknown.
+CATEGORY_HEIGHT_M: Dict[str, float] = {k: v[1] for k, v in CATEGORY_HEIGHT_RANGE_M.items()}
+# A model may stretch this much along one floor axis to fill its plan box (beyond that it stays smaller).
+MAX_FOOTPRINT_STRETCH = 1.2
+# Height correction: first stretch/squash vertically up to this factor, then scale the whole model up to
+# MAX_HEIGHT_UNIFORM (the footprint then exceeds the plan box a little); any rest is left as is.
+MAX_HEIGHT_STRETCH = 1.5
+MAX_HEIGHT_UNIFORM = 1.25
+
+# Seats turn to face a table within this distance (m) instead of turning their back to a wall.
+SEATS = {"Dining Chair", "Stool", "Armchair", "Sofa", "Dining Bench"}
+TABLES = {"Dining Table", "Coffee Table", "Kitchen Counter"}
+SEAT_TABLE_RANGE_M = {"Dining Chair": 1.5, "Stool": 1.5, "Dining Bench": 1.5, "Armchair": 2.5, "Sofa": 2.5}
+# Sofas/armchairs only face a table when nothing is right behind them (they float in the room).
+FLOATING_GAP_M = 0.5
+
 CATALOG_CATEGORIES: List[str] = list(CATEGORY_HEIGHT_M.keys())
 
 BATHROOM_WORDS = re.compile(r"\b(bath|bathroom|wc|toilet|powder|ensuite|en-suite|shower|restroom|lavatory)\b", re.I)
@@ -151,6 +168,102 @@ def _axis_angle(front_axis: str) -> float:
     return {"+z": 0.0, "+x": math.pi / 2, "-z": math.pi, "-x": -math.pi / 2}.get(front_axis or "+z", 0.0)
 
 
+# Typical longest footprint side (m) per category, for items added without a plan box.
+CATEGORY_LENGTH_M: Dict[str, float] = {
+    "Sofa": 2.1, "Armchair": 0.85, "Coffee Table": 1.1, "TV Stand": 1.6, "Dining Table": 1.6,
+    "Dining Chair": 0.5, "Dining Bench": 1.4, "Stool": 0.45, "Bed": 2.1, "Nightstand": 0.5,
+    "Wardrobe & Storage": 1.6, "Kitchen Counter": 2.0, "Kitchen Sink": 1.0, "Kitchen Appliance": 0.75,
+    "Appliance": 0.65, "Bathtub": 1.7, "Toilet": 0.7, "Bathroom Vanity": 0.9, "Sink": 0.6, "Lighting": 0.5,
+    "Other": 0.8,
+}
+
+Neighbor = Tuple[Optional[str], Tuple[float, float]]  # (category, center in meters)
+
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
+def _native(asset: Optional[dict]) -> Optional[Tuple[float, float, float]]:
+    d = (asset or {}).get("dims") or None
+    if not d or min(float(d.get("w") or 0), float(d.get("d") or 0), float(d.get("h") or 0)) <= 0:
+        return None
+    return float(d["w"]), float(d["d"]), float(d["h"])
+
+
+def _fix_height(sx: float, sz: float, sy: float, nh: float, category: Optional[str]) -> Tuple[float, float, float]:
+    """Pull the model height into its category's plausible range: vertical stretch first, then uniform scale."""
+    rng = CATEGORY_HEIGHT_RANGE_M.get(category or "")
+    h = nh * sy
+    if not rng or h <= 0 or rng[0] <= h <= rng[2]:
+        return sx, sz, sy
+    g = (rng[0] if h < rng[0] else rng[2]) / h
+    v = _clamp(g, 1 / MAX_HEIGHT_STRETCH, MAX_HEIGHT_STRETCH)
+    u = _clamp(g / v, 1 / MAX_HEIGHT_UNIFORM, MAX_HEIGHT_UNIFORM)
+    return sx * u, sz * u, sy * v * u
+
+
+def real_dims(asset: Optional[dict], category: Optional[str]) -> Dict[str, float]:
+    """Plausible real-world size (m) of an asset placed without a plan box (e.g. added in 3D)."""
+    cat_h = CATEGORY_HEIGHT_M.get(category or "", 0.8)
+    native = _native(asset)
+    if not native:
+        return {"w": 0.8, "d": 0.8, "h": cat_h}
+    nw, nd, nh = native
+    s = CATEGORY_LENGTH_M.get(category or "", 0.8) / max(nw, nd)
+    sx, sz, sy = _fix_height(s, s, s, nh, category)
+    return {"w": round(nw * sx, 3), "d": round(nd * sz, 3), "h": round(nh * sy, 3)}
+
+
+def _back_gap(center: Tuple[float, float], front: Tuple[float, float], half_depth: float,
+              walls: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]]) -> Optional[float]:
+    """Free space (m) between the item's back face and the first wall behind it; None when no wall is behind."""
+    back = (-front[0], -front[1])
+    hits = [t for a, b in walls if (t := ray_segment_distance(center, back, a, b)) is not None]
+    return min(hits) - half_depth if hits else None
+
+
+def _choose_offset(
+    offsets: Sequence[float],
+    base_rotation_y: float,
+    front_axis: float,
+    box_w: float,
+    box_d: float,
+    center: Tuple[float, float],
+    category: Optional[str],
+    walls: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+    neighbors: Sequence[Neighbor],
+) -> float:
+    """Pick the 90° turn: seats face a nearby table, everything else turns its back to the closest wall behind it."""
+    fronts = []
+    for off in offsets:
+        fx, fz = front_vector(base_rotation_y + off + front_axis)
+        lx, _ = front_vector(off + front_axis)  # front in the box frame: along box x when |lx| ~ 1
+        half = (box_w if abs(lx) > 0.5 else box_d) / 2
+        fronts.append((off, (fx, fz), _back_gap(center, (fx, fz), half, walls)))
+
+    reach = SEAT_TABLE_RANGE_M.get(category or "")
+    if reach and neighbors:
+        tables = [(math.dist(center, p), p) for cat, p in neighbors if cat in TABLES]
+        tables = [t for t in tables if 1e-6 < t[0] <= reach]
+        gaps = [g for _, _, g in fronts if g is not None]
+        floating = category in ("Sofa", "Armchair") and (not gaps or min(gaps) > FLOATING_GAP_M)
+        if tables and (category not in ("Sofa", "Armchair") or floating):
+            dist, (tx, tz) = min(tables)
+            to = ((tx - center[0]) / dist, (tz - center[1]) / dist)
+            return max(fronts, key=lambda f: (f[1][0] * to[0] + f[1][1] * to[1], -abs(f[0])))[0]
+
+    with_wall = [f for f in fronts if f[2] is not None]
+    if with_wall:
+        return min(with_wall, key=lambda f: (round(f[2], 3), abs(f[0])))[0]
+    # No wall behind any option (walls missing): turn away from the nearest wall, as before
+    toward = nearest_wall_direction(center, walls)
+    if not toward:
+        return offsets[0]
+    (wx, wz), _ = toward
+    return max(fronts, key=lambda f: (-(f[1][0] * wx + f[1][1] * wz), -abs(f[0])))[0]
+
+
 def fit_asset(
     box_w: float,
     box_d: float,
@@ -159,18 +272,21 @@ def fit_asset(
     asset: Optional[dict],
     category: Optional[str],
     walls: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
+    neighbors: Sequence[Neighbor] = (),
 ) -> Tuple[Dict[str, float], float]:
-    """Uniform footprint fit of a model into a box (meters), and the extra yaw (multiple of 90°).
+    """Fit a model into a plan box (meters), and the extra yaw (multiple of 90°).
 
-    The yaw keeps the model's long side along the box's long side and turns its back to the nearest wall.
+    The yaw keeps the model's long side along the box's long side; seats face a nearby table, other items turn
+    their back to the wall behind them. The footprint fills the box (each floor axis may stretch up to
+    MAX_FOOTPRINT_STRETCH past a uniform fit) and the height is pulled into the category's plausible range.
     Returns (dims {w, d, h} in the raw model frame, rotation_offset radians).
     """
-    native = (asset or {}).get("dims") or None
     cat_h = CATEGORY_HEIGHT_M.get(category or "", 0.8)
-    if not native or min(native.get("w", 0), native.get("d", 0), native.get("h", 0)) <= 0:
+    native = _native(asset)
+    if not native:
         return {"w": round(box_w, 3), "d": round(box_d, 3), "h": cat_h}, 0.0
 
-    nw, nd, nh = float(native["w"]), float(native["d"]), float(native["h"])
+    nw, nd, nh = native
     box_long_x = box_w >= box_d
     model_long_x = nw >= nd
     near_square = max(nw, nd) / min(nw, nd) < 1.15 or max(box_w, box_d) / max(min(box_w, box_d), 1e-6) < 1.15
@@ -182,24 +298,26 @@ def fit_asset(
         offsets = [math.pi / 2, -math.pi / 2]
 
     front_axis = _axis_angle((asset or {}).get("frontAxis") or "+z")
-    toward_wall = nearest_wall_direction(center, walls)
-    best_offset = offsets[0]
-    if toward_wall:
-        (wx, wz), _ = toward_wall
-        best_score = -2.0
-        for off in offsets:
-            fx, fz = front_vector(base_rotation_y + off + front_axis)
-            score = -(fx * wx + fz * wz)  # facing away from the wall
-            if score > best_score + 1e-6:
-                best_score, best_offset = score, off
+    best_offset = _choose_offset(offsets, base_rotation_y, front_axis, box_w, box_d, center, category, walls, neighbors)
 
     quarter = abs(abs(best_offset) - math.pi / 2) < 1e-6
-    if quarter:
-        s = min(box_w / nd, box_d / nw)
-    else:
-        s = min(box_w / nw, box_d / nd)
-    dims = {"w": round(nw * s, 3), "d": round(nd * s, 3), "h": round(nh * s, 3)}
-    return dims, best_offset
+    ex, ez = (nd, nw) if quarter else (nw, nd)  # native extent along the box's x / z
+    sx, sz = box_w / ex, box_d / ez
+    s = min(sx, sz)  # uniform fit inside the box
+    sx, sz = min(sx, s * MAX_FOOTPRINT_STRETCH), min(sz, s * MAX_FOOTPRINT_STRETCH)
+    sx, sz, sy = _fix_height(sx, sz, math.sqrt(sx * sz), nh, category)
+    w, d = (nw * sz, nd * sx) if quarter else (nw * sx, nd * sz)
+    return {"w": round(w, 3), "d": round(d, 3), "h": round(nh * sy, 3)}, best_offset
+
+
+def _neighbors(plan: dict, k: float, categories: Dict[str, Optional[str]], skip: str) -> List[Neighbor]:
+    out: List[Neighbor] = []
+    for b in plan_boxes(plan):
+        if b["id"] == skip or not categories.get(b["id"]):
+            continue
+        cx, cy = box_center(b)
+        out.append((categories[b["id"]], (cx * k, cy * k)))
+    return out
 
 
 def _aspect_distance(asset: dict, box_w: float, box_d: float) -> float:
@@ -263,6 +381,7 @@ def map_plan(
     if not master_bed_id and len(beds) > 1:
         master_bed_id = max(beds, key=lambda b: float(b["width"]) * float(b["height"]))["id"]
 
+    first_category = {cid: (cats or [None])[0] for cid, cats in categories.items()}
     mapping: Dict[str, dict] = {}
     missing: List[dict] = []
     for b in boxes:
@@ -313,7 +432,8 @@ def map_plan(
             missing.append({"componentId": cid, "label": label, "category": category})
             continue
 
-        auto_dims, offset = fit_asset(box_w, box_d, base_rot, center, asset, category, walls)
+        auto_dims, offset = fit_asset(box_w, box_d, base_rot, center, asset, category, walls,
+                                      _neighbors(plan, k, first_category, cid))
         keep_user = prev.get("dimsSource") == "user" and prev.get("dims") and prev.get("category") == category
         mapping[cid] = {
             "assetId": asset["id"],
@@ -328,8 +448,12 @@ def map_plan(
     return mapping, missing
 
 
-def refit_entry(plan: dict, component_id: str, entry: dict, asset: Optional[dict]) -> dict:
-    """Recompute autoDims/rotation for one entry (after its asset changed or became ready)."""
+def refit_entry(plan: dict, component_id: str, entry: dict, asset: Optional[dict],
+                mapping: Optional[Dict[str, dict]] = None) -> dict:
+    """Recompute autoDims/rotation for one entry (after its asset changed or became ready).
+
+    `mapping` (the project's current mapping) gives the other boxes' categories, so seats can face tables.
+    """
     k = plan_scale(plan)
     box = next((b for b in plan_boxes(plan) if b["id"] == component_id), None)
     if not box:
@@ -347,6 +471,7 @@ def refit_entry(plan: dict, component_id: str, entry: dict, asset: Optional[dict
         asset,
         entry.get("category"),
         walls,
+        _neighbors(plan, k, {cid: e.get("category") for cid, e in (mapping or {}).items()}, component_id),
     )
     out = {**entry, "autoDims": dims, "rotationOffset": offset}
     if entry.get("dimsSource") != "user" or not entry.get("dims"):

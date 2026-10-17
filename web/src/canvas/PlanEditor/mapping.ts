@@ -44,7 +44,8 @@ export function buildDecorations(
       dec.progress = asset?.progress || 0;
       if (dims && state === "matched") {
         dec.footprint = { w: dims.w / k, d: dims.d / k, rotation: footprintRotation(o.rotation, entry?.rotationOffset) };
-        dec.stretched = isStretched(dims, asset?.dims || null);
+        // The auto fit already stretches a little on purpose; flag only edits that go beyond it.
+        dec.stretched = isStretched(dims, entry?.autoDims || asset?.dims || null);
       }
     }
     out[o.id] = dec;
@@ -52,7 +53,7 @@ export function buildDecorations(
   return out;
 }
 
-/** True when any axis deviates more than `tolerance` from the model's native proportions. */
+/** True when any axis deviates more than `tolerance` from the reference proportions (auto fit or native model). */
 export function isStretched(dims: Dims, native: Dims | null, tolerance = 0.2): boolean {
   if (!native || native.w <= 0 || native.d <= 0 || native.h <= 0) return false;
   const s = [dims.w / native.w, dims.d / native.d, dims.h / native.h];

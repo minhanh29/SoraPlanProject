@@ -18,9 +18,12 @@ interface Props {
 
 const HANDLE_PX = 7;
 
+/** Radius of the rotate ring around an item's footprint. */
+export const ringRadius = (dims: { w: number; d: number }) => Math.hypot(dims.w, dims.d) / 2 + 0.18;
+
 export default function Gizmo({ item, color, warnColor, warning, showHandles, onRotateStart, onScaleStart }: Props) {
   const { w, d, h } = item.dims;
-  const radius = Math.hypot(w, d) / 2 + 0.18;
+  const radius = ringRadius(item.dims);
   const handles = useRef<THREE.Group>(null);
   const knob = useRef<THREE.Mesh>(null);
 

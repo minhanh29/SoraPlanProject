@@ -55,10 +55,16 @@ interface Props {
   wallColor: string;
   floorColor: string;
   cutaway: boolean;
+  overlay: boolean;
+  /** False when the project has no parsed plan (overlay unavailable). */
+  canOverlay: boolean;
   canUndo: boolean;
   canRedo: boolean;
   onReset: () => void;
+  onTop: () => void;
   onToggleCutaway: () => void;
+  onToggleOverlay: () => void;
+  onAdd: () => void;
   onWallColor: (hex: string) => void;
   onFloorColor: (hex: string) => void;
   onUndo: () => void;
@@ -74,14 +80,33 @@ export default function Toolbar(p: Props) {
           <Icon name="fit" />
           <span className="s3d-tool__label">Reset view</span>
         </button>
+        <button className="s3d-tool" onClick={p.onTop} title="Top view">
+          <Icon name="grid" />
+          <span className="s3d-tool__label">Top</span>
+        </button>
         <button className={`s3d-tool ${p.cutaway ? "is-active" : ""}`} onClick={p.onToggleCutaway} title="Cut walls at 1 m" aria-pressed={p.cutaway}>
           <Icon name="cube" />
           <span className="s3d-tool__label">{p.cutaway ? "Cutaway" : "Full walls"}</span>
         </button>
+        {p.canOverlay && (
+          <button
+            className={`s3d-tool ${p.overlay ? "is-active" : ""}`}
+            onClick={p.onToggleOverlay}
+            title="Overlay the floor plan and parsed objects on the floor"
+            aria-pressed={p.overlay}
+          >
+            <Icon name="layers" />
+            <span className="s3d-tool__label">Plan overlay</span>
+          </button>
+        )}
         <ColorButton label="Walls" value={p.wallColor} swatches={WALL_SWATCHES} onPick={p.onWallColor} />
         <ColorButton label="Floor" value={p.floorColor} swatches={FLOOR_SWATCHES} onPick={p.onFloorColor} />
       </div>
       <div className="s3d-toolbar__group">
+        <button className="s3d-tool s3d-tool--primary" onClick={p.onAdd} title="Add furniture" aria-label="Add furniture">
+          <Icon name="plus" />
+          <span className="s3d-tool__label">Add</span>
+        </button>
         <button className="icon-btn" onClick={p.onUndo} disabled={!p.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
           <Icon name="undo" />
         </button>

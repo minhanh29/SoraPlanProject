@@ -157,7 +157,7 @@ export function Menu({
 type IconName =
   | "plus" | "close" | "dots" | "send" | "stop" | "attach" | "sun" | "moon" | "logout" | "box" | "chat"
   | "menu" | "undo" | "redo" | "trash" | "upload" | "check" | "back" | "search" | "cube" | "rotate"
-  | "fit" | "zoomIn" | "zoomOut" | "lock" | "unlock" | "grid" | "image" | "sidebar";
+  | "fit" | "zoomIn" | "zoomOut" | "lock" | "unlock" | "grid" | "image" | "sidebar" | "swap" | "layers" | "move";
 
 const PATHS: Record<IconName, string> = {
   plus: "M12 5v14M5 12h14",
@@ -189,6 +189,9 @@ const PATHS: Record<IconName, string> = {
   grid: "M4 4h16v16H4zM4 12h16M12 4v16",
   image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01",
   sidebar: "M4 5h16v14H4zM9 5v14",
+  swap: "M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7",
+  layers: "M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5",
+  move: "M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3",
 };
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {

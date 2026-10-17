@@ -1,18 +1,21 @@
 // The 3D viewport: isometric camera, lights, floors, walls, items and direct manipulation
-// (select, drag-move on the floor, rotate ring, corner scale, keyboard shortcuts).
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
+// (select, drag-move on the floor, rotate ring, corner scale, keyboard shortcuts), plus the optional
+// plan overlay used to validate the parse.
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { ContactShadows, Environment, Html } from "@react-three/drei";
 import * as THREE from "three";
-import type { Asset, Dims, ItemInstance, PlanUnits, SceneGraph, SceneOp, Vec3 } from "../../lib/types";
-import IsoCamera, { type CameraApi } from "./IsoCamera";
+import type { Asset, Dims, FloorPlan, ItemInstance, PlanUnits, SceneGraph, SceneOp, Vec3 } from "../../lib/types";
+import IsoCamera, { isPanKeyHeld, type CameraApi } from "./IsoCamera";
 import Walls from "./Walls";
 import Floors from "./Floors";
 import { ItemView } from "./Items";
-import Gizmo from "./Gizmo";
+import Gizmo, { ringRadius } from "./Gizmo";
+import PlanOverlay, { type OverlayImageStatus } from "./PlanOverlay";
 import SelectionChip from "./SelectionChip";
 import {
   clamp,
+  freeSpot,
   itemAxes,
   nearestWallGap,
   normalizeAngle,
@@ -31,6 +34,10 @@ export interface SceneViewProps {
   colors: SceneColors;
   cutaway: boolean;
   cameraRef: MutableRefObject<CameraApi | null>;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  /** Plan image + parsed boxes drawn on the floor (validation), or null when off. */
+  overlay: { plan: FloorPlan; imageUrl: string | null | undefined; onImageStatus: (s: OverlayImageStatus) => void } | null;
   apply: (ops: SceneOp[], label?: string) => void;
   undo: () => void;
   redo: () => void;
@@ -50,9 +57,36 @@ const isTyping = () => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 };
 const round = (v: number, step = 0.01) => Math.round(v / step) * step;
+const PAN_STEP_PX = 80;
+
+/**
+ * Group placed at the item's top edge *on screen* (highest projected point of its bbox and rotate ring),
+ * so an <Html> label inside it, shifted up by its own height, never covers the item.
+ */
+function AboveItem({ item, children }: { item: ItemInstance; children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  const up = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera }) => {
+    const g = ref.current;
+    if (!g) return;
+    up.set(0, 1, 0).applyQuaternion(camera.quaternion); // screen-up in world space (orthographic: linear)
+    const { ax, az } = itemAxes(item.rotationY);
+    const [px, , pz] = item.position;
+    const { w, d, h } = item.dims;
+    const along = (x: number, y: number, z: number) => x * up.x + y * up.y + z * up.z;
+    let top = along(px, 0, pz) + ringRadius(item.dims) * Math.hypot(up.x, up.z);
+    for (const sx of [-1, 1])
+      for (const sz of [-1, 1])
+        top = Math.max(top, along(px + (ax[0] * w * sx + az[0] * d * sz) / 2, h, pz + (ax[1] * w * sx + az[1] * d * sz) / 2));
+    const k = top - along(px, h, pz);
+    g.position.set(px + up.x * k, h + up.y * k, pz + up.z * k);
+  });
+  return <group ref={ref}>{children}</group>;
+}
 
 function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(() => void) | null> }) {
   const { graph, assets, units, colors, cutaway, cameraRef, apply, undo, redo, onRequestReplace, missedRef } = props;
+  const { selectedId, onSelect: setSelectedId, overlay } = props;
   const level = graph.levels[0];
   const { camera, gl } = useThree();
   const controls = useThree((st) => st.controls) as { enabled: boolean } | null;
@@ -60,7 +94,6 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
   const holdControls = useCallback(() => {
     if (controls) controls.enabled = false;
   }, [controls]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [dragMode, setDragMode] = useState<Drag["mode"] | null>(null);
   const [loadModels, setLoadModels] = useState(false);
@@ -108,7 +141,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
   // Selection disappears when the item does (undo, AI removal).
   useEffect(() => {
     if (selectedId && !level?.items.some((i) => i.id === selectedId)) setSelectedId(null);
-  }, [level?.items, selectedId]);
+  }, [level?.items, selectedId, setSelectedId]);
 
   // ---------------------------------------------------------------- ray helpers
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
@@ -200,7 +233,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
 
   useEffect(() => {
     missedRef.current = () => !drag.current && setSelectedId(null);
-  }, [missedRef]);
+  }, [missedRef, setSelectedId]);
 
   useEffect(() => {
     const up = () => drag.current && endDrag();
@@ -216,7 +249,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
 
   const onItemDown = useCallback(
     (item: ItemInstance, e: ThreeEvent<PointerEvent>) => {
-      if (e.button !== 0) return; // right-drag pans
+      if (e.button !== 0 || isPanKeyHeld()) return; // middle/right-drag and Space+drag pan the view
       e.stopPropagation();
       holdControls();
       setSelectedId(item.id);
@@ -230,7 +263,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
       };
       setDragMode("pending");
     },
-    [hitPlane, holdControls],
+    [hitPlane, holdControls, setSelectedId],
   );
 
   const onRotateStart = useCallback(
@@ -269,7 +302,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
         max: new THREE.Vector3(item.position[0] + r, item.dims.h, item.position[2] + r),
       });
     },
-    [cameraRef],
+    [cameraRef, setSelectedId],
   );
 
   const removeItem = useCallback(
@@ -277,7 +310,24 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
       apply([{ op: "item.remove", id: item.id }], `Delete ${item.label}`);
       setSelectedId(null);
     },
-    [apply],
+    [apply, setSelectedId],
+  );
+
+  const duplicateItem = useCallback(
+    (item: ItemInstance) => {
+      const others = itemsRef.current;
+      const [x, z] = freeSpot(item, [item.position[0] + item.dims.w / 2 + 0.3, item.position[2]], others);
+      const copy: ItemInstance = {
+        ...structuredClone(item),
+        id: `itm_u_${Math.random().toString(36).slice(2, 10)}`,
+        componentId: null,
+        position: [x, item.position[1], z],
+        addedBy: "user",
+      };
+      apply([{ op: "item.add", item: copy }], `Duplicate ${item.label}`);
+      setSelectedId(copy.id);
+    },
+    [apply, setSelectedId],
   );
 
   // ---------------------------------------------------------------- keyboard
@@ -301,7 +351,29 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
         return;
       }
       const item = itemsRef.current.find((i) => i.id === selectedId);
-      if (!item || drag.current) return;
+      if (drag.current) return;
+      if (e.key.toLowerCase() === "f" && !mod) {
+        e.preventDefault();
+        if (item) focusItem(item);
+        else cameraRef.current?.reset();
+        return;
+      }
+      if (!item) {
+        // Nothing selected: arrows pan the view
+        const pan: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+        const dir = pan[e.key];
+        if (dir) {
+          e.preventDefault();
+          const step = e.shiftKey ? PAN_STEP_PX * 3 : PAN_STEP_PX;
+          cameraRef.current?.pan(dir[0] * step, dir[1] * step);
+        }
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        duplicateItem(item);
+        return;
+      }
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         removeItem(item);
@@ -325,7 +397,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, apply, undo, redo, removeItem, camera]);
+  }, [selectedId, setSelectedId, apply, undo, redo, removeItem, duplicateItem, focusItem, cameraRef, camera]);
 
   // ---------------------------------------------------------------- render
   const center = useMemo(() => bounds.min.clone().add(bounds.max).multiplyScalar(0.5), [bounds]);
@@ -370,6 +442,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
       <Floors bounds={graph.meta.bounds} rooms={level?.rooms || []} palette={graph.meta.palette} />
       <Walls walls={level?.walls || []} openings={level?.openings || []} palette={graph.meta.palette} cutHeight={cutaway ? CUTAWAY_HEIGHT : null} />
       <ContactShadows position={[center.x, 0.004, center.z]} scale={extent * 1.6} opacity={0.32} blur={2.2} far={2.5} resolution={1024} />
+      {overlay && <PlanOverlay plan={overlay.plan} imageUrl={overlay.imageUrl} color={colors.parsed} onImageStatus={overlay.onImageStatus} />}
 
       {items.map((it) => (
         <ItemView
@@ -401,18 +474,22 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
             onRotateStart={onRotateStart}
             onScaleStart={onScaleStart}
           />
-          <Html position={[selected.position[0], selected.dims.h + 0.12, selected.position[2]]} center zIndexRange={[30, 10]}>
-            <SelectionChip
-              item={selected}
-              name={selected.label || selectedAsset?.name || "Item"}
-              units={units}
-              warning={selectedWarning}
-              wallGap={wallGap}
-              dragging={dragMode === "move" || dragMode === "rotate" || dragMode === "scale"}
-              onReplace={() => onRequestReplace(selected)}
-              onDelete={() => removeItem(selected)}
-            />
-          </Html>
+          <AboveItem item={selected}>
+            <Html zIndexRange={[30, 10]}>
+              <div className="s3d-anchor">
+                <SelectionChip
+                  item={selected}
+                  name={selected.label || selectedAsset?.name || "Item"}
+                  units={units}
+                  warning={selectedWarning}
+                  wallGap={wallGap}
+                  dragging={dragMode === "move" || dragMode === "rotate" || dragMode === "scale"}
+                  onReplace={() => onRequestReplace(selected)}
+                  onDelete={() => removeItem(selected)}
+                />
+              </div>
+            </Html>
+          </AboveItem>
         </>
       )}
     </>

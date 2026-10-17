@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { footprintsOverlap, nearestWallGap, normalizeAngle, overlappingIds, snap, snapAngle, wallPieces } from "./geometry";
+import { footprintsOverlap, freeSpot, nearestWallGap, normalizeAngle, overlappingIds, pointInPolygon, snap, snapAngle, wallPieces } from "./geometry";
 import type { SceneWall } from "../../lib/types";
 
 const box = (x: number, z: number, w: number, d: number, r = 0) => ({ position: [x, 0, z] as [number, number, number], rotationY: r, dims: { w, d, h: 1 } });
@@ -76,5 +76,20 @@ describe("wall pieces", () => {
     const p = wallPieces(6, 2.7, 0.2, [{ type: "door", offset: 3, width: 1, height: 2.1, sillHeight: 0 }], 1);
     expect(p.every((x) => x.y1 <= 1)).toBe(true);
     expect(p).toHaveLength(2); // lintel is above the cut
+  });
+});
+
+describe("placing new items", () => {
+  it("keeps the start when it is free and moves off an occupied spot", () => {
+    const f = { rotationY: 0, dims: { w: 1, d: 1, h: 1 } };
+    expect(freeSpot(f, [5, 5], [])).toEqual([5, 5]);
+    const spot = freeSpot(f, [0, 0], [box(0, 0, 1, 1)]);
+    expect(footprintsOverlap({ ...f, position: [spot[0], 0, spot[1]] }, box(0, 0, 1, 1))).toBe(false);
+    expect(Math.hypot(spot[0], spot[1])).toBeLessThan(1.3);
+  });
+  it("tests points against room polygons", () => {
+    const sq = [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 3 }, { x: 0, z: 3 }];
+    expect(pointInPolygon(1, 1, sq)).toBe(true);
+    expect(pointInPolygon(5, 1, sq)).toBe(false);
   });
 });

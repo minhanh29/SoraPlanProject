@@ -75,13 +75,29 @@ def test_gemini_classification_fills_unknowns():
     assert [m["componentId"] for m in missing] == ["fix_006"]
 
 
-def test_footprint_fit_is_uniform_and_inside_the_box():
+def test_footprint_fills_the_box_with_bounded_stretch():
     asset = {"dims": {"w": 2.0, "d": 1.0, "h": 0.8}, "frontAxis": "+z"}
+    # box is 3:1, model 2:1 -> long side stretches at most 20% past the uniform fit (d = 1.0 -> w = 2.4)
     dims, off = fit_asset(3.0, 1.0, 0.0, (5, 5), asset, "Sofa", [])
-    assert dims["w"] <= 3.0 + 1e-6 and dims["d"] <= 1.0 + 1e-6
-    assert dims["w"] / dims["d"] == pytest.approx(2.0)
-    assert dims["h"] / dims["d"] == pytest.approx(0.8)
+    assert dims["d"] == pytest.approx(1.0)
+    assert dims["w"] == pytest.approx(2.4)
+    assert dims["w"] <= 3.0 and dims["d"] <= 1.0 + 1e-6
     assert off in (0.0, math.pi)
+    # a box with the model's own proportions is filled exactly
+    dims, _ = fit_asset(2.2, 1.1, 0.0, (5, 5), asset, "Sofa", [])
+    assert (dims["w"], dims["d"]) == (pytest.approx(2.2), pytest.approx(1.1))
+
+
+def test_height_is_pulled_into_the_category_range():
+    # a squat chair model in a small box: footprint fit alone would make it 0.38 m tall
+    chair = {"dims": {"w": 1.6, "d": 1.4, "h": 1.3}, "frontAxis": "+z"}
+    dims, _ = fit_asset(0.46, 0.46, 0.0, (5, 5), chair, "Dining Chair", [])
+    assert 0.75 - 1e-3 <= dims["h"] <= 1.05
+    # a flat bathtub model is stretched up, not left at 0.25 m
+    tub = {"dims": {"w": 1.9, "d": 0.86, "h": 0.32}, "frontAxis": "+z"}
+    dims, _ = fit_asset(1.52, 0.76, 0.0, (5, 5), tub, "Bathtub", [])
+    assert dims["h"] >= 0.4 - 1e-3
+    assert dims["w"] <= 1.52 + 1e-6
 
 
 def test_fit_rotates_to_match_box_orientation_and_faces_away_from_wall():
@@ -92,7 +108,47 @@ def test_fit_rotates_to_match_box_orientation_and_faces_away_from_wall():
     assert abs(abs(off) - math.pi / 2) < 1e-6
     front = (math.sin(off), math.cos(off))
     assert front[0] > 0.9  # faces +x, away from the wall
-    assert dims["w"] == pytest.approx(2.0 * dims["d"] / 0.9)
+    assert dims["d"] == pytest.approx(0.9)
+
+
+def test_back_goes_to_the_wall_behind_not_the_nearest_side_wall():
+    # bed in a corner: the side wall (x = 0) is closer than the head wall (z = 0), but only the head wall
+    # lies along the bed's long axis, so the headboard (-z) goes there.
+    bed = {"dims": {"w": 1.5, "d": 2.0, "h": 0.8}, "frontAxis": "+z"}
+    walls = [((0.0, 0.0), (0.0, 10.0)), ((0.0, 0.0), (10.0, 0.0)), ((0.0, 10.0), (10.0, 10.0))]
+    _, off = fit_asset(1.5, 2.0, 0.0, (0.85, 1.6), bed, "Bed", walls)
+    assert off == 0.0  # front +z, headboard against z = 0
+    _, off = fit_asset(1.5, 2.0, 0.0, (0.85, 8.4), bed, "Bed", walls)
+    assert off == pytest.approx(math.pi)  # same bed at the bottom wall turns around
+
+
+def test_chairs_face_the_table():
+    chair = {"dims": {"w": 0.5, "d": 0.5, "h": 0.9}, "frontAxis": "+z"}
+    walls = [((0.0, 0.0), (10.0, 0.0))]
+    table = [("Dining Table", (5.0, 3.0))]
+    # chair north of the table (smaller z) with a wall right behind the table side: still faces the table
+    _, off = fit_asset(0.46, 0.46, 0.0, (5.0, 2.3), chair, "Dining Chair", walls, table)
+    assert math.cos(off) > 0.9  # front +z, toward the table
+    _, off = fit_asset(0.46, 0.46, 0.0, (5.0, 3.7), chair, "Dining Chair", walls, table)
+    assert math.cos(off) < -0.9  # south chair faces -z
+    _, off = fit_asset(0.46, 0.46, 0.0, (6.0, 3.0), chair, "Dining Chair", walls, table)
+    assert math.sin(off) < -0.9  # east chair faces -x
+
+
+def test_sofa_against_a_wall_ignores_the_coffee_table_behind_it():
+    sofa = {"dims": {"w": 2.0, "d": 0.9, "h": 0.8}, "frontAxis": "+z"}
+    walls = [((0.0, 0.0), (10.0, 0.0))]
+    # coffee table is on the wall side (odd plan); the sofa keeps its back to the wall
+    _, off = fit_asset(2.2, 0.9, 0.0, (5.0, 0.6), sofa, "Sofa", walls, [("Coffee Table", (5.0, 0.2))])
+    assert math.cos(off) > 0.9
+
+
+def test_real_dims_uses_typical_size_and_height():
+    from app.services.asset_mapper import real_dims
+    dims = real_dims({"dims": {"w": 1.9, "d": 0.97, "h": 0.65}}, "Sofa")
+    assert dims["w"] == pytest.approx(2.1)
+    assert 0.7 - 1e-3 <= dims["h"] <= 1.0
+    assert real_dims(None, "Bed") == {"w": 0.8, "d": 0.8, "h": 0.9}
 
 
 def test_user_dims_survive_restyle_for_same_category():

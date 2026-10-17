@@ -341,7 +341,7 @@ class AssetService:
         entry = (project.get("mapping") or {}).get(component_id)
         if not entry or entry.get("assetId") != asset["id"] or not project.get("floorPlan"):
             return
-        entry = refit_entry(project["floorPlan"], component_id, entry, asset)
+        entry = refit_entry(project["floorPlan"], component_id, entry, asset, project.get("mapping"))
         ref.update({f"mapping.{component_id}": entry, "updatedAt": SERVER_TIMESTAMP})
 
         from .scene_ops import SceneService  # local import: avoid a cycle

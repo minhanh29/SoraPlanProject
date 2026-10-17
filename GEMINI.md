@@ -287,9 +287,13 @@ docs/                         target design; 10-chat-refactor-plan.md = what was
 - Plan → scene: `k = 0.3048` for `ft`, `1` for `m`, `10 / max(width, height)` for `normalized`;
   `X = x·k`, `Z = y·k`, `rotationY = -deg2rad(rotation) + rotationOffset`. Same rule in
   `backend/api/app/services/geometry.py` and `web/src/lib/units.ts`.
-- Meshy scales every model so its longest side is ~1.9 units: catalog `dims` are **proportions**, not meters.
-  The mapper fits each model uniformly into its plan box (no distortion) and picks a 90° turn so the long
-  sides match and the back faces the nearest wall. Users can rescale per box during mapping or in 3D.
+- Meshy scales every model so its longest side is ~1.9 units: catalog `dims` are **proportions**, not meters
+  (all catalog models face +Z; checked by measuring which side is taller). The mapper (`fit_asset`) fills each
+  plan box, stretching one floor axis at most 20 % past a uniform fit, then pulls the height into the
+  category's plausible range (`CATEGORY_HEIGHT_RANGE_M`: vertical stretch ≤ 1.5×, then uniform ≤ 1.25×).
+  It picks a 90° turn so the long sides match; seats face a table within reach, everything else turns its
+  back to the first wall behind it. Items added in 3D use `real_dims` (mirrored in `web/src/lib/furniture.ts`).
+  Users can rescale per box during mapping or in 3D. Existing scenes keep their sizes until re-mapped.
 - Logical paths `assets/{Style}/{file}` and `assets-web/{Style}/{file}` map to
   `https://storage.googleapis.com/soraplan-catalog/...`. `assets/{id}` docs store ready-to-use URLs;
   `backend/api/app/data/system_assets.json` is the bundled fallback until Firestore is seeded.
@@ -330,7 +334,8 @@ cd backend/plan_parsing_worker && cp .env.example .env && python -m venv .venv &
 .venv/bin/uvicorn app.main:app --reload --port 8001          # worker
 
 cd web && cp .env.example .env.local && npm install
-npm run dev                                                    # http://localhost:5173
+npm run dev                                                    # http://localhost:5173 → Cloud Run API
+#   (public/config.js); local API: VITE_API_BASE_URL=http://localhost:8000/v1 in web/.env.local
 npm test && npm run typecheck
 ```
 

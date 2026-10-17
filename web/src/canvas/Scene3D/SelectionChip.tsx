@@ -1,5 +1,5 @@
 // Floating chip above the selected item (rendered through drei <Html>, so props only — no app context).
-import { Menu } from "../../components/ui";
+import { Icon } from "../../components/ui";
 import { formatDims, formatLength } from "../../lib/units";
 import type { ItemInstance, PlanUnits } from "../../lib/types";
 
@@ -30,13 +30,12 @@ export default function SelectionChip({ item, name, units, warning, wallGap, dra
         <span>{formatDims(item.dims, units)}</span>
         {warning && <span className="s3d-chip__warn">{warning}</span>}
       </div>
-      <Menu
-        label="Item actions"
-        items={[
-          { label: "Replace…", onClick: onReplace },
-          { label: "Delete", onClick: onDelete, danger: true },
-        ]}
-      />
+      <button className="icon-btn s3d-chip__btn" onClick={onReplace} title="Replace model" aria-label="Replace model">
+        <Icon name="swap" size={16} />
+      </button>
+      <button className="icon-btn s3d-chip__btn s3d-chip__btn--danger" onClick={onDelete} title="Delete (Del)" aria-label="Delete item">
+        <Icon name="trash" size={16} />
+      </button>
     </div>
   );
 }

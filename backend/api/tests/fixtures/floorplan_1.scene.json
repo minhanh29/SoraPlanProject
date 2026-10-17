@@ -13,8 +13,8 @@
      "componentId": "fur_001",
      "dims": {
       "d": 2.134,
-      "h": 0.873,
-      "w": 1.919
+      "h": 0.887,
+      "w": 1.981
      },
      "id": "itm_fur_001",
      "label": "Master Bed",
@@ -34,8 +34,8 @@
      "componentId": "fur_002",
      "dims": {
       "d": 0.914,
-      "h": 0.638,
-      "w": 2.069
+      "h": 0.7,
+      "w": 2.286
      },
      "id": "itm_fur_002",
      "label": "Sofa",
@@ -54,8 +54,8 @@
      "category": "Wardrobe & Storage",
      "componentId": "fur_003",
      "dims": {
-      "d": 0.513,
-      "h": 2.034,
+      "d": 0.616,
+      "h": 2.228,
       "w": 1.707
      },
      "id": "itm_fur_003",
@@ -75,8 +75,8 @@
      "category": "Coffee Table",
      "componentId": "fur_004",
      "dims": {
-      "d": 0.738,
-      "h": 0.617,
+      "d": 0.762,
+      "h": 0.55,
       "w": 1.219
      },
      "id": "itm_fur_004",
@@ -96,8 +96,8 @@
      "category": "Dining Table",
      "componentId": "fur_005",
      "dims": {
-      "d": 0.773,
-      "h": 0.601,
+      "d": 0.914,
+      "h": 0.7,
       "w": 1.524
      },
      "id": "itm_fur_005",
@@ -117,8 +117,8 @@
      "category": "Dining Chair",
      "componentId": "fur_006",
      "dims": {
-      "d": 0.434,
-      "h": 0.663,
+      "d": 0.457,
+      "h": 0.75,
       "w": 0.457
      },
      "id": "itm_fur_006",
@@ -138,8 +138,8 @@
      "category": "Dining Chair",
      "componentId": "fur_007",
      "dims": {
-      "d": 0.434,
-      "h": 0.663,
+      "d": 0.457,
+      "h": 0.75,
       "w": 0.457
      },
      "id": "itm_fur_007",
@@ -160,8 +160,8 @@
      "componentId": "fur_009",
      "dims": {
       "d": 0.457,
-      "h": 0.343,
-      "w": 0.444
+      "h": 0.45,
+      "w": 0.457
      },
      "id": "itm_fur_009",
      "label": "Nightstand",
@@ -180,8 +180,8 @@
      "category": "Bathtub",
      "componentId": "fix_001",
      "dims": {
-      "d": 0.673,
-      "h": 0.271,
+      "d": 0.762,
+      "h": 0.4,
       "w": 1.524
      },
      "id": "itm_fix_001",
@@ -202,8 +202,8 @@
      "componentId": "fix_002",
      "dims": {
       "d": 0.732,
-      "h": 0.635,
-      "w": 0.426
+      "h": 0.679,
+      "w": 0.488
      },
      "id": "itm_fix_002",
      "label": "Toilet",
@@ -222,9 +222,9 @@
      "category": "Sink",
      "componentId": "fix_003",
      "dims": {
-      "d": 0.196,
-      "h": 0.271,
-      "w": 0.61
+      "d": 0.294,
+      "h": 0.557,
+      "w": 0.762
      },
      "id": "itm_fix_003",
      "label": "Sink",
@@ -243,9 +243,9 @@
      "category": "Kitchen Sink",
      "componentId": "fix_004",
      "dims": {
-      "d": 0.314,
-      "h": 0.293,
-      "w": 0.914
+      "d": 0.471,
+      "h": 0.601,
+      "w": 1.143
      },
      "id": "itm_fix_004",
      "label": "Kitchen sink",
@@ -265,8 +265,8 @@
      "componentId": "fix_005",
      "dims": {
       "d": 0.762,
-      "h": 1.72,
-      "w": 0.597
+      "h": 1.884,
+      "w": 0.716
      },
      "id": "itm_fix_005",
      "label": "Fridge",

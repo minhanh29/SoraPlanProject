@@ -422,7 +422,7 @@ class Workflow:
             asset = self.assets.get_readable(asset_id, uid)
             entry.update({"assetId": asset_id, "category": entry.get("category") or asset.get("category"), "skipped": False,
                           "dimsSource": "auto"})
-            entry = refit_entry(project["floorPlan"], component_id, entry, asset)
+            entry = refit_entry(project["floorPlan"], component_id, entry, asset, project.get("mapping"))
             mapping[component_id] = entry
             missing = [m for m in project.get("missing") or [] if m.get("componentId") != component_id]
             self._project_ref(project_id).update({"mapping": mapping, "missing": missing, "updatedAt": SERVER_TIMESTAMP})
