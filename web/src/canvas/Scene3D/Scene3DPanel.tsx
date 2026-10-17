@@ -10,7 +10,7 @@ import { useScene } from "../../hooks/useScene";
 import { useAssetIndex } from "../../hooks/useAssets";
 import { realDims } from "../../lib/furniture";
 import { cssVar } from "../../lib/theme";
-import SceneView, { type TourSetup } from "./SceneView";
+import SceneView, { type SnapshotApi, type TourSetup } from "./SceneView";
 import Toolbar from "./Toolbar";
 import ReplacePicker from "./ReplacePicker";
 import AddPicker from "./AddPicker";
@@ -86,7 +86,7 @@ const nextFrames = (n: number) =>
     step(n);
   });
 
-export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
+export default function Scene3DPanel({ conversation, project, files, onClose }: PanelProps) {
   const scene = useScene(project.id);
   const assets = useAssetIndex();
   const colors = useSceneColors();
@@ -110,6 +110,30 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
   const overlayApi = useRef<TourOverlayApi | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // ---------------------------------------------------------------- sidebar picture
+  // Until the home is built the sidebar shows the plan. Once it is (or after a rebuild), this view is sent as the
+  // layout reference and the API has Gemini paint a realistic photo of the home from it.
+  const snapshotRef = useRef<SnapshotApi | null>(null);
+  const snapshotting = useRef(false);
+  const needsThumb = conversation.thumbnailKind !== "scene" || !!conversation.thumbnailStale;
+  const hasGraph = !!graph;
+  useEffect(() => {
+    if (!needsThumb || !hasGraph || touring || selectedId) return;
+    const t = window.setTimeout(async () => {
+      const snap = snapshotRef.current;
+      if (!snap || snapshotting.current) return;
+      snapshotting.current = true;
+      try {
+        await api.saveSceneThumbnail(project.id, await snap.capture(768));
+      } catch {
+        /* keep the plan thumbnail; the next visit tries again */
+      } finally {
+        snapshotting.current = false;
+      }
+    }, 2500);
+    return () => window.clearTimeout(t);
+  }, [needsThumb, hasGraph, touring, selectedId, project.id]);
 
   const style = graph?.meta.style;
   const [tourPlan, setTourPlan] = useState<Tour | null>(null);
@@ -356,6 +380,7 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
           tour={tourSetup}
           renderDpr={exportState?.dpr}
           frameloop={exportState ? "never" : "always"}
+          snapshotRef={snapshotRef}
         />
         {touring && <TourOverlay ref={overlayApi} />}
       </div>

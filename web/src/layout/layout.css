@@ -1,5 +1,5 @@
-.shell { display: flex; height: 100dvh; overflow: hidden; }
-.shell__main { position: relative; flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; }
+.shell { position: relative; display: flex; height: 100dvh; overflow: hidden; }
+.shell__main { position: relative; z-index: 1; flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; }
 .shell__menu { display: none; position: absolute; top: 10px; left: 10px; z-index: 30; background: var(--surface-glass); backdrop-filter: blur(8px); }
 .shell__scrim { display: none; }
 
@@ -10,9 +10,12 @@
   flex-direction: column;
   gap: 4px;
   padding: 12px;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  transition: width 0.2s var(--ease);
+  position: relative;
+  background: var(--glass-strong);
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  border-right: 1px solid var(--glass-line);
+  transition: width 0.2s var(--ease), background-color var(--fade);
   z-index: 40;
 }
 .sidebar.is-collapsed { width: var(--sidebar-w-collapsed); align-items: center; padding: 12px 8px; }
@@ -27,12 +30,12 @@
   border: none; background: none; color: var(--text-2); cursor: pointer; text-decoration: none; font-size: 14px; width: 100%;
 }
 .sidebar.is-collapsed .side-btn { width: 40px; justify-content: center; padding: 0; }
-.side-btn:hover { background: var(--surface-2); color: var(--text); }
+.side-btn:hover { background: var(--accent-soft); color: var(--text); }
 .side-btn.is-active { background: var(--accent-soft); color: var(--accent); }
-.sidebar__label { margin: 14px 10px 4px; font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.sidebar__label { margin: 16px 10px 4px; font-size: 12px; font-weight: 600; color: var(--text-3); }
 .sidebar__projects { flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
 .sidebar__spacer { flex: 1; }
-.sidebar__foot { border-top: 1px solid var(--border); padding-top: 8px; display: grid; gap: 4px; width: 100%; }
+.sidebar__foot { border-top: 1px solid var(--glass-line); padding-top: 8px; display: grid; gap: 4px; width: 100%; }
 .sidebar__user { display: flex; align-items: center; gap: 10px; padding: 4px 4px 0 6px; min-width: 0; }
 .sidebar.is-collapsed .sidebar__user { flex-direction: column; padding: 4px 0 0; }
 .sidebar__name { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -40,10 +43,16 @@
 
 .proj-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
 .proj-row { position: relative; border-radius: var(--radius-sm); }
-.proj-row:hover, .proj-row:focus-within { background: var(--surface-2); }
+/* The row whose menu is open sits above the rows below it, so its dropdown is never covered */
+.proj-row:has(.menu__list) { z-index: 5; }
+.proj-row:hover, .proj-row:focus-within { background: var(--accent-soft); }
 .proj-row__link { display: flex; align-items: center; gap: 10px; padding: 7px 34px 7px 8px; text-decoration: none; color: var(--text); border-radius: var(--radius-sm); }
 .proj-row__link.active { background: var(--accent-soft); }
-.proj-row__thumb { width: 24px; height: 24px; flex: none; border-radius: 6px; overflow: hidden; background: var(--surface-sunken); display: grid; place-items: center; color: var(--text-3); }
+.proj-row__thumb { width: 24px; height: 24px; flex: none; border-radius: 5px; transition: box-shadow 0.2s; overflow: hidden; background: var(--surface-sunken); display: grid; place-items: center; color: var(--text-3); }
+/* The uploaded plan is a white sheet: a frame sets it off from the glass. The 3D snapshot needs none. */
+.proj-row__thumb.is-plan { background: #fff; border: 1px solid var(--border-strong); padding: 1px; }
+.proj-row__thumb.is-plan img { border-radius: 3px; }
+.proj-row__link.active .proj-row__thumb { box-shadow: 0 0 0 2px var(--lamp); }
 .proj-row__thumb img { width: 100%; height: 100%; object-fit: cover; }
 .proj-row__title { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj-row__time { font-size: 12px; color: var(--text-3); flex: none; }
@@ -53,13 +62,14 @@
 .proj-row__menu .icon-btn { width: 28px; height: 28px; }
 .proj-row__rename { height: 34px; margin: 2px 0; }
 .proj-row--skeleton { height: 36px; margin: 2px 0; background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-sunken) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
-.proj-empty { padding: 8px 10px; }
-.dot-pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse-dot 1.2s infinite; }
+.proj-empty { display: grid; justify-items: start; gap: 6px; padding: 8px 10px; }
+.proj-empty img { width: 88px; height: auto; margin-left: -6px; }
+.dot-pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--lamp); animation: pulse-dot 1.2s infinite; }
 @keyframes pulse-dot { 50% { opacity: 0.3; } }
 
 @media (max-width: 899px) {
-  .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-100%); transition: transform 0.22s var(--ease); width: min(var(--sidebar-w), 86vw); box-shadow: var(--shadow-lg); }
+  .sidebar { position: fixed; inset: 0 auto 0 0; background: var(--surface); transform: translateX(-100%); transition: transform 0.22s var(--ease); width: min(var(--sidebar-w), 86vw); box-shadow: var(--shadow-lg); }
   .shell--drawer .sidebar { transform: none; }
-  .shell--drawer .shell__scrim { display: block; position: fixed; inset: 0; background: rgba(10, 12, 16, 0.4); z-index: 35; }
+  .shell--drawer .shell__scrim { display: block; position: fixed; inset: 0; background: rgba(13, 22, 38, 0.42); z-index: 35; }
   .shell__menu { display: inline-grid; }
 }

@@ -44,7 +44,7 @@ function Row({ c, onNavigate }: { c: Conversation; onNavigate: () => void }) {
         />
       ) : (
         <NavLink to={`/p/${c.id}`} className="proj-row__link" onClick={onNavigate} title={c.title}>
-          <span className="proj-row__thumb">
+          <span className={`proj-row__thumb ${c.thumbnailKind === "scene" ? "is-scene" : "is-plan"}`}>
             {c.thumbnailUrl ? <img src={c.thumbnailUrl} alt="" loading="lazy" /> : <Icon name="grid" size={14} />}
           </span>
           <span className="proj-row__title">{c.title}</span>
@@ -81,7 +81,13 @@ export default function ProjectList({ onNavigate }: { onNavigate: () => void }) 
         {[0, 1, 2].map((i) => <li key={i} className="proj-row proj-row--skeleton" />)}
       </ul>
     );
-  if (!convs.length) return <p className="proj-empty subtle">Your projects will show up here.</p>;
+  if (!convs.length)
+    return (
+      <div className="proj-empty subtle">
+        <img src="/art/obj-plans.webp" alt="" width={88} height={88} />
+        Your projects will show up here.
+      </div>
+    );
   return (
     <ul className="proj-list">
       {convs.map((c) => <Row key={c.id} c={c} onNavigate={onNavigate} />)}

@@ -90,6 +90,16 @@ class ProjectFilesResponse(BaseSchema):
     plan_url: Optional[str] = None
 
 
+class SceneThumbnailRequest(BaseSchema):
+    """Snapshot of the finished 3D scene, rendered in the browser (base64 JPEG/PNG, no data: prefix)."""
+
+    image: str = Field(..., min_length=16, max_length=2_000_000)
+
+
+class SceneThumbnailResponse(BaseSchema):
+    thumbnail_url: str
+
+
 class SavePlanRequest(BaseSchema):
     floor_plan: Dict[str, Any]
 

@@ -1,14 +1,15 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithPopup,
   updateProfile,
 } from "firebase/auth";
-import { auth, googleProvider } from "../lib/firebase";
+import { auth } from "../lib/firebase";
 import { config } from "../lib/config";
 import { useAuth } from "../hooks/useAuth";
+import { setTheme, useTheme } from "../lib/theme";
+import { Icon } from "../components/ui";
 import { Spinner } from "../components/ui";
 import "./login.css";
 
@@ -19,7 +20,6 @@ const MESSAGES: Record<string, string> = {
   "auth/email-already-in-use": "An account with this email already exists. Sign in instead.",
   "auth/weak-password": "Use at least 6 characters.",
   "auth/invalid-email": "That email doesn't look right.",
-  "auth/popup-closed-by-user": "The Google window was closed.",
   "auth/too-many-requests": "Too many attempts. Try again in a minute.",
   "auth/invalid-api-key": "Firebase is not configured (missing web API key).",
 };
@@ -33,6 +33,10 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dusk = useTheme() === "dark";
+  // Each hour's photo loads the first time it is shown
+  const [shown, setShown] = useState({ day: !dusk, dusk });
+  useEffect(() => setShown((s) => (dusk ? { ...s, dusk: true } : { ...s, day: true })), [dusk]);
 
   if (!loading && user) return <Navigate to={(location.state as any)?.from || "/"} replace />;
 
@@ -55,40 +59,50 @@ export default function LoginPage() {
     }
   };
 
-  const google = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
-      fail(err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <div className="login">
-      <div className="login__card card">
-        <div className="login__brand">
-          <img src="/favicon.svg" alt="" width={36} height={36} />
-          <div>
-            <h1>SoraPlan</h1>
-            <p className="subtle">From a floor-plan sketch to a real-scale 3D home.</p>
+    <div className={`login ${dusk ? "login--dusk" : "login--day"}`}>
+      {/* Day: the drawing is wiped into the photo on load. Switching theme crossfades the sky between the two
+          hours of the same frame. */}
+      <div className="login__scene" aria-hidden="true">
+        {shown.day && (
+          <div className={`login__hour ${dusk ? "" : "is-on"}`}>
+            <img className="login__photo" src="/art/hero-day.webp" alt="" />
+            <img className="login__photo login__sketch" src="/art/hero-sketch.webp" alt="" />
           </div>
+        )}
+        {shown.dusk && (
+          <div className={`login__hour ${dusk ? "is-on" : ""}`}>
+            <img className="login__photo" src="/art/hero-dusk.webp" alt="" />
+          </div>
+        )}
+      </div>
+      <div className="login__cols" aria-hidden="true"><span /><span /><span /><span /></div>
+
+      <div className="login__brand">
+        <img src="/favicon.svg" alt="" width={28} height={28} />
+        <span>SoraPlan</span>
+      </div>
+      <h1 className="login__headline display" aria-label="From sketch to a home at scale">
+        <span><b>From sketch</b></span>
+        <span><b>to a home</b></span>
+        <span><b>at scale</b></span>
+      </h1>
+
+      <div className="login__panel ink" aria-hidden="true">
+        <img className="login__plan" src="/art/line-plan.webp" alt="" />
+        <div>
+          <small>Sora plan</small>
+          <strong className="display login__area">86 m²</strong>
+          <span>2 bedrooms, 1 bath</span>
         </div>
+      </div>
+      <button type="button" className="login__theme" onClick={() => setTheme(dusk ? "light" : "dark")}>
+        <Icon name={dusk ? "sun" : "moon"} size={16} />
+        {dusk ? "Light theme" : "Dark theme"}
+      </button>
 
-        <button className="btn btn--block login__google" onClick={google} disabled={busy}>
-          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-            <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
-            <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
-            <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
-            <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
-          </svg>
-          Continue with Google
-        </button>
-
-        <div className="login__or"><span>or</span></div>
+      <div className="login__card">
+        <h2 className="login__title">{mode === "signin" ? "Sign in" : "Create your account"}</h2>
 
         <form onSubmit={submit}>
           {mode === "signup" && (

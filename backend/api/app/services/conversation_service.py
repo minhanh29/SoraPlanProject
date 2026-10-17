@@ -56,6 +56,10 @@ class ConversationService:
         fields["updatedAt"] = SERVER_TIMESTAMP
         self._ref(conversation_id).update(fields)
 
+    def set_thumbnail(self, conversation_id: str, **fields: Any) -> None:
+        """Thumbnail fields only: leaves updatedAt alone so the sidebar order does not change."""
+        self._ref(conversation_id).update(fields)
+
     def set_stage(self, conversation_id: str, stage: str, **extra: Any) -> None:
         logger.info("Conversation %s → stage %s", conversation_id, stage)
         self.update(conversation_id, stage=stage, **extra)

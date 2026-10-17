@@ -8,6 +8,8 @@ from ..models.conversation import (
     ProjectFilesResponse,
     SavePlanRequest,
     SavePlanResponse,
+    SceneThumbnailRequest,
+    SceneThumbnailResponse,
     TourPlanRequest,
     TourPlanResponse,
     UpdateMappingRequest,
@@ -25,6 +27,17 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 @router.get("/{project_id}/files", response_model=ProjectFilesResponse, summary="Fresh signed URLs of the plan images")
 def project_files(project_id: str, user: UserProfile = Depends(get_current_user), workflow: Workflow = Depends(get_workflow)):
     return workflow.files(project_id, user.uid)
+
+
+@router.post("/{project_id}/thumbnail", response_model=SceneThumbnailResponse,
+             summary="Replace the sidebar thumbnail with a snapshot of the finished 3D scene")
+def save_scene_thumbnail(
+    project_id: str,
+    body: SceneThumbnailRequest,
+    user: UserProfile = Depends(get_current_user),
+    workflow: Workflow = Depends(get_workflow),
+):
+    return {"thumbnailUrl": workflow.save_scene_thumbnail(project_id, user.uid, body.image)}
 
 
 @router.put("/{project_id}/plan", response_model=SavePlanResponse, summary="Save the edited 2D plan")

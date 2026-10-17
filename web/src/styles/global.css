@@ -18,6 +18,7 @@ body {
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+  transition: background-color var(--fade), color var(--fade);
 }
 button,
 input,
@@ -32,7 +33,22 @@ a {
 h1, h2, h3 {
   margin: 0;
   line-height: 1.25;
+  text-wrap: balance;
 }
+/* Condensed headline: one per immersive screen (login, new project, empty states) */
+.display {
+  font-family: var(--display);
+  font-stretch: 62%;
+  font-weight: 800;
+  text-transform: uppercase;
+  line-height: 0.88;
+  letter-spacing: 0.005em;
+}
+/* Art that exists per theme: day for light, dusk for dark */
+:root[data-theme="dark"] .only-light,
+:root:not([data-theme="dark"]) .only-dark { display: none !important; }
+/* White line art (public/art/line-*.webp) reads as ink on light grounds */
+.line-art { filter: var(--line-art); }
 .muted { color: var(--text-2); }
 .subtle { color: var(--text-3); font-size: 13px; }
 .mono { font-family: var(--mono); font-size: 12px; }
@@ -145,7 +161,7 @@ h1, h2, h3 {
 /* ---------- dialog ---------- */
 .dialog-backdrop {
   position: fixed; inset: 0; z-index: 100;
-  background: rgba(10, 12, 16, 0.42);
+  background: rgba(13, 22, 38, 0.46);
   display: grid; place-items: center; padding: 16px;
   animation: fade-in 0.15s var(--ease);
 }
@@ -189,6 +205,12 @@ h1, h2, h3 {
 }
 .toast--error { background: var(--danger); color: #fff; }
 .toast--success { background: var(--success); color: #fff; }
+
+/* ---------- backdrop (Backdrop.tsx): full-bleed photo behind the shell ---------- */
+.backdrop { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: var(--bg); transition: background-color var(--fade); }
+.backdrop__layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--fade); }
+.backdrop__layer.is-in { opacity: 1; }
+.backdrop__layer--none { background: var(--bg); }
 
 /* ---------- model preview ---------- */
 .model-preview { position: relative; width: 100%; border-radius: var(--radius); overflow: hidden; }

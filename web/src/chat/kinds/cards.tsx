@@ -71,19 +71,27 @@ export function ParseProgressCard({ message, conversation }: CardProps) {
   }, [done, failed, message.payload?.jobId]);
 
   if (conversation.stage !== "parsing" && !done && !failed) return null;
+  // The wireframe house builds up to the job's progress (never below the steps already finished)
+  const built = done ? 100 : Math.max(4, job?.progress || 0, Math.max(0, idx - 1) * 25);
   return (
-    <ol className={`parse-steps ${done ? "is-done" : ""}`}>
-      {PARSE_STAGES.slice(1).map((s, i) => {
-        const state = done || i + 1 < idx ? "done" : i + 1 === idx || (idx === 0 && i === 0) ? (failed ? "failed" : "active") : "todo";
-        return (
-          <li key={s.key} className={`parse-step is-${state}`}>
-            <span className="parse-step__dot">{state === "done" ? <Icon name="check" size={12} /> : state === "active" ? <Spinner size={10} /> : null}</span>
-            <span className={state === "active" ? "shimmer-text" : ""}>{s.label}</span>
-          </li>
-        );
-      })}
-      {job && !done && !failed && <li className="parse-progress"><span style={{ width: `${Math.max(5, job.progress || 0)}%` }} /></li>}
-    </ol>
+    <div className={`parse-card ${done ? "is-done" : ""} ${failed ? "is-failed" : ""}`} style={{ "--built": `${built}%` } as React.CSSProperties}>
+      <div className="parse-card__art" aria-hidden="true">
+        <img className="parse-card__ghost line-art" src="/art/line-house.webp" alt="" />
+        <img className="parse-card__built line-art" src="/art/line-house.webp" alt="" />
+        {!done && !failed && <span className="parse-card__edge" />}
+      </div>
+      <ol className={`parse-steps ${done ? "is-done" : ""}`}>
+        {PARSE_STAGES.slice(1).map((s, i) => {
+          const state = done || i + 1 < idx ? "done" : i + 1 === idx || (idx === 0 && i === 0) ? (failed ? "failed" : "active") : "todo";
+          return (
+            <li key={s.key} className={`parse-step is-${state}`}>
+              <span className="parse-step__dot">{state === "done" ? <Icon name="check" size={12} /> : state === "active" ? <Spinner size={10} /> : null}</span>
+              <span className={state === "active" ? "shimmer-text" : ""}>{s.label}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 

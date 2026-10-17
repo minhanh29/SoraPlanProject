@@ -59,6 +59,13 @@ export interface SceneViewProps {
   /** Canvas pixel ratio and frame loop: the video export renders at its own resolution, frame by frame. */
   renderDpr?: number;
   frameloop?: "always" | "never";
+  /** Filled with a capture() of the home, the reference for the sidebar picture. */
+  snapshotRef?: MutableRefObject<SnapshotApi | null>;
+}
+
+export interface SnapshotApi {
+  /** Square JPEG (base64, no data: prefix) of the current view, once every model has loaded. */
+  capture: (size: number) => Promise<string>;
 }
 
 export interface TourSetup {
@@ -122,6 +129,25 @@ function AboveItem({ item, children }: { item: ItemInstance; children: ReactNode
     g.position.copy(center.setY(top).unproject(camera));
   });
   return <group ref={ref}>{children}</group>;
+}
+
+const SNAPSHOT_BG = new THREE.Color("#e8edf4");
+
+/** Bounding box of whatever differs from the background (the top-left pixel's color); the whole frame if nothing does. */
+function contentBox({ data, width, height }: ImageData) {
+  const [r0, g0, b0] = [data[0], data[1], data[2]];
+  let minX = width, minY = height, maxX = -1, maxY = -1;
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (Math.abs(data[i] - r0) + Math.abs(data[i + 1] - g0) + Math.abs(data[i + 2] - b0) > 24) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  return maxX < 0 ? { x: 0, y: 0, w: width, h: height } : { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
 function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(() => void) | null> }) {
@@ -521,6 +547,54 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
     await Promise.allSettled(urls.map((u) => loadModel(u)));
   }, [level?.items, assets]);
 
+  const getThree = useThree((s) => s.get);
+  const [snapping, setSnapping] = useState(false); // editing marks (overlap warnings) stay out of the snapshot
+  useEffect(() => {
+    if (!props.snapshotRef) return;
+    const ref = props.snapshotRef;
+    ref.current = {
+      capture: async (sizePx) => {
+        await preloadModels();
+        setSnapping(true);
+        try {
+          // Let the loaded models mount and the warnings unmount before reading the frame
+          await new Promise((r) => setTimeout(r, 600));
+          return snapshot(sizePx);
+        } finally {
+          setSnapping(false);
+        }
+      },
+    };
+    const snapshot = (sizePx: number) => {
+      const three = getThree(); // the camera IsoCamera made default, at capture time
+      // Same backdrop whichever theme takes the snapshot (light theme's --scene-bg)
+      const background = three.scene.background;
+      three.scene.background = SNAPSHOT_BG;
+      three.gl.render(three.scene, three.camera);
+      three.scene.background = background;
+      const src = three.gl.domElement;
+      // Same task as the render: the drawing buffer is still valid. Copy it small to find the home.
+      const probe = document.createElement("canvas");
+      probe.width = 240;
+      probe.height = Math.max(1, Math.round((240 * src.height) / src.width));
+      const pctx = probe.getContext("2d", { alpha: false, willReadFrequently: true })!;
+      pctx.drawImage(src, 0, 0, probe.width, probe.height);
+      const box = contentBox(pctx.getImageData(0, 0, probe.width, probe.height));
+      const k = src.width / probe.width;
+      // Square around the home with a little air, kept inside the frame
+      const side = Math.min(Math.max(box.w, box.h) * k * 1.12, src.width, src.height);
+      const x = clamp((box.x + box.w / 2) * k - side / 2, 0, src.width - side);
+      const y = clamp((box.y + box.h / 2) * k - side / 2, 0, src.height - side);
+      const out = document.createElement("canvas");
+      out.width = out.height = sizePx;
+      out.getContext("2d", { alpha: false })!.drawImage(src, x, y, side, side, 0, 0, sizePx, sizePx);
+      return out.toDataURL("image/jpeg", 0.85).split(",")[1];
+    };
+    return () => {
+      ref.current = null;
+    };
+  }, [props.snapshotRef, preloadModels, getThree]);
+
   // ---------------------------------------------------------------- render
   const center = useMemo(() => bounds.min.clone().add(bounds.max).multiplyScalar(0.5), [bounds]);
   const extent = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z, 4);
@@ -605,7 +679,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
 
       {/* Overlap warnings stay on dropped items */}
       {items
-        .filter((it) => !touring && overlaps.has(it.id) && it.id !== selectedId)
+        .filter((it) => !touring && !snapping && overlaps.has(it.id) && it.id !== selectedId)
         .map((it) => (
           <Gizmo key={`w-${it.id}`} item={it} color={colors.danger} warnColor={colors.danger} warning showHandles={false} onRotateStart={noop} onScaleStart={noop} onEdgeStart={noop} onHeightStart={noop} />
         ))}

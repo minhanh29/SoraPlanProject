@@ -174,6 +174,9 @@ directly; it calls tools, tools validate and apply.
 conversations/{conversationId}          # conversationId == projectId (1:1)
   ownerUid, projectId, title, stage, stageData{}, lastMessageAt, lastMessagePreview,
   busy: bool                            # true while Gemini or a job is working (disables composer)
+  thumbnailUrl                          # sidebar icon: the uploaded plan, then a generated photo of the home
+  thumbnailKind: "plan" | "scene"       # "scene" once the photo of the finished home exists
+  thumbnailStale: bool                  # set on every scene build; the 3D view asks for a new photo
   createdAt, updatedAt
 
 conversations/{id}/messages/{messageId} # ordered by createdAt
@@ -262,6 +265,7 @@ All writes go through the API (Admin SDK bypasses rules).
 | POST | `/v1/conversations/{id}/actions` | Body `{type, args}` for UI buttons (`confirm_crop`, `confirm_plan`, `select_style`, `skip_missing`, `continue`). **Same handlers as Gemini tools.** |
 | PATCH | `/v1/conversations/{id}` | Rename (also renames project) |
 | DELETE | `/v1/conversations/{id}` | Deletes conversation, messages, project, scene, project blobs |
+| POST | `/v1/projects/{id}/thumbnail` | Body `{image}` (base64 JPEG): the browser's render of the 3D scene → Gemini image model paints a realistic photo of the home (style, rooms, furniture from the scene) → sidebar thumbnail |
 | PUT | `/v1/projects/{id}/plan` | Saves edited `floorPlan` (bumps `floorPlanVersion`). **Today edits are never saved; this fixes it.** |
 | PATCH | `/v1/projects/{id}/mapping` | Body `{componentId, dims, applyToSameAsset}` — scale a matched model during the mapping step |
 | POST | `/v1/projects/{id}/scene/ops` | Applies an `OpBatch` from the UI (drag move, rotate, scale, delete, colors); rejects with 409 on stale `baseVersion` |

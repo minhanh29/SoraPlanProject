@@ -93,6 +93,9 @@ export const api = {
   projectFiles: (id: string) => request<ProjectFiles>("GET", `/projects/${id}/files`),
   savePlan: (id: string, floorPlan: FloorPlan) =>
     request<{ floorPlanVersion: number }>("PUT", `/projects/${id}/plan`, { floorPlan }),
+  /** Sidebar picture: the API has Gemini paint a realistic photo of the home from this 3D render (base64 JPEG). */
+  saveSceneThumbnail: (id: string, image: string) =>
+    request<{ thumbnailUrl: string }>("POST", `/projects/${id}/thumbnail`, { image }),
   /** AI director: Gemini chooses and orders candidate tour shots (502 → use the automatic plan). */
   planTour: (
     id: string,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
+import Backdrop from "../components/Backdrop";
 import { Icon } from "../components/ui";
 import "./layout.css";
 
@@ -38,6 +39,7 @@ export default function Shell() {
 
   return (
     <div className={`shell ${collapsed ? "shell--collapsed" : ""} ${drawer ? "shell--drawer" : ""}`}>
+      <Backdrop />
       <Sidebar collapsed={collapsed && !drawer} onToggle={drawer ? () => setDrawer(false) : toggle} onNavigate={() => setDrawer(false)} />
       <div className="shell__scrim" onClick={() => setDrawer(false)} />
       <main className="shell__main">

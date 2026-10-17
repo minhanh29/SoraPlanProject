@@ -235,6 +235,15 @@ class FakeGemini:
         return getattr(self, "tour_reply", '{"shots": []}')
 
 
+    def render_home(self, reference, prompt):
+        """Image model: records the call, returns a small PNG or raises `self.photo_error`."""
+        self.calls.append({"home_photo_prompt": prompt, "reference_bytes": len(reference)})
+        if getattr(self, "photo_error", None):
+            raise self.photo_error
+        from .helpers import png_bytes
+        return png_bytes(64, 64)
+
+
 def say(text: str) -> ModelTurn:
     return ModelTurn(text=text)
 

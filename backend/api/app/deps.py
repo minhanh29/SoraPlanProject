@@ -106,6 +106,7 @@ def get_workflow(
         assets=asset_service,
         scenes=scene_service,
         classify=gemini.classify_labels,
+        render_home=gemini.render_home,
     )
 
 

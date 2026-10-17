@@ -35,6 +35,10 @@ export interface Conversation {
   lastMessageAt?: Date | null;
   lastMessagePreview?: string;
   thumbnailUrl?: string | null;
+  /** "scene": a realistic photo of the finished home (generated from the 3D scene); otherwise the uploaded plan. */
+  thumbnailKind?: "plan" | "scene" | null;
+  /** The scene was rebuilt since the snapshot was taken (the 3D view takes a new one). */
+  thumbnailStale?: boolean;
   createdAt?: Date | null;
   updatedAt?: Date | null;
 }

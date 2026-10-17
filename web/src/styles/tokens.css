@@ -1,100 +1,151 @@
-/* Design tokens. Components use these variables only — no hard-coded colors. */
+/* Design tokens. Components use these variables only — no hard-coded colors.
+   Light is "day", dark is "blue hour": navy ink on daylight, stone on dusk, one warm lamp accent. */
 :root,
 :root[data-theme="light"] {
-  --bg: #f7f8fa;
+  --bg: #f4f6f9;
   --surface: #ffffff;
-  --surface-2: #f1f3f6;
-  --surface-sunken: #eceff3;
-  --surface-glass: rgba(255, 255, 255, 0.78);
-  --border: #e2e6ec;
-  --border-strong: #cdd3db;
-  --text: #1b1f24;
-  --text-2: #4a525d;
-  --text-3: #7b8490;
-  --accent: #3b5bdb;
-  --accent-hover: #3049b8;
-  --accent-soft: #e8edff;
+  --surface-2: #edf0f5;
+  --surface-sunken: #e6eaf0;
+  --surface-glass: rgba(255, 255, 255, 0.72);
+  --border: #dde2ea;
+  --border-strong: #c6cdd8;
+  --text: #13213a;
+  --text-2: #3f4f69;
+  --text-3: #6b7a92;
+  --accent: #13213a;
+  --accent-hover: #24365a;
+  --accent-soft: #e4e9f1;
   --accent-text: #ffffff;
-  --user-bubble: #eef1f8;
-  --success: #1f9d55;
-  --success-soft: #e3f6eb;
-  --warning: #d97706;
-  --warning-soft: #fff4e0;
-  --danger: #d6336c;
-  --danger-soft: #fde8ef;
-  --focus: rgba(59, 91, 219, 0.35);
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-  --shadow-md: 0 6px 24px rgba(16, 24, 40, 0.08);
-  --shadow-lg: 0 18px 48px rgba(16, 24, 40, 0.14);
+  --user-bubble: #e8ecf3;
+  --success: #1f8a52;
+  --success-soft: #e1f3e9;
+  --warning: #b86a0a;
+  --warning-soft: #fdf1dd;
+  --danger: #c92a5b;
+  --danger-soft: #fbe6ed;
+  --focus: rgba(242, 180, 90, 0.55);
+  --shadow-sm: 0 1px 2px rgba(19, 33, 58, 0.06);
+  --shadow-md: 0 8px 28px rgba(19, 33, 58, 0.1);
+  --shadow-lg: 0 22px 56px rgba(19, 33, 58, 0.18);
+  /* Blue-hour palette */
+  --lamp: #f2b45a; /* window glow: progress, live, selection */
+  --lamp-text: #9a5f0c; /* lamp when it has to be readable text on day */
+  --ink: #000000; /* signature info panels, both themes */
+  --stone: #eceef0;
+  --haze: #93a2bb;
+  --glass: rgba(255, 255, 255, 0.7);
+  --glass-strong: rgba(250, 251, 253, 0.8);
+  --glass-line: rgba(19, 33, 58, 0.1);
+  --wash: rgba(244, 246, 249, 0.92); /* over the backdrop photo behind chat */
+  --scrim: linear-gradient(90deg, rgba(244, 246, 249, 0.92) 0%, rgba(244, 246, 249, 0.72) 42%, rgba(244, 246, 249, 0.1) 80%);
+  --scrim-up: linear-gradient(0deg, rgba(244, 246, 249, 0.85), rgba(244, 246, 249, 0) 45%);
+  --backdrop-cols: rgba(19, 33, 58, 0.08);
+  --line-art: brightness(0) opacity(0.8); /* white line art -> ink on day */
   /* Canvas drawing (2D plan editor) */
   --plan-bg: #ffffff;
-  --plan-grid: #eef1f5;
-  --plan-wall: #1f2328;
-  --plan-room: rgba(59, 91, 219, 0.05);
-  --plan-room-label: #3b5bdb;
-  --plan-furniture: #dbe4ff;
-  --plan-furniture-stroke: #4263eb;
-  --plan-fixture: #d3f9d8;
-  --plan-fixture-stroke: #2b8a3e;
-  --plan-select: #7048e8;
-  --plan-missing: #f59f00;
-  --plan-dim: #7048e8;
+  --plan-grid: #edf0f5;
+  --plan-wall: #13213a;
+  --plan-room: rgba(19, 33, 58, 0.035);
+  --plan-room-label: #3f4f69;
+  --plan-furniture: #e1e9f5;
+  --plan-furniture-stroke: #36598a;
+  --plan-fixture: #dcefe3;
+  --plan-fixture-stroke: #2c7a4b;
+  --plan-select: #c27c12;
+  --plan-missing: #e8590c;
+  --plan-dim: #c27c12;
   /* 3D viewport */
-  --scene-bg: #eef1f5;
+  --scene-bg: #e8edf4;
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --bg: #111316;
-  --surface: #181b20;
-  --surface-2: #1f232a;
-  --surface-sunken: #14171b;
-  --surface-glass: rgba(28, 32, 38, 0.78);
-  --border: #2a2f37;
-  --border-strong: #3a414b;
-  --text: #e8eaed;
-  --text-2: #b4bac3;
-  --text-3: #808893;
-  --accent: #7c95ff;
-  --accent-hover: #93a7ff;
-  --accent-soft: #232b48;
-  --accent-text: #0e1220;
-  --user-bubble: #242a35;
-  --success: #46c37b;
-  --success-soft: #16301f;
-  --warning: #f2a33a;
-  --warning-soft: #3a2a12;
-  --danger: #f06595;
-  --danger-soft: #3a1a26;
-  --focus: rgba(124, 149, 255, 0.4);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.5);
-  --plan-bg: #15181c;
-  --plan-grid: #1f242b;
-  --plan-wall: #e8eaed;
-  --plan-room: rgba(124, 149, 255, 0.07);
-  --plan-room-label: #93a7ff;
-  --plan-furniture: #26304f;
-  --plan-furniture-stroke: #7c95ff;
-  --plan-fixture: #1d3626;
-  --plan-fixture-stroke: #51cf66;
-  --plan-select: #b197fc;
-  --plan-missing: #fcc419;
-  --plan-dim: #b197fc;
-  --scene-bg: #1a1d22;
+  --bg: #16233a;
+  --surface: #1b2a44;
+  --surface-2: #22334f;
+  --surface-sunken: #131f33;
+  --surface-glass: rgba(22, 35, 58, 0.72);
+  --border: #2b3c5a;
+  --border-strong: #3c5072;
+  --text: #eceef0;
+  --text-2: #c0c9d8;
+  --text-3: #93a2bb;
+  --accent: #eceef0;
+  --accent-hover: #ffffff;
+  --accent-soft: #283b5c;
+  --accent-text: #000000;
+  --user-bubble: #26385a;
+  --success: #52c487;
+  --success-soft: #16352a;
+  --warning: #f2b45a;
+  --warning-soft: #3a2c14;
+  --danger: #f2729b;
+  --danger-soft: #3d1b2b;
+  --focus: rgba(242, 180, 90, 0.5);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 22px 56px rgba(0, 0, 0, 0.5);
+  --lamp: #f2b45a;
+  --lamp-text: #f2b45a;
+  --ink: #000000;
+  --stone: #eceef0;
+  --haze: #93a2bb;
+  --glass: rgba(10, 16, 28, 0.55);
+  --glass-strong: rgba(14, 22, 38, 0.72);
+  --glass-line: rgba(255, 255, 255, 0.1);
+  --wash: rgba(22, 35, 58, 0.88);
+  --scrim: linear-gradient(90deg, rgba(10, 16, 28, 0.88) 0%, rgba(10, 16, 28, 0.62) 42%, rgba(10, 16, 28, 0.12) 80%);
+  --scrim-up: linear-gradient(0deg, rgba(10, 16, 28, 0.8), rgba(10, 16, 28, 0) 45%);
+  --backdrop-cols: rgba(255, 255, 255, 0.08);
+  --line-art: none;
+  --plan-bg: #111c2e;
+  --plan-grid: #1a2840;
+  --plan-wall: #eceef0;
+  --plan-room: rgba(236, 238, 240, 0.05);
+  --plan-room-label: #c0c9d8;
+  --plan-furniture: #22344f;
+  --plan-furniture-stroke: #8fb0dc;
+  --plan-fixture: #1b3a2e;
+  --plan-fixture-stroke: #5fc28a;
+  --plan-select: #f2b45a;
+  --plan-missing: #ff8a4c;
+  --plan-dim: #f2b45a;
+  --scene-bg: #16233a;
   color-scheme: dark;
 }
 
+/* The info-panel scope: black ground, stone type. Anything inside (buttons, inputs, pills) follows.
+   The parse card is a black panel at dusk only; by day it is drafting paper (chat.css). */
+.ink,
+:root[data-theme="dark"] .parse-card {
+  --surface: #0e131c;
+  --surface-2: #1a212d;
+  --surface-sunken: #080b10;
+  --border: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.3);
+  --text: #eceef0;
+  --text-2: #c0c9d8;
+  --text-3: #93a2bb;
+  --accent: #eceef0;
+  --accent-hover: #ffffff;
+  --accent-soft: rgba(255, 255, 255, 0.1);
+  --accent-text: #000000;
+  --line-art: none;
+  background: var(--ink);
+  color: var(--text);
+}
+
 :root {
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
-  --radius-sm: 8px;
-  --radius: 12px;
-  --radius-lg: 18px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
   --radius-pill: 999px;
   --sidebar-w: 272px;
   --sidebar-w-collapsed: 64px;
   --chat-max: 760px;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --fade: 1.2s cubic-bezier(0.4, 0, 0.2, 1);
 }

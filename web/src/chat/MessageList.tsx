@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { Conversation, Message } from "../lib/types";
-import MessageItem from "./MessageItem";
+import MessageItem, { AssistantAvatar } from "./MessageItem";
 
 const BUSY_LABEL: Record<string, string> = {
   mapping: "Placing furniture from the catalog…",
@@ -46,7 +46,7 @@ export default function MessageList({
         ))}
         {busyLabel && (
           <div className="msg msg--assistant">
-            <div className="msg__avatar" aria-hidden="true"><img src="/favicon.svg" alt="" width={22} height={22} /></div>
+            <AssistantAvatar />
             <div className="msg__body"><span className="shimmer-text">{busyLabel}</span></div>
           </div>
         )}

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 export type Theme = "light" | "dark";
 const KEY = "soraplan.theme";
 
@@ -19,4 +20,15 @@ export function setTheme(theme: Theme) {
 export function cssVar(name: string, fallback = "#000"): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
+}
+
+/** Current theme, kept in sync with setTheme(). */
+export function useTheme(): Theme {
+  const [theme, set] = useState<Theme>(getTheme);
+  useEffect(() => {
+    const on = (e: Event) => set((e as CustomEvent<Theme>).detail);
+    window.addEventListener("soraplan:theme", on);
+    return () => window.removeEventListener("soraplan:theme", on);
+  }, []);
+  return theme;
 }

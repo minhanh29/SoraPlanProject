@@ -118,6 +118,8 @@ class Settings(BaseSettings):
 
     # Gemini (chat orchestrator). Vertex AI with the service account by default (decision D2).
     GEMINI_CHAT_MODEL: str = Field(default="gemini-3.8-flash", description="Model for chat + tool calls")
+    GEMINI_IMAGE_MODEL: str = Field(default="gemini-3.1-flash-image",
+                                    description="Image model (Nano Banana 2) for the project thumbnail photo")
     GEMINI_LOCATION: str = Field(default="global", description="Vertex AI location for Gemini")
     GEMINI_API_KEY: Optional[str] = Field(
         default=None,

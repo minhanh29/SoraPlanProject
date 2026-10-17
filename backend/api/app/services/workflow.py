@@ -5,6 +5,8 @@
 Every transition writes the conversation stage and a predefined message (kind + payload only; the
 web app renders the copy from web/src/chat/messageTemplates.ts).
 """
+import base64
+import binascii
 import datetime
 import logging
 import math
@@ -42,6 +44,36 @@ class Ctx:
 class NeedsConfirmation(AppException):
     def __init__(self, what: str):
         super().__init__(status_code=409, code="NEEDS_CONFIRMATION", detail=f"Ask the user to confirm first: {what}")
+
+
+def home_photo_prompt(graph: Dict[str, Any], styles: Dict[str, Dict[str, Any]]) -> str:
+    """Prompt for the project picture: the attached 3D render fixes the layout; the style and contents come from the scene."""
+    meta = graph.get("meta") or {}
+    level = (graph.get("levels") or [{}])[0]
+    style = meta.get("style") or ""
+    info = styles.get(style) or {}
+    palette = meta.get("palette") or info.get("palette") or {}
+    rooms = level.get("rooms") or []
+    # The shot: the living room if there is one, else the largest room
+    main = next((r for r in rooms if r.get("type") == "living"), None) or max(rooms, key=lambda r: r.get("area") or 0, default={})
+    in_main = [i.get("label") or i.get("category") for i in level.get("items") or [] if i.get("roomId") == main.get("id")]
+    everywhere = sorted({i.get("label") or i.get("category") or "" for i in level.get("items") or []} - {""})
+    lines = [
+        "The attached image is a plain 3D model of a home: walls cut at waist height, simple furniture, no ceiling. "
+        "Use it only as a reference for the layout, the rooms and where the furniture stands.",
+        "Create one professional architectural interior photograph of this home, as it would appear in a premium "
+        "real-estate or design magazine: eye level, wide angle, natural soft daylight through the windows, realistic "
+        "materials and textures, full-height walls and a ceiling, calm and uncluttered.",
+        f"Show the {main.get('name') or 'main living space'}" + (f", furnished with: {', '.join(sorted(set(filter(None, in_main))))}." if in_main else "."),
+    ]
+    if style:
+        lines.append(f"Interior style: {style}" + (f" ({info['blurb']})" if info.get("blurb") else "") + ".")
+    if palette.get("wall") or palette.get("floor"):
+        lines.append(f"Wall color close to {palette.get('wall', 'warm white')}, floor close to {palette.get('floor', 'light oak')}.")
+    if everywhere:
+        lines.append(f"Other furniture in the home, for consistency: {', '.join(everywhere[:30])}.")
+    lines.append("Square image. No text, no labels, no people, no watermark; it must not look like a 3D render or a floor plan.")
+    return "\n".join(lines)
 
 
 def stage_index(stage: str) -> int:
@@ -160,6 +192,7 @@ class Workflow:
         assets: AssetService,
         scenes: SceneService,
         classify: Optional[Callable] = None,
+        render_home: Optional[Callable[[bytes, str], bytes]] = None,
     ):
         self.db = db
         self.storage = storage
@@ -168,6 +201,7 @@ class Workflow:
         self.assets = assets
         self.scenes = scenes
         self.classify = classify
+        self.render_home = render_home
         self.settings = get_settings()
 
     # ------------------------------------------------------------------ helpers
@@ -480,7 +514,8 @@ class Workflow:
         graph = build_scene(project["id"], project["floorPlan"], project["style"], project.get("mapping") or {})
         version = self.scenes.save_built(project["id"], ctx.uid, graph)
         self._project_ref(project["id"]).update({"status": "completed", "sceneVersion": version, "updatedAt": SERVER_TIMESTAMP})
-        self.conversations.set_stage(ctx.conversation_id, "scene_ready")
+        # A new build (e.g. another style) asks the 3D view for a fresh snapshot; the old thumbnail shows until then
+        self.conversations.set_stage(ctx.conversation_id, "scene_ready", thumbnailStale=True)
         self.conversations.append_message(ctx.conversation_id, "system", "scene_ready",
                                           payload={"sceneVersion": version, "style": project["style"], "matched": matched,
                                                    "items": len(graph["levels"][0]["items"])})
@@ -511,6 +546,38 @@ class Workflow:
             except Exception as e:
                 logger.warning("Thumbnail refresh failed for %s: %s", project_id, e)
         return out
+
+    def save_scene_thumbnail(self, project_id: str, uid: str, image_b64: str) -> str:
+        """The browser's render of the 3D scene → Gemini paints a realistic photo of that home → sidebar thumbnail."""
+        project = get_owned(self.db, "projects", project_id, uid)
+        if not project.get("sceneVersion"):
+            raise AppException(status_code=409, code="SCENE_NOT_READY", detail="The 3D scene is not built yet")
+        if not self.render_home:
+            raise AppException(status_code=503, code="IMAGE_MODEL_UNAVAILABLE", detail="Image generation is not configured")
+        try:
+            data = base64.b64decode(image_b64, validate=True)
+        except (binascii.Error, ValueError):
+            raise AppException(status_code=400, code="INVALID_IMAGE", detail="The snapshot is not valid base64")
+        reference = crop_service.thumbnail(data, size=768)  # also rejects anything that is not an image
+        graph = (self.scenes.get_optional(project_id) or {}).get("graph") or {}
+        try:
+            photo = self.render_home(reference, home_photo_prompt(graph, load_styles()))
+        except Exception as e:
+            logger.warning("Home photo for %s failed: %s", project_id, e)
+            raise AppException(status_code=502, code="THUMBNAIL_FAILED", detail="Could not create the project picture")
+        # Versioned path: a new picture gets a new URL, so browsers never show a cached older one
+        path = f"{uid}/{project_id}/home-{int(utcnow().timestamp())}.jpg"
+        self.storage.upload_bytes(crop_service.thumbnail(photo, size=384), path, "image/jpeg")
+        self._project_ref(project_id).update({"thumbnailPath": path, "thumbnailKind": "scene"})
+        url = self.storage.generate_signed_read_url(path, expiration_seconds=SIGNED_URL_TTL)
+        self.conversations.set_thumbnail(
+            project.get("conversationId") or project_id,
+            thumbnailUrl=url,
+            thumbnailKind="scene",
+            thumbnailStale=False,
+            thumbnailExpiresAt=(utcnow() + datetime.timedelta(seconds=SIGNED_URL_TTL)).isoformat(),
+        )
+        return url
 
     def rename(self, conversation_id: str, uid: str, title: str) -> None:
         conv = self.conversations.get(conversation_id, uid)

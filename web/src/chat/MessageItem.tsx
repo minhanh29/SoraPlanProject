@@ -28,6 +28,16 @@ const CARDS: Partial<Record<Message["kind"], (p: CardProps) => JSX.Element | nul
   error: ErrorCard,
 };
 
+/** The house, by day or at dusk to match the theme. */
+export function AssistantAvatar() {
+  return (
+    <div className="msg__avatar" aria-hidden="true">
+      <img className="only-light" src="/art/avatar-day.webp" alt="" width={30} height={30} />
+      <img className="only-dark" src="/art/avatar-dusk.webp" alt="" width={30} height={30} />
+    </div>
+  );
+}
+
 function Markdown({ text }: { text: string }) {
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: (props) => <a {...props} target="_blank" rel="noreferrer" /> }}>
@@ -50,7 +60,7 @@ function MessageItem({ message, conversation, isLatest, openCanvas }: CardProps)
   if (message.kind === "text" && !text && !streaming && message.status !== "error") return null;
   return (
     <div className={`msg msg--assistant msg--${message.kind}`}>
-      <div className="msg__avatar" aria-hidden="true"><img src="/favicon.svg" alt="" width={22} height={22} /></div>
+      <AssistantAvatar />
       <div className="msg__body">
         {streaming && !text ? (
           <div className="typing" aria-label="Thinking"><span /><span /><span /></div>

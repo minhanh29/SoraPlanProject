@@ -204,6 +204,33 @@ class GeminiClient:
         raise GeminiError(str(last_error))
 
 
+    def render_home(self, reference: bytes, prompt: str) -> bytes:
+        """Image model: a render of the 3D scene (layout reference) + prompt → one photoreal square image."""
+        from google.genai import types
+
+        model = self.settings.GEMINI_IMAGE_MODEL
+        parts = [types.Part.from_bytes(data=reference, mime_type="image/jpeg"), types.Part.from_text(text=prompt)]
+        config = types.GenerateContentConfig(response_modalities=["IMAGE"], image_config=types.ImageConfig(aspect_ratio="1:1"))
+        started = time.monotonic()
+        last_error: Optional[Exception] = None
+        for attempt in range(2):
+            try:
+                resp = self.client.models.generate_content(model=model, contents=[types.Content(role="user", parts=parts)], config=config)
+                for part in (resp.candidates[0].content.parts if resp.candidates and resp.candidates[0].content else []):
+                    if part.inline_data and part.inline_data.data:
+                        logger.info(json.dumps({"event": "gemini_home_photo", "model": model, "attempt": attempt,
+                                                "latencyMs": int((time.monotonic() - started) * 1000)}))
+                        return part.inline_data.data
+                last_error = GeminiError("The image model returned no image")
+            except Exception as e:
+                last_error = e
+                logger.warning("Gemini home photo failed (attempt %d): %s", attempt + 1, e)
+                if not _is_retryable(e):
+                    break
+                time.sleep(1.0)
+        raise GeminiError(str(last_error))
+
+
 def _is_retryable(e: Exception) -> bool:
     code = getattr(e, "code", None) or getattr(e, "status_code", None)
     if code in (429, 500, 502, 503, 504):

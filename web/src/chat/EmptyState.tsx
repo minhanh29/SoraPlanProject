@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, uploadToSignedUrl } from "../lib/api";
 import { Icon, Spinner, ZoomableImage } from "../components/ui";
+import { useBackdrop } from "../components/Backdrop";
 
 const ACCEPT = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -37,6 +38,7 @@ export default function EmptyState() {
   const [step, setStep] = useState<null | "creating" | "uploading" | "processing">(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  useBackdrop("lift");
 
   const pick = (f: File | undefined | null) => {
     if (!f) return;
@@ -118,51 +120,64 @@ export default function EmptyState() {
 
   return (
     <div className={`empty ${dragging ? "is-dragging" : ""}`}>
+      <div className="empty__scrim" aria-hidden="true" />
       <div className="empty__inner">
-        <h1 className="empty__title">Drop your floor plan to start a new project</h1>
+        <h1 className="empty__title display">Drop your floor plan to start a new project</h1>
         <p className="empty__sub">Photo, scan or PDF of a floor plan. We'll turn it into a 3D home.</p>
-
-        {!file ? (
-          <button className="dropzone" onClick={() => input.current?.click()} onDrop={onZoneDrop}>
-            <span className="dropzone__icon"><Icon name="upload" size={26} /></span>
-            <span><strong>Drop a file</strong> or click to browse</span>
-            <span className="subtle">PNG, JPEG, WebP or PDF · up to 25 MB</span>
-          </button>
-        ) : (
-          <div className="pick card">
-            <div className="pick__preview">
-              {preview ? <ZoomableImage src={preview} alt="Selected floor plan" /> : <span className="pick__pdf">PDF</span>}
-            </div>
-            <div className="pick__meta">
-              <label className="pick__name">
-                <span>Project name</span>
-                <input
-                  className="input"
-                  value={name}
-                  maxLength={MAX_TITLE}
-                  placeholder="e.g. Riverside apartment"
-                  disabled={!!step}
-                  autoFocus
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !step && create()}
-                />
-              </label>
-              <span className="subtle pick__file" title={file.name}>{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span>
-              {step === "uploading" && <div className="progress"><span style={{ width: `${progress}%` }} /></div>}
-              {step && <span className="subtle">{step === "creating" ? "Creating project…" : step === "uploading" ? `Uploading ${progress}%` : "Preparing the image…"}</span>}
-            </div>
-            <div className="pick__actions">
-              <button className="btn btn--ghost" disabled={!!step} onClick={() => { setFile(null); setPreview(null); setName(""); }}>Change file</button>
-              <button className="btn btn--primary" disabled={!!step} onClick={create}>
-                {step ? <Spinner /> : <Icon name="plus" size={16} />} Create project
-              </button>
-            </div>
-          </div>
-        )}
         {error && <p className="empty__error" role="alert">{error}</p>}
-        <input ref={input} type="file" hidden accept={ACCEPT.join(",")} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
       </div>
-      {dragging && <div className="drop-overlay"><Icon name="upload" size={32} /> Drop to start</div>}
+
+      {!file ? (
+        <button className="dropzone ink" onClick={() => input.current?.click()} onDrop={onZoneDrop}>
+          {/* The flat plan tilts back and the house rises out of it on hover or drag-over */}
+          <span className="dropzone__art" aria-hidden="true">
+            <img className="dropzone__flat" src="/art/line-plan.webp" alt="" />
+            <img className="dropzone__iso" src="/art/line-house.webp" alt="" />
+          </span>
+          <span className="dropzone__text">
+            <strong>Drop a file or click to browse</strong>
+            <span className="subtle">PNG, JPEG, WebP or PDF · up to 25 MB</span>
+            <span className="btn btn--primary btn--sm" aria-hidden="true">Choose file</span>
+          </span>
+        </button>
+      ) : (
+        <div className="pick ink">
+          <div className="pick__preview">
+            {preview ? <ZoomableImage src={preview} alt="Selected floor plan" /> : <span className="pick__pdf">PDF</span>}
+          </div>
+          <div className="pick__meta">
+            <label className="pick__name">
+              <span>Project name</span>
+              <input
+                className="input"
+                value={name}
+                maxLength={MAX_TITLE}
+                placeholder="e.g. Riverside apartment"
+                disabled={!!step}
+                autoFocus
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !step && create()}
+              />
+            </label>
+            <span className="subtle pick__file" title={file.name}>{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span>
+            {step === "uploading" && <div className="progress"><span style={{ width: `${progress}%` }} /></div>}
+            {step && <span className="subtle">{step === "creating" ? "Creating project…" : step === "uploading" ? `Uploading ${progress}%` : "Preparing the image…"}</span>}
+          </div>
+          <div className="pick__actions">
+            <button className="btn btn--ghost" disabled={!!step} onClick={() => { setFile(null); setPreview(null); setName(""); }}>Change file</button>
+            <button className="btn btn--primary" disabled={!!step} onClick={create}>
+              {step ? <Spinner /> : <Icon name="plus" size={16} />} Create project
+            </button>
+          </div>
+        </div>
+      )}
+      <input ref={input} type="file" hidden accept={ACCEPT.join(",")} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+      {dragging && (
+        <div className="drop-overlay">
+          <img className="line-art" src="/art/line-house.webp" alt="" />
+          Drop to start
+        </div>
+      )}
     </div>
   );
 }

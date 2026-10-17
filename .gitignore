@@ -82,3 +82,5 @@ tmp/
 
 # Deploy build output (frontend staged with generated config.js)
 /build/
+# Art generation cache (scripts/art/generate.py)
+scripts/art/.raw/

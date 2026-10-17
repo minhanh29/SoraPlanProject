@@ -4,6 +4,7 @@ import { useConversation, useMessages, useProject } from "../hooks/useConversati
 import { useProjectFiles } from "../hooks/useProjectFiles";
 import { api, ApiError } from "../lib/api";
 import { Spinner, toast } from "../components/ui";
+import { STAGE_SCENE, useBackdrop } from "../components/Backdrop";
 import CanvasPane, { CANVAS_STAGES } from "../canvas/CanvasPane";
 import UploadAssetDialog from "../assets/UploadAssetDialog";
 import Composer from "./Composer";
@@ -57,6 +58,7 @@ function ProjectChat({ id }: { id: string }) {
   });
   const lastStage = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  useBackdrop(conversation ? STAGE_SCENE[conversation.stage] ?? null : null);
 
   // Open the canvas automatically when the flow enters a stage that needs it
   const stage = conversation?.stage;
@@ -105,7 +107,10 @@ function ProjectChat({ id }: { id: string }) {
   if (conversation === null || project === null)
     return (
       <div className="chat chat--loading">
-        <p className="muted">This project doesn't exist or was deleted.</p>
+        <div className="chat__missing">
+          <img src="/art/obj-plans.webp" alt="" width={160} height={160} />
+          <p className="muted">This project doesn't exist or was deleted.</p>
+        </div>
       </div>
     );
 

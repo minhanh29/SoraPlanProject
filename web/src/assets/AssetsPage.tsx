@@ -38,8 +38,15 @@ export default function AssetsPage({ tab }: { tab: "system" | "mine" }) {
     <div className="assets-scroll">
       <div className="assets-page">
         <header className="assets-page__head">
-          <div>
-            <h1>Assets</h1>
+          {/* Furniture standing on a soft floor line, behind the title */}
+          <div className="assets-page__art" aria-hidden="true">
+            <img className="assets-page__plant" src="/art/obj-plant.webp" alt="" />
+            <img className="assets-page__sofa" src="/art/obj-sofa.webp" alt="" />
+            <img className="assets-page__lamp" src="/art/obj-lamp.webp" alt="" />
+            <img className="assets-page__chair" src="/art/obj-chair.webp" alt="" />
+          </div>
+          <div className="assets-page__title">
+            <h1 className="display">Assets</h1>
             <p className="subtle">
               {tab === "system" ? "Curated 3D furniture used to furnish your homes." : "Furniture you turned into 3D from your own photos."}
             </p>
@@ -102,7 +109,7 @@ export default function AssetsPage({ tab }: { tab: "system" | "mine" }) {
               </>
             ) : (
               <>
-                <Icon name="cube" size={30} />
+                <img className="asset-empty__art" src="/art/obj-chair.webp" alt="" width={150} height={150} />
                 <strong>No assets yet</strong>
                 <span className="subtle">Upload a photo of a piece you love and we'll turn it into a 3D model.</span>
                 <button className="btn btn--primary" onClick={() => setUploadOpen(true)}>
