@@ -118,6 +118,45 @@ class MappingResponse(BaseSchema):
     mapping: Dict[str, Any]
 
 
+# ---------------------------------------------------------------- cinematic tour (AI director)
+
+class TourRoom(BaseSchema):
+    id: str = Field(..., max_length=80)
+    name: str = Field(..., max_length=120)
+    type: Optional[str] = Field(default=None, max_length=40)
+    area: float = 0
+    items: List[str] = Field(default_factory=list, max_length=60)
+    connects_to: List[str] = Field(default_factory=list, max_length=20)
+
+
+class TourCandidate(BaseSchema):
+    id: str = Field(..., max_length=120)
+    room_id: str = Field(..., max_length=80)
+    description: str = Field(default="", max_length=800)
+    score: float = 0
+    # Preview frame, base64 JPEG (~384×216, a few tens of KB)
+    image: Optional[str] = Field(default=None, max_length=250_000)
+
+
+class TourPlanRequest(BaseSchema):
+    title: str = Field(default="Home", max_length=120)
+    style: Optional[str] = Field(default=None, max_length=40)
+    rooms: List[TourRoom] = Field(..., max_length=20)
+    candidates: List[TourCandidate] = Field(..., min_length=1, max_length=64)
+
+
+class TourShotChoice(BaseSchema):
+    candidate_id: str
+    move: str
+    duration: float
+    reason: str = ""
+
+
+class TourPlanResponse(BaseSchema):
+    shots: List[TourShotChoice]
+    source: str
+
+
 class OpBatchRequest(BaseSchema):
     base_version: int = Field(..., ge=0)
     ops: List[Dict[str, Any]] = Field(..., min_length=1, max_length=200)

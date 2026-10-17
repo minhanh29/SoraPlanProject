@@ -1,8 +1,10 @@
 // Stage scene_ready: the isometric 3D world with direct manipulation (docs/10 §2.5), the realistic render and
-// the cinematic tour (preview + MP4 export).
+// the cinematic tour: candidate shots from a visibility analysis → previews rendered here → Gemini directs
+// (picks, orders, moves) → preview + MP4 export. The plan is cached per scene version in this browser.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PanelProps } from "../panelTypes";
-import type { Asset, ItemInstance, SceneOp } from "../../lib/types";
+import type { Asset, ItemInstance, SceneGraph, SceneOp } from "../../lib/types";
+import { api } from "../../lib/api";
 import { Icon, Spinner, toast } from "../../components/ui";
 import { useScene } from "../../hooks/useScene";
 import { useAssetIndex } from "../../hooks/useAssets";
@@ -17,7 +19,16 @@ import TourOverlay, { type TourOverlayApi } from "./TourOverlay";
 import type { TourApi } from "./TourDirector";
 import type { CameraApi, Projection } from "./IsoCamera";
 import type { OverlayImageStatus } from "./PlanOverlay";
-import { planTour } from "./cinematic";
+import {
+  buildTour,
+  candidatePose,
+  defaultChoices,
+  roomConnections,
+  shotCandidates,
+  type Candidate,
+  type ShotChoice,
+  type Tour,
+} from "./cinematic";
 import { canExportVideo, downloadBlob } from "./exportVideo";
 import { freeSpot, pointInPolygon } from "./geometry";
 import { useSceneColors } from "./useSceneColors";
@@ -33,6 +44,41 @@ const readRealistic = () => {
     return false;
   }
 };
+const PREVIEW_W = 384; // candidate previews sent to Gemini (16:9)
+const PREVIEW_H = 216;
+type PlanSource = "gemini" | "auto";
+
+const planCacheKey = (projectId: string, version: number) => `soraplan.tour.${projectId}.${version}`;
+function readPlan(key: string): { shots: ShotChoice[]; source: PlanSource } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || "null");
+    return v && Array.isArray(v.shots) ? v : null;
+  } catch {
+    return null;
+  }
+}
+function writePlan(key: string, value: { shots: ShotChoice[]; source: PlanSource }) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** What the AI director knows about the home besides the previews. */
+function houseSummary(graph: SceneGraph) {
+  const level = graph.levels[0];
+  const conn = roomConnections(graph);
+  return (level?.rooms || []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    area: Math.round((r.area || 0) * 10) / 10,
+    items: (level?.items || []).filter((it) => it.roomId === r.id).map((it) => it.label || it.category || "item").slice(0, 40),
+    connectsTo: conn[r.id] || [],
+  }));
+}
+
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "home";
 const nextFrames = (n: number) =>
   new Promise<void>((resolve) => {
@@ -66,31 +112,111 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
   const abortRef = useRef<AbortController | null>(null);
 
   const style = graph?.meta.style;
-  const tourPlan = useMemo(
-    () => (touring && graph ? planTour(graph, { title: project.name || "Your home", subtitle: style ? `${style} home` : undefined }) : null),
-    // Planned once per tour: edits made while touring (by the assistant) show up in the next tour
-    [touring], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  const [tourPlan, setTourPlan] = useState<Tour | null>(null);
+  const [planning, setPlanning] = useState<string | null>(null); // status line while planning
+  const [planSource, setPlanSource] = useState<PlanSource | null>(null);
+  const planRun = useRef(0); // ignore a planning run that finished after the tour was closed / restarted
 
   const onTourFrame = useCallback((f: Parameters<TourOverlayApi["update"]>[0]) => overlayApi.current?.update(f), []);
   const onTourEnd = useCallback(() => setPlaying(false), []);
   const tourSetup: TourSetup | null = useMemo(
-    () =>
-      tourPlan
-        ? { plan: tourPlan, playing, timeRef: tourTime, apiRef: tourApi, onFrame: onTourFrame, onEnd: onTourEnd }
-        : null,
-    [tourPlan, playing, onTourFrame, onTourEnd],
+    () => (touring ? { plan: tourPlan, playing, timeRef: tourTime, apiRef: tourApi, onFrame: onTourFrame, onEnd: onTourEnd } : null),
+    [touring, tourPlan, playing, onTourFrame, onTourEnd],
   );
+
+  /**
+   * Candidates from the visibility analysis → a preview of each → Gemini picks and orders the shots. Falls back to
+   * the automatic choice when the AI director is unavailable. `force` skips the per-scene-version cache.
+   */
+  const makePlan = async (force: boolean) => {
+    if (!graph) return;
+    const run = ++planRun.current;
+    const opts = { title: project.name || "Your home", subtitle: style ? `${style} home` : undefined };
+    const candidates: Candidate[] = shotCandidates(graph);
+    const key = planCacheKey(project.id, scene.version);
+    const cached = force ? null : readPlan(key);
+    if (cached) {
+      setTourPlan(buildTour(graph, candidates, cached.shots, opts));
+      setPlanSource(cached.source);
+      return;
+    }
+    setTourPlan(null);
+    setPlanning("Looking at every room…");
+    let images: string[] = [];
+    const stage = stageRef.current;
+    if (stage && tourApi.current && candidates.length) {
+      setExportState({ dpr: PREVIEW_W / Math.max(stage.clientWidth, 1), progress: 0 });
+      await nextFrames(3);
+      try {
+        images = await tourApi.current.renderStills(candidates.map(candidatePose), PREVIEW_W, PREVIEW_H);
+      } catch {
+        images = [];
+      } finally {
+        setExportState(null);
+      }
+    }
+    if (run !== planRun.current) return;
+    setPlanning("Gemini is directing your tour…");
+    let shots: ShotChoice[];
+    let source: PlanSource;
+    try {
+      const res = await api.planTour(project.id, {
+        title: opts.title,
+        style,
+        rooms: houseSummary(graph),
+        candidates: candidates.map((c, i) => ({ id: c.id, roomId: c.roomId, description: c.description, score: Math.round(c.score * 100) / 100, image: images[i] })),
+      });
+      shots = res.shots.map((s) => ({ candidateId: s.candidateId, move: s.move as ShotChoice["move"], duration: s.duration }));
+      source = "gemini";
+    } catch {
+      shots = defaultChoices(graph, candidates);
+      source = "auto";
+      if (run === planRun.current) toast("The AI director is unavailable, so this is the automatic tour.");
+    }
+    if (run !== planRun.current) return;
+    writePlan(key, { shots, source });
+    setTourPlan(buildTour(graph, candidates, shots, opts));
+    setPlanSource(source);
+    setPlanning(null);
+  };
+
+  const playFromStart = () => {
+    tourTime.current = 0;
+    setPlaying(true);
+  };
 
   const startTour = () => {
     setSelectedId(null);
     setOverlay(false);
     tourTime.current = 0;
+    setPlaying(false);
+    setTourPlan(null);
     setTouring(true);
-    setPlaying(true);
+  };
+  // Plan once the tour director is mounted (it renders the candidate previews)
+  useEffect(() => {
+    if (!touring || tourPlan || planning) return;
+    let cancelled = false;
+    nextFrames(2).then(async () => {
+      if (cancelled) return;
+      await makePlan(false);
+      if (!cancelled) playFromStart();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [touring]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const replan = async () => {
+    setPlaying(false);
+    await makePlan(true);
+    playFromStart();
   };
   const exitTour = () => {
     abortRef.current?.abort();
+    planRun.current++;
+    setPlanning(null);
+    setExportState(null);
     setPlaying(false);
     setTouring(false);
   };
@@ -234,9 +360,21 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
         {touring && <TourOverlay ref={overlayApi} />}
       </div>
 
-      {touring && tourPlan ? (
+      {touring && !tourPlan ? (
+        <div className="s3d-planning card" role="status" aria-live="polite">
+          <Spinner size={16} />
+          <div>
+            <strong>Planning your tour</strong>
+            <span className="subtle">{planning || "Getting ready…"}</span>
+          </div>
+          <button className="btn btn--sm" onClick={exitTour}>Cancel</button>
+        </div>
+      ) : touring && tourPlan ? (
         <TourBar
           duration={tourPlan.duration}
+          source={planSource}
+          replanning={!!planning}
+          onReplan={replan}
           timeRef={tourTime}
           playing={playing}
           exportProgress={exportState ? exportState.progress : null}
@@ -245,10 +383,7 @@ export default function Scene3DPanel({ project, files, onClose }: PanelProps) {
             if (!playing && tourTime.current >= tourPlan.duration) tourTime.current = 0;
             setPlaying((p) => !p);
           }}
-          onRestart={() => {
-            tourTime.current = 0;
-            setPlaying(true);
-          }}
+          onRestart={playFromStart}
           onSeek={(t) => {
             tourTime.current = t;
           }}

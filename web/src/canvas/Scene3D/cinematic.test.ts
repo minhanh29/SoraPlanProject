@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import type { SceneGraph } from "../../lib/types";
-import { EYE_HEIGHT, planTour, sampleTour } from "./cinematic";
+import { buildTour, defaultChoices, EYE_HEIGHT, planTour, sampleTour, shotCandidates } from "./cinematic";
 import { pointInPolygon } from "./geometry";
 
 // The backend's golden scene (floorplan_1, Japandi): real rooms, walls and furniture.
@@ -54,6 +54,46 @@ describe("cinematic tour", () => {
       const b = sampleTour(tour, f / fps);
       if (a.shotIndex !== b.shotIndex) continue; // cuts are allowed to jump
       expect(Math.hypot(b.position[0] - a.position[0], b.position[1] - a.position[1], b.position[2] - a.position[2])).toBeLessThan(0.5);
+    }
+  });
+});
+
+describe("candidate shots", () => {
+  const candidates = shotCandidates(graph);
+
+  it("offers a few diverse, wall-free viewpoints per room", () => {
+    const rooms = new Set(candidates.map((c) => c.roomId));
+    expect(rooms.size).toBeGreaterThan(1);
+    for (const r of rooms) expect(candidates.filter((c) => c.roomId === r).length).toBeLessThanOrEqual(4);
+    const best = defaultChoices(graph, candidates).map((ch) => candidates.find((c) => c.id === ch.candidateId)!);
+    for (const c of best) {
+      expect(c.depth).toBeGreaterThan(1.8); // never staring at a wall or a wardrobe
+      expect(c.visible.length).toBeGreaterThan(0);
+      expect(c.description).toContain(c.roomName);
+    }
+  });
+
+  it("builds the tour from chosen candidates and ignores unknown ones; captions carry no area", () => {
+    const pick = candidates[0];
+    const tour = buildTour(graph, candidates, [
+      { candidateId: pick.id, move: "slide_left", duration: 5 },
+      { candidateId: "nope", move: "dolly_in", duration: 5 },
+      { candidateId: pick.id.replace(/#\d+$/, "#2"), move: "pan_right", duration: 20 },
+    ], { title: "T" });
+    const interiors = tour.shots.filter((s) => s.kind === "interior");
+    expect(interiors.length).toBe(candidates.some((c) => c.id === pick.id.replace(/#\d+$/, "#2")) ? 2 : 1);
+    expect(interiors[0].caption).toEqual({ title: pick.roomName, style: "lower" });
+    if (interiors[1]) {
+      expect(interiors[1].caption).toBeNull(); // same room again: no repeated name
+      expect(interiors[1].duration).toBeLessThanOrEqual(7);
+    }
+  });
+
+  it("keeps corridors out of the automatic order", () => {
+    const rooms = new Map(graph.levels[0].rooms.map((r) => [r.id, r]));
+    for (const ch of defaultChoices(graph, candidates)) {
+      const c = candidates.find((x) => x.id === ch.candidateId)!;
+      expect(rooms.get(c.roomId)?.type).not.toBe("hallway");
     }
   });
 });

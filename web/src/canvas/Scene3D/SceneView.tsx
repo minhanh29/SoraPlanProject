@@ -62,7 +62,8 @@ export interface SceneViewProps {
 }
 
 export interface TourSetup {
-  plan: Tour;
+  /** null while the AI director is planning (TourDirector only renders previews then). */
+  plan: Tour | null;
   playing: boolean;
   timeRef: MutableRefObject<number>;
   apiRef: MutableRefObject<TourApi | null>;

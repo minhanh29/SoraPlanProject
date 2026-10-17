@@ -93,6 +93,16 @@ export const api = {
   projectFiles: (id: string) => request<ProjectFiles>("GET", `/projects/${id}/files`),
   savePlan: (id: string, floorPlan: FloorPlan) =>
     request<{ floorPlanVersion: number }>("PUT", `/projects/${id}/plan`, { floorPlan }),
+  /** AI director: Gemini chooses and orders candidate tour shots (502 → use the automatic plan). */
+  planTour: (
+    id: string,
+    body: {
+      title: string;
+      style?: string | null;
+      rooms: { id: string; name: string; type?: string; area: number; items: string[]; connectsTo: string[] }[];
+      candidates: { id: string; roomId: string; description: string; score: number; image?: string }[];
+    },
+  ) => request<{ shots: { candidateId: string; move: string; duration: number; reason: string }[]; source: string }>("POST", `/projects/${id}/tour/plan`, body),
   updateMapping: (
     id: string,
     body: { componentId: string; dims?: Dims | null; assetId?: string | null; applyToSameAsset?: boolean; reset?: boolean; restore?: boolean },

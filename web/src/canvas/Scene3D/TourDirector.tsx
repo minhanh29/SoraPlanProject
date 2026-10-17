@@ -1,6 +1,7 @@
-// Drives the camera along a planned tour (live preview), and renders it frame by frame for the MP4 export.
-// Lives inside the R3F <Canvas>. The panel switches the Canvas to frameloop "never" + the export pixel ratio
-// before calling exportVideo, so every frame is rendered on demand with advance().
+// Drives the camera along a planned tour (live preview), renders candidate previews for the AI director, and
+// renders the tour frame by frame for the MP4 export. Lives inside the R3F <Canvas>. The panel switches the
+// Canvas to frameloop "never" + the target pixel ratio before renderStills / exportVideo, so every frame is
+// rendered on demand with advance().
 import { forwardRef, useEffect, useImperativeHandle, useRef, type MutableRefObject } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
@@ -9,7 +10,15 @@ import { sampleTour, type Tour, type TourFrame } from "./cinematic";
 import { drawTourOverlay, encodeVideo } from "./exportVideo";
 import { FOV } from "./IsoCamera";
 
+export interface StillPose {
+  position: [number, number, number];
+  target: [number, number, number];
+  fov: number;
+}
+
 export interface TourApi {
+  /** One JPEG (base64, no data: prefix) per pose, `width × height`, interior lighting on. */
+  renderStills: (poses: StillPose[], width: number, height: number) => Promise<string[]>;
   exportVideo: (opts: {
     width: number;
     height: number;
@@ -21,7 +30,8 @@ export interface TourApi {
 }
 
 interface Props {
-  tour: Tour;
+  /** null while the tour is being planned (the camera is only moved by renderStills). */
+  tour: Tour | null;
   playing: boolean;
   /** Tour time (s); owned by the panel so it can seek / restart. */
   timeRef: MutableRefObject<number>;
@@ -47,6 +57,7 @@ const TourDirector = forwardRef<TourApi, Props>(function TourDirector(
   const exporting = useRef(false);
   const ended = useRef(false);
   const target = useRef(new THREE.Vector3());
+  const still = useRef<TourFrame | null>(null);
 
   const apply = (f: TourFrame) => {
     camera.position.set(...f.position);
@@ -64,6 +75,11 @@ const TourDirector = forwardRef<TourApi, Props>(function TourDirector(
   };
 
   useFrame((_, delta) => {
+    if (still.current) {
+      apply(still.current);
+      return;
+    }
+    if (!tour) return;
     if (!exporting.current && playing) timeRef.current = Math.min(tour.duration, timeRef.current + Math.min(delta, 0.1));
     apply(sampleTour(tour, timeRef.current));
     if (exporting.current || !playing) {
@@ -92,7 +108,34 @@ const TourDirector = forwardRef<TourApi, Props>(function TourDirector(
   useImperativeHandle(
     ref,
     () => ({
+      renderStills: async (poses, width, height) => {
+        exporting.current = true;
+        try {
+          await preload();
+          await wait(120);
+          composerRef.current?.setSize(size.width, size.height);
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d", { alpha: false })!;
+          const out: string[] = [];
+          for (let i = 0; i < poses.length; i++) {
+            const p = poses[i];
+            still.current = { position: p.position, target: p.target, fov: p.fov, interior: true, fade: 0, caption: null, captionAlpha: 0, shotIndex: 0 };
+            // First pose: a few extra renders compile shaders / upload textures
+            for (let k = 0; k < (i === 0 ? 4 : 1); k++) advance(performance.now());
+            ctx.drawImage(gl.domElement, 0, 0, width, height);
+            out.push(canvas.toDataURL("image/jpeg", 0.72).split(",")[1]);
+            if (i % 4 === 3) await wait(0); // keep the page responsive
+          }
+          return out;
+        } finally {
+          still.current = null;
+          exporting.current = false;
+        }
+      },
       exportVideo: async ({ width, height, fps, font, signal, onProgress }) => {
+        if (!tour) throw new Error("The tour is not ready yet");
         exporting.current = true;
         try {
           await preload();

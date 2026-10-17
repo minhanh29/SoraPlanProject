@@ -221,6 +221,13 @@ class FakeGemini:
     def classify_labels(self, items, categories):
         return {i["id"]: self.labels.get(i["label"]) for i in items}
 
+    def direct_tour(self, system, parts, temperature=0.3):
+        """Tour director: returns `self.tour_reply` (JSON text) or raises `self.tour_error`."""
+        self.calls.append({"system": system, "tour_parts": parts})
+        if getattr(self, "tour_error", None):
+            raise self.tour_error
+        return getattr(self, "tour_reply", '{"shots": []}')
+
 
 def say(text: str) -> ModelTurn:
     return ModelTurn(text=text)

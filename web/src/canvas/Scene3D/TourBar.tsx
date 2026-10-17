@@ -5,6 +5,10 @@ import { Icon, Spinner } from "../../components/ui";
 
 interface Props {
   duration: number;
+  /** Who chose the shots: the AI director or the automatic fallback. */
+  source: "gemini" | "auto" | null;
+  replanning: boolean;
+  onReplan: () => void;
   timeRef: MutableRefObject<number>;
   playing: boolean;
   /** Export progress 0..1, or null when not exporting. */
@@ -58,6 +62,15 @@ export default function TourBar(p: Props) {
           onInput={(e) => p.onSeek(Number((e.target as HTMLInputElement).value))}
         />
         <span ref={time} className="s3d-tourbar__time" />
+        <button
+          className="s3d-tourbar__source"
+          onClick={p.onReplan}
+          disabled={exporting || p.replanning}
+          title={p.source === "gemini" ? "Shots chosen by Gemini. Click to ask for a new plan." : "Automatic shots. Click to ask Gemini to direct the tour."}
+        >
+          {p.replanning ? <Spinner size={12} /> : <Icon name="sparkle" size={14} />}
+          {p.replanning ? "Re-planning…" : p.source === "gemini" ? "Directed by Gemini · Re-plan" : "Ask Gemini to direct"}
+        </button>
         <div className="s3d-tourbar__export">
           <button className="btn btn--sm btn--primary" disabled={exporting || !p.canExport} onClick={() => p.onExport(1080)}
             title={p.canExport ? "Render the tour to an MP4 file (1920×1080, 30 fps)" : "Video export needs a recent Chrome, Edge or Safari"}>

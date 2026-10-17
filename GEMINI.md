@@ -344,10 +344,15 @@ npm test && npm run typecheck
 - **Realistic** (3D toolbar, remembered per browser): `RealisticEffects` (N8AO ambient occlusion, bloom, SMAA, ACES
   tone mapping, vignette; the composer does tone mapping because three.js skips it for render targets), warmer sun
   with low fill light (strong fill washes the shadows out), procedural wood / tile floors (`materials.ts`), window glass.
-- **Tour**: `cinematic.ts` plans shots from the scene graph (aerial title orbit → one eye-height dolly/slide per room,
-  living spaces first, cameras kept inside the room and clear of walls and tall furniture → aerial outro, dips to
-  black) and `sampleTour(t)` is pure, so preview and export see the same frames. Full walls, ceilings and room lights
-  (`Interior.tsx`, lights only change intensity: adding lights recompiles every material).
+- **Tour**: `cinematic.ts` finds candidate shots per room (camera spots on a grid, clear of walls and furniture,
+  × 16 directions, scored by a 2D ray fan over the 16:9 field of view against walls with door gaps and tall
+  furniture: own furniture in clear view, depth, penalties for a near wall / furniture in the lens / looking out
+  through gaps in the parsed walls). The browser renders a 384×216 preview of each candidate (`renderStills`) and
+  `POST /v1/projects/{id}/tour/plan` lets **Gemini direct** (`services/tour_planner.py`: it picks, orders and
+  chooses moves among candidate ids only; the answer is validated). 502 → the automatic choice
+  (`defaultChoices`). The plan is cached per scene version in localStorage; "Re-plan" asks again. `sampleTour(t)`
+  is pure, so preview and export see the same frames. Full walls, ceilings and room lights (`Interior.tsx`,
+  lights only change intensity: adding lights recompiles every material).
 - **Export** (`exportVideo.ts`): the panel sets the Canvas to `frameloop="never"` and the export pixel ratio (as props:
   R3F resets an imperatively changed dpr on re-render), `TourDirector` renders each frame with `advance()`, captions
   and fades are drawn on a 2D canvas, WebCodecs encodes H.264 (VP9/AV1 fallback) and `mp4-muxer` writes the MP4.
@@ -433,6 +438,7 @@ backs to the wall behind (`asset_mapper.fit_asset`), `real_dims` for added items
 (undo a Skip). Existing scenes keep their sizes until the style is picked again. Web not redeployed.
 Then `soraplan-api-00006-jkl`: skipping specific boxes (`skip_missing` with `componentIds`) no longer builds the scene,
 even for the last missing box; only skip-all / Continue builds.
+Then `soraplan-api-00007-d98`: `POST /projects/{id}/tour/plan` (Gemini tour director, `services/tour_planner.py`).
 
 Live URLs: API `https://soraplan-api-va4xv7fowq-as.a.run.app` (= `API_PUBLIC_URL`), worker
 `https://soraplan-plan-parsing-worker-va4xv7fowq-as.a.run.app` (private), web `https://soraplan.web.app`.

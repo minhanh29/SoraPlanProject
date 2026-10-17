@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from ..deps import get_asset_service, get_current_user, get_scene_service, get_workflow
+from ..deps import get_asset_service, get_current_user, get_db, get_gemini, get_scene_service, get_workflow
 from ..models.conversation import (
     MappingResponse,
     OpBatchRequest,
@@ -8,12 +8,15 @@ from ..models.conversation import (
     ProjectFilesResponse,
     SavePlanRequest,
     SavePlanResponse,
+    TourPlanRequest,
+    TourPlanResponse,
     UpdateMappingRequest,
     VersionResponse,
 )
 from ..models.user import UserProfile
 from ..services.asset_service import AssetService
 from ..services.scene_ops import SceneService
+from ..services.tour_planner import TourPlanner
 from ..services.workflow import Workflow
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -53,6 +56,18 @@ def update_mapping(
         restore=body.restore,
     )
     return {"mapping": mapping}
+
+
+@router.post("/{project_id}/tour/plan", response_model=TourPlanResponse,
+             summary="AI director: Gemini picks and orders candidate tour shots from their previews (502 → use the automatic plan)")
+def plan_tour(
+    project_id: str,
+    body: TourPlanRequest,
+    user: UserProfile = Depends(get_current_user),
+    db=Depends(get_db),
+    gemini=Depends(get_gemini),
+):
+    return TourPlanner(db, gemini).plan(project_id, user.uid, body.model_dump(by_alias=True))
 
 
 @router.post("/{project_id}/scene/ops", response_model=OpResultResponse,

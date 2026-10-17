@@ -174,6 +174,36 @@ class GeminiClient:
         return {k: (v if v in categories else None) for k, v in data.items()} if isinstance(data, dict) else {}
 
 
+    def direct_tour(self, system: str, parts: List[Any], temperature: float = 0.3) -> str:
+        """Tour director: text + (bytes, mime) image parts in order → JSON text (see services/tour_planner.py)."""
+        from google.genai import types
+
+        contents = [
+            types.Part.from_bytes(data=p[0], mime_type=p[1]) if isinstance(p, tuple) else types.Part.from_text(text=p)
+            for p in parts
+        ]
+        config = types.GenerateContentConfig(system_instruction=system, temperature=temperature, response_mime_type="application/json")
+        started = time.monotonic()
+        last_error: Optional[Exception] = None
+        for attempt in range(2):
+            try:
+                resp = self.client.models.generate_content(model=self.model, contents=[types.Content(role="user", parts=contents)], config=config)
+                um = resp.usage_metadata
+                logger.info(json.dumps({
+                    "event": "gemini_tour", "model": self.model, "latencyMs": int((time.monotonic() - started) * 1000),
+                    "images": sum(1 for p in parts if isinstance(p, tuple)), "attempt": attempt,
+                    "tokens": {"prompt": um.prompt_token_count or 0, "output": um.candidates_token_count or 0} if um else {},
+                }))
+                return resp.text or ""
+            except Exception as e:
+                last_error = e
+                logger.warning("Gemini tour call failed (attempt %d): %s", attempt + 1, e)
+                if not _is_retryable(e):
+                    break
+                time.sleep(1.0)
+        raise GeminiError(str(last_error))
+
+
 def _is_retryable(e: Exception) -> bool:
     code = getattr(e, "code", None) or getattr(e, "status_code", None)
     if code in (429, 500, 502, 503, 504):
