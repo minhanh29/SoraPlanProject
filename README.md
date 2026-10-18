@@ -16,7 +16,7 @@
 
 <br/>
 
-<img src="docs/images/hero-3d-chat.jpg" alt="SoraPlan: chat on the left edits the furnished 3D home on the right" width="900"/>
+<img src="media/demo.webp" alt="SoraPlan: chat on the left edits the furnished 3D home on the right" width="900"/>
 
 </div>
 
