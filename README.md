@@ -38,9 +38,9 @@ builds a scene measured in real meters, then furnishes it in the style you choos
 <td width="33%" align="center"><b>3 · Explore &amp; edit in 3D</b></td>
 </tr>
 <tr>
-<td><img src="docs/images/plan-input.jpg" alt="Input floor plan"/></td>
-<td><img src="docs/images/style-realistic.jpg" alt="Style and realistic 3D view"/></td>
-<td><img src="docs/images/plan-overlay.jpg" alt="Plan overlay on the 3D model"/></td>
+<td><img src="media/plan-input.jpg" alt="Input floor plan"/></td>
+<td><img src="media/style-realistic.jpg" alt="Style and realistic 3D view"/></td>
+<td><img src="media/plan-overlay.jpg" alt="Plan overlay on the 3D model"/></td>
 </tr>
 </table>
 
@@ -59,8 +59,8 @@ builds a scene measured in real meters, then furnishes it in the style you choos
 
 <table>
 <tr>
-<td width="60%"><img src="docs/images/tour.jpg" alt="AI-directed tour"/></td>
-<td width="40%"><img src="docs/images/photo-to-3d.jpg" alt="Photo of a laptop converted to a 3D model"/></td>
+<td width="60%"><img src="media/tour.jpg" alt="AI-directed tour"/></td>
+<td width="40%"><img src="media/photo-to-3d.jpg" alt="Photo of a laptop converted to a 3D model"/></td>
 </tr>
 <tr>
 <td align="center"><sub>🎬 AI-directed walkthrough tour</sub></td>
