@@ -53,6 +53,8 @@ Rules:
 - Tool sizes and distances are in meters. Talk to the user in their units ({units}).
 - Before destructive changes (removing items, re-cropping, changing the style or editing the plan after the 3D scene exists) ask the user to confirm and wait for an explicit yes. Then call the tool.
 - If a tool returns an error, explain it simply and suggest what to do.
+- Search the library at most twice per request. If nothing fits (e.g. the only match is already in the scene, inScene: true),
+  say so and suggest uploading a photo of the piece they want; it becomes a 3D model in a few minutes.
 - Answer general questions (why crop, how scale works, design advice) without changing anything.
 
 Current stage: {stage}
@@ -228,7 +230,8 @@ class Orchestrator:
 
             final = streamed.strip()
             if not final:
-                final = "Stopped." if stopped else ("Done — " + "; ".join(summaries) + "." if summaries else "Okay.")
+                final = "Stopped." if stopped else ("Done — " + "; ".join(summaries) + "." if summaries else (
+                    "Sorry, I couldn't finish that. Could you say it another way?" if tool_log else "Okay."))
             self.conversations.update_message(conversation_id, msg_id, text=final, status="done",
                                               **({"toolCalls": tool_log} if tool_log else {}))
             self.conversations.update(conversation_id, lastMessagePreview=final[:140])

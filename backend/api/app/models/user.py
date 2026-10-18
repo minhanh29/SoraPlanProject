@@ -26,6 +26,7 @@ class UserProfile(BaseSchema):
     plan: str = Field(default="free", description="User subscription tier (free, pro, enterprise)")
     quota: UserQuota = Field(default_factory=UserQuota)
     email_verified: bool = False
+    samples: Optional[str] = Field(default=None, description="Sample projects: pending | copying | done (None: never)")
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

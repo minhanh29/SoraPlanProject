@@ -35,7 +35,7 @@ export default function ReplacePicker({ item, assets, style, onPick, onClose }: 
         <div className="s3d-picker">
           {options.map((a) => (
             <button key={a.id} className="s3d-picker__card" onClick={() => onPick(a)}>
-              <span className="s3d-picker__img">{a.imageUrl ? <img src={a.imageUrl} alt="" loading="lazy" /> : null}</span>
+              <span className="s3d-picker__img">{a.thumbUrl || a.imageUrl ? <img src={(a.thumbUrl || a.imageUrl)!} alt="" loading="lazy" /> : null}</span>
               <span className="s3d-picker__name">{a.name}</span>
               <span className="subtle">{a.isSystem ? a.style : "Your asset"}</span>
             </button>

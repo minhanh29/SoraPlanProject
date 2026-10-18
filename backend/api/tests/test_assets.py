@@ -35,6 +35,25 @@ def test_glb_dims_reads_accessors_and_node_scale():
     assert glb_dims(b"not a glb") is None
 
 
+def test_thumbnail_is_small_webp_and_keeps_alpha():
+    import io
+    from PIL import Image
+    from app.services.thumbnail import make_thumbnail
+
+    src = Image.new("RGBA", (2000, 1000), (0, 0, 0, 0))
+    src.paste((200, 100, 50, 255), (500, 250, 1500, 750))
+    buf = io.BytesIO()
+    src.save(buf, format="PNG")
+    thumb = Image.open(io.BytesIO(make_thumbnail(buf.getvalue())))
+    assert thumb.format == "WEBP" and thumb.size == (512, 256) and thumb.mode == "RGBA"
+    assert thumb.getpixel((0, 0))[3] == 0 and thumb.getpixel((256, 128))[3] == 255
+
+    jpeg = io.BytesIO()
+    Image.new("RGB", (300, 400), "white").save(jpeg, format="JPEG")
+    thumb = Image.open(io.BytesIO(make_thumbnail(jpeg.getvalue())))
+    assert thumb.size == (300, 400) and thumb.mode == "RGB"  # never upscaled
+
+
 def test_upload_starts_meshy_and_poll_finalizes(client, fake_db, fake_storage, fake_meshy, monkeypatch):
     asset = upload(client, fake_storage)
     doc = fake_db.doc(f"assets/{asset['id']}")
@@ -42,6 +61,8 @@ def test_upload_starts_meshy_and_poll_finalizes(client, fake_db, fake_storage, f
     assert doc["status"] == "generating_3d" and doc["meshyTaskId"] == "task_1"
     assert fake_meshy.created[0].startswith("data:image/jpeg;base64,")
     assert "links" not in asset and "meshyTaskId" not in asset  # internal fields hidden
+    assert doc["thumbPath"] == f"{USER_UID}/assets/{asset['id']}/thumb.webp"
+    assert fake_storage.blobs[doc["thumbPath"]][8:12] == b"WEBP" and asset["thumbUrl"].startswith("https://signed.example/")
 
     res = client.post(f"/internal/assets/{asset['id']}/poll", json={"attempt": 0})
     assert res.json() == {"running": True}
@@ -131,13 +152,14 @@ def test_admin_promotion_requires_style_category_and_ready_model(admin_client, f
     # moved, not copied: the private originals are gone
     assert "x/model.glb" not in fake_storage.blobs and not [k for k in fake_storage.blobs if f"/assets/{asset['id']}/" in k]
     assert f"assets/Japandi/user_{asset['id']}.glb" in fake_storage.catalog
+    assert doc["thumbUrl"] == f"https://storage.googleapis.com/soraplan-catalog/assets-web/Japandi/user_{asset['id']}_thumb.webp"
 
     # demoting moves the files back into the owner's private folder
     res = admin_client.patch(f"/v1/assets/{asset['id']}", json={"isSystem": False}, headers=AUTH)
     assert res.status_code == 200, res.text
     doc = fake_db.doc(f"assets/{asset['id']}")
     assert doc["isSystem"] is False and doc["glbPath"].endswith(f"/assets/{asset['id']}/model.glb")
-    assert doc["glbPath"] in fake_storage.blobs and doc["imagePath"] in fake_storage.blobs
+    assert doc["glbPath"] in fake_storage.blobs and doc["imagePath"] in fake_storage.blobs and doc["thumbPath"] in fake_storage.blobs
     assert doc["glbUrl"].startswith("https://signed.example/")
     assert not fake_storage.catalog
 

@@ -40,7 +40,8 @@ export function buildDecorations(
     const dims = dimsOverride[o.id] || entry?.dims || null;
     const dec: Decoration = { kind: state, category: entry?.category ?? o.category ?? null };
     if (state === "matched" || state === "generating") {
-      dec.image = asset?.imageUrl ? imageFor(asset.imageUrl) : null;
+      const imageUrl = asset?.thumbUrl || asset?.imageUrl;
+      dec.image = imageUrl ? imageFor(imageUrl) : null;
       dec.progress = asset?.progress || 0;
       if (dims && state === "matched") {
         dec.footprint = { w: dims.w / k, d: dims.d / k, rotation: footprintRotation(o.rotation, entry?.rotationOffset) };

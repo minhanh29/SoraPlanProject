@@ -70,6 +70,8 @@ export function uploadToSignedUrl(url: string, file: Blob, contentType: string, 
 
 export const api = {
   me: () => request<UserProfile>("GET", "/users/me"),
+  /** New accounts: copy the sample projects in (no-op once done). */
+  copySamples: () => request<{ status: string; projectIds: string[] }>("POST", "/users/me/samples"),
   /** Also marks a job that stopped making progress as failed (and resets its chat). */
   job: (id: string) => request<Job>("GET", `/jobs/${id}`),
 

@@ -187,6 +187,14 @@ class StorageService:
             logger.error("Error deleting blobs under prefix %s: %s", prefix, e)
             return 0
 
+    def copy_prefix(self, src_prefix: str, dst_prefix: str) -> int:
+        """Server-side copy of every blob under src_prefix to the same relative path under dst_prefix."""
+        count = 0
+        for blob in self.bucket.list_blobs(prefix=src_prefix):
+            self.bucket.copy_blob(blob, self.bucket, dst_prefix + blob.name[len(src_prefix):])
+            count += 1
+        return count
+
     def download_bytes(self, blob_path: str) -> bytes:
         return self.bucket.blob(blob_path).download_as_bytes()
 

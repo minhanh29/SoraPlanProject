@@ -27,7 +27,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (u) {
           // The API is the only source of the admin role (ADMIN_UIDS)
           try {
-            setProfile(await api.me());
+            const me = await api.me();
+            setProfile(me);
+            // First load of a new account: the copies show up in the project list through its listener
+            if (me.samples === "pending") api.copySamples().catch((e) => console.warn("Sample projects not copied", e));
           } catch {
             setProfile({ uid: u.uid, email: u.email || "", displayName: u.displayName, photoUrl: u.photoURL, role: "user" });
           }

@@ -6,8 +6,6 @@ import math
 import re
 import statistics
 import time
-import urllib.request
-import urllib.error
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import httpx
 import importlib
@@ -1347,63 +1345,57 @@ class PlanParserService:
         furniture_name: str = "furniture",
     ) -> Dict[str, Any]:
         """
-        Calls OpenAI gpt-6-sol with image_generation tool to isolate furniture
-        with prompt '{uploaded_furniture} transparent background'.
-        Returns data URI with a transparent background PNG.
+        Calls the OpenAI Images edit endpoint with prompt '{uploaded_furniture} transparent background'
+        (1024x1024, transparent PNG). Returns data URI with a transparent background PNG.
         """
         clean_name = (furniture_name or "furniture").strip()
         prompt = f"{clean_name} transparent background"
+        model = self.settings.OPENAI_IMAGE_MODEL
 
         media_type = mime_type if mime_type in ("image/png", "image/jpeg", "image/webp") else "image/jpeg"
-        b64_data = base64.b64encode(image_bytes).decode("utf-8")
-        data_uri = f"data:{media_type};base64,{b64_data}"
+        ext = media_type.split("/")[1]
 
-        payload = {
-            "model": self.settings.OPENAI_MODEL,
-            "tools": [{"type": "image_generation"}],
-            "input": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": prompt},
-                        {"type": "input_image", "image_url": data_uri},
-                    ],
-                }
-            ],
-        }
+        # The output is a 1024x1024 square: shrink and pad the photo to a centered square first so a wide
+        # object is not cropped (also keeps the upload small).
+        if HAS_PIL:
+            try:
+                src = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+                src.thumbnail((1024, 1024))
+                side = max(src.size)
+                square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+                square.paste(src, ((side - src.width) // 2, (side - src.height) // 2))
+                buf = io.BytesIO()
+                square.save(buf, format="PNG")
+                image_bytes, media_type, ext = buf.getvalue(), "image/png", "png"
+            except Exception as e:
+                logger.warning("Could not pad the photo to a square, sending it as is: %s", e)
 
-        headers = {
-            "Authorization": f"Bearer {self.settings.OPENAI_API_KEY}",
-            "Content-Type": "application/json",
-        }
-
-        logger.info("Calling OpenAI Responses API (%s) to generate transparent background for: '%s'", self.settings.OPENAI_MODEL, prompt)
-        req = urllib.request.Request(
-            "https://api.openai.com/v1/responses",
-            headers=headers,
-            data=json.dumps(payload).encode("utf-8"),
-        )
-
+        logger.info("Calling OpenAI Images edit (%s) to generate transparent background for: '%s'", model, prompt)
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                res = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="replace")
-            logger.error("OpenAI API HTTPError %d: %s", e.code, err_body)
-            raise RuntimeError(f"OpenAI API error ({e.code}): {err_body}")
-        except Exception as e:
+            resp = httpx.post(
+                "https://api.openai.com/v1/images/edits",
+                headers={"Authorization": f"Bearer {self.settings.OPENAI_API_KEY}"},
+                data={
+                    "model": model,
+                    "prompt": prompt,
+                    "size": "1024x1024",
+                    "background": "transparent",
+                    "output_format": "png",
+                },
+                files={"image": (f"furniture.{ext}", image_bytes, media_type)},
+                timeout=120,
+            )
+        except httpx.HTTPError as e:
             logger.error("Failed to call OpenAI API: %s", e)
             raise RuntimeError(f"Failed to communicate with OpenAI API: {str(e)}")
+        if resp.status_code != 200:
+            logger.error("OpenAI API HTTPError %d: %s", resp.status_code, resp.text)
+            raise RuntimeError(f"OpenAI API error ({resp.status_code}): {resp.text}")
 
-        result_b64 = None
-        for item in res.get("output", []):
-            if item.get("type") == "image_generation_call":
-                result_b64 = item.get("result")
-                if result_b64:
-                    break
-
+        data = resp.json().get("data") or []
+        result_b64 = data[0].get("b64_json") if data else None
         if not result_b64:
-            logger.error("OpenAI response did not contain image_generation_call result: %s", res)
+            logger.error("OpenAI images edit response did not contain an image: %s", resp.text[:500])
             raise RuntimeError("No image returned from OpenAI model for transparent background.")
 
         # Post-process with alpha channel if PIL is available
@@ -1422,7 +1414,7 @@ class PlanParserService:
             "status": "success",
             "furnitureName": clean_name,
             "prompt": prompt,
-            "model": self.settings.OPENAI_MODEL,
+            "model": model,
             "mimeType": "image/png",
             "dataUri": f"data:image/png;base64,{result_b64}",
             "result": result_b64,

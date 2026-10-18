@@ -47,14 +47,17 @@ class GeminiClient:
     def client(self):
         if self._client is None:
             from google import genai
+            from google.genai import types
 
+            http_options = types.HttpOptions(timeout=self.settings.GEMINI_TIMEOUT_SECONDS * 1000)
             if self.settings.GEMINI_API_KEY:
-                self._client = genai.Client(api_key=self.settings.GEMINI_API_KEY)
+                self._client = genai.Client(api_key=self.settings.GEMINI_API_KEY, http_options=http_options)
             else:
                 self._client = genai.Client(
                     vertexai=True,
                     project=self.settings.FIREBASE_PROJECT_ID,
                     location=self.settings.GEMINI_LOCATION,
+                    http_options=http_options,
                 )
         return self._client
 
@@ -110,6 +113,7 @@ class GeminiClient:
             tools=self._tools(tools),
             temperature=temperature,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            http_options=types.HttpOptions(timeout=self.settings.GEMINI_CHAT_TIMEOUT_SECONDS * 1000),
         )
         contents = self._contents(history)
         started = time.monotonic()
@@ -146,7 +150,9 @@ class GeminiClient:
             except Exception as e:  # retry transient errors only before anything was shown to the user
                 last_error = e
                 logger.warning("Gemini call failed (attempt %d): %s", attempt + 1, e)
-                if emitted or not _is_retryable(e):
+                # At most one retry after a full timeout, so the user never waits much longer than two attempts
+                out_of_time = time.monotonic() - started > self.settings.GEMINI_CHAT_TIMEOUT_SECONDS * 1.5
+                if emitted or out_of_time or not _is_retryable(e):
                     break
                 time.sleep(0.8 * (2 ** attempt))
         raise GeminiError(str(last_error))
@@ -210,7 +216,8 @@ class GeminiClient:
 
         model = self.settings.GEMINI_IMAGE_MODEL
         parts = [types.Part.from_bytes(data=reference, mime_type="image/jpeg"), types.Part.from_text(text=prompt)]
-        config = types.GenerateContentConfig(response_modalities=["IMAGE"], image_config=types.ImageConfig(aspect_ratio="1:1"))
+        config = types.GenerateContentConfig(response_modalities=["IMAGE"], image_config=types.ImageConfig(aspect_ratio="1:1"),
+                                             http_options=types.HttpOptions(timeout=180_000))  # image generation is slow
         started = time.monotonic()
         last_error: Optional[Exception] = None
         for attempt in range(2):
@@ -236,4 +243,4 @@ def _is_retryable(e: Exception) -> bool:
     if code in (429, 500, 502, 503, 504):
         return True
     text = str(e).lower()
-    return any(s in text for s in ("unavailable", "deadline", "resource exhausted", "timeout", "temporarily"))
+    return any(s in text for s in ("unavailable", "deadline", "resource exhausted", "timeout", "timed out", "temporarily"))

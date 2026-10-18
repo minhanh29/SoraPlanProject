@@ -57,6 +57,10 @@ class Settings(BaseSettings):
         default="soraplan-catalog",
         description="Public-read bucket holding preset furniture under assets/{Style}/",
     )
+    SAMPLE_PROJECT_IDS: Union[List[str], str] = Field(
+        default=["dXQrA5ZhhLsskEcHN3tE", "KtVIruk6urX04OI8HuGs"],
+        description="Projects copied into every new account (comma-separated in env)",
+    )
     MAX_UPLOAD_SIZE_BYTES: int = Field(
         default=25 * 1024 * 1024,
         description="Maximum allowed file upload size in bytes (default 25MB)",
@@ -125,6 +129,14 @@ class Settings(BaseSettings):
         default=None,
         description="Local dev only: use the Gemini API with a key instead of Vertex AI. Unset on Cloud Run.",
     )
+    GEMINI_TIMEOUT_SECONDS: int = Field(
+        default=60,
+        description="Per-request Gemini timeout. Without one a stalled call (e.g. after a 429) hangs the chat turn forever.",
+    )
+    GEMINI_CHAT_TIMEOUT_SECONDS: int = Field(
+        default=20,
+        description="Per-attempt timeout of a chat turn. Vertex latency has a random 30-50 s tail: retrying is faster than waiting.",
+    )
     CHAT_HISTORY_MESSAGES: int = Field(default=20, description="Past messages sent to Gemini each turn")
     CHAT_MAX_TOOL_ROUNDS: int = Field(default=4, description="Model ↔ tool round trips per user turn")
 
@@ -143,7 +155,7 @@ class Settings(BaseSettings):
     def catalog_base_url(self) -> str:
         return f"https://storage.googleapis.com/{self.CATALOG_BUCKET_NAME}"
 
-    @field_validator("CORS_ORIGINS", "ADMIN_UIDS", mode="before")
+    @field_validator("CORS_ORIGINS", "ADMIN_UIDS", "SAMPLE_PROJECT_IDS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, str):

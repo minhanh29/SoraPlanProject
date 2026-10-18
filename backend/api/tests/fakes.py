@@ -180,6 +180,12 @@ class FakeStorage:
             del self.blobs[k]
         return len(keys)
 
+    def copy_prefix(self, src_prefix: str, dst_prefix: str) -> int:
+        keys = [k for k in self.blobs if k.startswith(src_prefix)]
+        for k in keys:
+            self.blobs[dst_prefix + k[len(src_prefix):]] = self.blobs[k]
+        return len(keys)
+
     def copy_to_catalog(self, blob_path: str, catalog_path: str, content_type: str) -> str:
         self.catalog[catalog_path] = self.blobs[blob_path]
         return f"https://storage.googleapis.com/soraplan-catalog/{catalog_path}"

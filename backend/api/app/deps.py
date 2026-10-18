@@ -20,6 +20,8 @@ from .services.gemini_client import GeminiClient
 from .services.orchestrator import Orchestrator
 from .services.scene_ops import SceneService
 from .services.workflow import Workflow
+from .services.sample_service import SampleService
+from .config import get_settings
 
 logger = logging.getLogger("api.deps")
 bearer_scheme = HTTPBearer(auto_error=True)
@@ -43,6 +45,13 @@ def get_storage() -> gcloud_storage.Client:
 def get_storage_service(storage_client: gcloud_storage.Client = Depends(get_storage)) -> StorageService:
     """Dependency for StorageService."""
     return StorageService(client=storage_client)
+
+
+def get_sample_service(
+    db: gcloud_firestore.Client = Depends(get_db),
+    storage_service: StorageService = Depends(get_storage_service),
+) -> SampleService:
+    return SampleService(db=db, storage=storage_service, sample_ids=get_settings().SAMPLE_PROJECT_IDS)
 
 
 def get_meshy_service() -> MeshyService:

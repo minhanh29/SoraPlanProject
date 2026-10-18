@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, status
 
-from ..deps import get_current_user, get_user_service
+from ..deps import get_current_user, get_sample_service, get_user_service
 from ..models.user import UpdateUserRequest, UserProfile, UserQuotaResponse
+from ..services.sample_service import SampleService
 from ..services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -31,6 +32,18 @@ def update_current_user_profile(
     user_service: UserService = Depends(get_user_service),
 ) -> UserProfile:
     return user_service.update_user_profile(current_user.uid, payload)
+
+
+@router.post(
+    "/me/samples",
+    status_code=status.HTTP_200_OK,
+    summary="Copy the sample projects into a new account (once; later calls are no-ops)",
+)
+def copy_sample_projects(
+    current_user: UserProfile = Depends(get_current_user),
+    samples: SampleService = Depends(get_sample_service),
+) -> dict:
+    return samples.ensure_samples(current_user.uid)
 
 
 @router.get(

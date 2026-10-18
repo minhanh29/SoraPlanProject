@@ -33,8 +33,8 @@ export default function AssetCard({
       }}
     >
       <div className="asset-card__media">
-        {asset.imageUrl ? (
-          <img src={asset.imageUrl} alt="" loading="lazy" draggable={false} />
+        {asset.thumbUrl || asset.imageUrl ? (
+          <img src={asset.thumbUrl || asset.imageUrl!} alt="" loading="lazy" draggable={false} />
         ) : (
           <span className="asset-card__placeholder">
             <Icon name="cube" size={28} />

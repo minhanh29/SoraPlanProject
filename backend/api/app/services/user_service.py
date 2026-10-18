@@ -83,6 +83,7 @@ class UserService:
             "plan": "free",
             "quota": default_quota.model_dump(by_alias=True),
             "emailVerified": email_verified,
+            "samples": "pending",  # sample projects are copied on the first load (POST /users/me/samples)
             "createdAt": now,
             "updatedAt": now,
         }
@@ -178,6 +179,7 @@ class UserService:
             plan=data.get("plan", "free"),
             quota=quota,
             email_verified=bool(data.get("emailVerified", False)),
+            samples=data.get("samples"),
             created_at=data.get("createdAt"),
             updated_at=data.get("updatedAt"),
         )

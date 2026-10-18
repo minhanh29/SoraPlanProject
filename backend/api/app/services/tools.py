@@ -310,6 +310,10 @@ def _find_assets(t: ToolContext, args: Dict[str, Any]) -> ToolResult:
     q = str(args.get("query") or "").lower().strip()
     style = args.get("style")
     words = [w for w in re.split(r"\W+", q) if w]
+    try:  # so "another sofa" does not pick the one already there
+        in_scene = {i.get("assetId") for i in t.level()["items"]} if t.stage == "scene_ready" else set()
+    except AppException:
+        in_scene = set()
     out = []
     for a in t.workflow.assets.placeable_assets(t.ctx.uid):
         if a.get("status", "ready") != "ready":
@@ -319,7 +323,7 @@ def _find_assets(t: ToolContext, args: Dict[str, Any]) -> ToolResult:
         hay = f"{a.get('name', '')} {a.get('category', '')} {a.get('style') or ''}".lower()
         if not words or all(w in hay for w in words) or any(w in hay for w in words if len(w) > 3):
             out.append({"assetId": a["id"], "name": a.get("name"), "category": a.get("category"), "style": a.get("style"),
-                        "owner": "system" if a.get("isSystem") else "user"})
+                        "owner": "system" if a.get("isSystem") else "user", "inScene": a["id"] in in_scene})
     return ToolResult({"results": out[:15], "count": len(out)})
 
 

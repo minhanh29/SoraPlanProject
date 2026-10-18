@@ -15,6 +15,72 @@ export interface UploadAssetPreset {
 
 type Step = "idle" | "uploading" | "confirming";
 
+/** Fits the whole photo by default; drag to move, wheel / pinch to zoom, double-click to reset. */
+function PannableImage({ src, alt }: { src: string; alt: string }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
+  const drag = useRef<{ id: number; x: number; y: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => setView({ x: 0, y: 0, scale: 1 }), [src]);
+
+  const endDrag = () => {
+    drag.current = null;
+    setDragging(false);
+  };
+
+  // Native listener: React's onWheel is passive, so it could not stop the dialog from scrolling
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const px = e.clientX - r.left - r.width / 2;
+      const py = e.clientY - r.top - r.height / 2;
+      setView((v) => {
+        const scale = Math.min(6, Math.max(1, v.scale * Math.exp(-e.deltaY * 0.0015)));
+        if (scale === 1) return { x: 0, y: 0, scale };
+        const k = scale / v.scale; // keep the point under the cursor in place
+        return { x: px - (px - v.x) * k, y: py - (py - v.y) * k, scale };
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  return (
+    <div
+      ref={boxRef}
+      className={`upload-pan ${dragging ? "is-dragging" : ""}`}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        setDragging(true);
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d || d.id !== e.pointerId) return;
+        const dx = e.clientX - d.x;
+        const dy = e.clientY - d.y;
+        drag.current = { ...d, x: e.clientX, y: e.clientY };
+        setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+      }}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onDoubleClick={() => setView({ x: 0, y: 0, scale: 1 })}
+    >
+      <img
+        src={src}
+        alt={alt}
+        draggable={false}
+        style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
+      />
+    </div>
+  );
+}
+
 async function dataUriToBlob(dataUri: string): Promise<Blob> {
   const res = await fetch(dataUri);
   return res.blob();
@@ -211,13 +277,19 @@ export default function UploadAssetDialog({
       ) : (
         <div className="upload-preview">
           <div className={`upload-preview__img ${cutout && showCutout ? "is-cutout" : ""}`}>
-            {shown && <img src={shown} alt="Selected photo" />}
+            {shown && <PannableImage src={shown} alt="Selected photo" />}
             {removingBg && (
               <div className="upload-preview__busy">
                 <Spinner /> Removing background…
               </div>
             )}
           </div>
+          {!cutout && (
+            <div className="subtle">
+              The photo needs a transparent background for a clean 3D model. If it doesn't have one, click Remove background
+              below.
+            </div>
+          )}
           <div className="upload-preview__actions">
             {cutout ? (
               <div className="segmented" role="group" aria-label="Compare">

@@ -56,7 +56,7 @@ def create_app() -> FastAPI:
         return {
             "status": "healthy",
             "service": "plan_parsing_worker",
-            "model": settings.OPENAI_MODEL,
+            "model": settings.OPENAI_IMAGE_MODEL,
             "version": "0.1.0",
             "projectId": settings.FIREBASE_PROJECT_ID,
         }

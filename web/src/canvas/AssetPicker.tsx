@@ -60,7 +60,7 @@ export default function AssetPicker({ assets, style, initialCategory, busyId, on
         <div className="s3d-picker s3d-add__grid">
           {visible.map((a) => (
             <button key={a.id} className="s3d-picker__card" disabled={!!busyId} onClick={() => onPick(a)}>
-              <span className="s3d-picker__img">{a.imageUrl ? <img src={a.imageUrl} alt="" loading="lazy" /> : null}</span>
+              <span className="s3d-picker__img">{a.thumbUrl || a.imageUrl ? <img src={(a.thumbUrl || a.imageUrl)!} alt="" loading="lazy" /> : null}</span>
               <span className="s3d-picker__name">
                 {busyId === a.id && <Spinner size={11} />} {a.name}
               </span>

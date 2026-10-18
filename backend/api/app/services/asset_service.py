@@ -25,6 +25,7 @@ from .common import SERVER_TIMESTAMP, load_system_catalog, utcnow
 from .glb import glb_dims
 from .meshy_service import MeshyService
 from .storage_service import StorageService
+from .thumbnail import THUMB_CONTENT_TYPE, make_thumbnail
 
 logger = logging.getLogger("api.asset_service")
 
@@ -54,7 +55,9 @@ def system_asset_doc(item: dict, catalog_base_url: str) -> dict:
         "imagePath": item.get("imagePath"),
         "glbPath": item.get("glbPath"),
         "glbWebPath": item.get("glbWebPath"),
+        "thumbPath": item.get("thumbPath"),
         "imageUrl": url(item.get("imagePath")),
+        "thumbUrl": url(item.get("thumbPath")),
         "glbUrl": url(item.get("glbPath")),
         "glbWebUrl": url(item.get("glbWebPath")),
         "dims": item.get("dims"),
@@ -123,6 +126,7 @@ class AssetService:
         expires = utcnow() + datetime.timedelta(seconds=SIGNED_URL_TTL)
         return {
             "imageUrl": self._sign(a.get("imagePath")),
+            "thumbUrl": self._sign(a.get("thumbPath")),
             "glbUrl": self._sign(a.get("glbPath")),
             "glbWebUrl": None,
             "urlsExpireAt": expires.isoformat(),
@@ -204,6 +208,7 @@ class AssetService:
             "category": category,
             "style": style if style in STYLES else None,
             "imagePath": source,
+            "thumbPath": None,
             "glbPath": None,
             "glbWebPath": None,
             "dims": None,
@@ -226,11 +231,17 @@ class AssetService:
         return {**doc, **(self.get(asset_id) or {})}
 
     def _start_generation(self, asset_id: str, source_path: str) -> None:
+        try:
+            data = self.storage.download_bytes(source_path)
+        except Exception as e:
+            logger.warning("Could not read the photo of %s: %s", asset_id, e)
+            self._ref(asset_id).update({"status": "failed", "error": "Could not read the photo", "updatedAt": SERVER_TIMESTAMP})
+            return
+        self._store_thumbnail(asset_id, source_path, data)
         if not self.meshy.is_configured:
             self._ref(asset_id).update({"status": "failed", "error": "3D generation is not configured", "updatedAt": SERVER_TIMESTAMP})
             return
         try:
-            data = self.storage.download_bytes(source_path)
             ext = os.path.splitext(source_path)[1].lstrip(".").replace("jpg", "jpeg")
             data_uri = f"data:image/{ext};base64,{base64.b64encode(data).decode()}"
             task_id = self.meshy.create_image_to_3d_task(image_url=data_uri)
@@ -240,6 +251,16 @@ class AssetService:
             return
         self._ref(asset_id).update({"status": "generating_3d", "progress": 1, "meshyTaskId": task_id, "updatedAt": SERVER_TIMESTAMP})
         self.enqueue_poll(asset_id, attempt=0)
+
+    def _store_thumbnail(self, asset_id: str, source_path: str, data: bytes) -> None:
+        """Best effort: cards fall back to the full photo when there is no thumbnail."""
+        path = f"{os.path.dirname(source_path)}/thumb.webp"
+        try:
+            self.storage.upload_bytes(make_thumbnail(data), path, THUMB_CONTENT_TYPE)
+        except Exception as e:
+            logger.warning("Thumbnail failed for %s: %s", asset_id, e)
+            return
+        self._ref(asset_id).update({"thumbPath": path, "thumbUrl": self._sign(path), "updatedAt": SERVER_TIMESTAMP})
 
     # ------------------------------------------------------------------ polling
 
@@ -405,10 +426,10 @@ class AssetService:
                 if a.get("status") != "ready" or not a.get("glbPath"):
                     raise AppException(status_code=409, code="ASSET_NOT_READY", detail="Only ready assets can be promoted")
                 fields.update(self._publish_to_catalog(a, style))
-                stale_private = [p for p in (a.get("glbPath"), a.get("imagePath")) if p]
+                stale_private = [p for p in (a.get("glbPath"), a.get("imagePath"), a.get("thumbPath")) if p]
             elif not promote and a.get("isSystem") and a.get("ownerUid") and _in_catalog(a):
                 fields.update(self._unpublish_from_catalog(a))
-                stale_catalog = [p for p in (a.get("glbPath"), a.get("imagePath")) if p]
+                stale_catalog = [p for p in (a.get("glbPath"), a.get("imagePath"), a.get("thumbPath")) if p]
             fields["isSystem"] = promote
         if not fields:
             return a
@@ -431,6 +452,10 @@ class AssetService:
         if a.get("imagePath"):
             out["imageUrl"] = self.storage.copy_to_catalog(a["imagePath"], f"{base}{ext}", image_ctype)
             out["imagePath"] = f"{base}{ext}"
+        if a.get("thumbPath"):
+            thumb = f"assets-web/{style}/user_{a['id']}_thumb.webp"
+            out["thumbUrl"] = self.storage.copy_to_catalog(a["thumbPath"], thumb, THUMB_CONTENT_TYPE)
+            out["thumbPath"] = thumb
         return out
 
     def _unpublish_from_catalog(self, a: dict) -> Dict[str, Any]:
@@ -442,6 +467,9 @@ class AssetService:
             ext = os.path.splitext(a["imagePath"])[1] or ".png"
             out["imagePath"] = f"{base}/source{ext}"
             self.storage.copy_from_catalog(a["imagePath"], out["imagePath"], mimetypes.guess_type(f"x{ext}")[0] or "image/png")
+        if a.get("thumbPath"):
+            out["thumbPath"] = f"{base}/thumb.webp"
+            self.storage.copy_from_catalog(a["thumbPath"], out["thumbPath"], THUMB_CONTENT_TYPE)
         out.update(self._url_fields({**a, **out}))
         return out
 
@@ -456,7 +484,7 @@ class AssetService:
         if a.get("ownerUid"):
             self.storage.delete_prefix(f"{a['ownerUid']}/assets/{asset_id}/")
             if _in_catalog(a):
-                for p in (a.get("glbPath"), a.get("imagePath")):
+                for p in (a.get("glbPath"), a.get("imagePath"), a.get("thumbPath")):
                     if p:
                         self.storage.delete_catalog_blob(p)
         self._ref(asset_id).delete()

@@ -71,8 +71,8 @@ def detect_room_corners_direct(
 @router.post(
     "/furniture/transparent-background",
     status_code=status.HTTP_200_OK,
-    summary="Isolate furniture with transparent background using gpt-6-sol",
-    description="Processes an uploaded furniture image with gpt-6-sol and the prompt '{uploaded_furniture} transparent background', returning a clean transparent PNG.",
+    summary="Isolate furniture with transparent background using the OpenAI Images edit endpoint",
+    description="Edits an uploaded furniture image (OpenAI Images edit, 1024x1024) with the prompt '{uploaded_furniture} transparent background', returning a clean transparent PNG.",
 )
 def make_furniture_transparent_background(
     file: UploadFile = File(..., description="Uploaded furniture photo"),

@@ -408,7 +408,7 @@ class ProjectService:
         content_type: str,
         furniture_name: str,
     ) -> Dict[str, Any]:
-        """Forward furniture image to plan parser worker gpt-6-sol for transparent background."""
+        """Forward furniture image to plan parser worker (OpenAI Images edit) for transparent background."""
         worker_url = f"{self._worker_base_url()}/api/furniture/transparent-background"
         files = {"file": (filename, image_bytes, content_type)}
         data = {"furniture_name": furniture_name}

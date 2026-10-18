@@ -102,6 +102,8 @@ def system_asset_docs(catalog_base_url: str) -> List[Dict[str, Any]]:
             "imageUrl": f"{base}/{item['imagePath']}",
             "glbUrl": f"{base}/{item['glbPath']}",
             "glbWebUrl": f"{base}/{item['glbWebPath']}",
+            "thumbPath": item.get("thumbPath"),
+            "thumbUrl": f"{base}/{item['thumbPath']}" if item.get("thumbPath") else None,
             "dims": item.get("dims"),
             "frontAxis": item.get("frontAxis", "+z"),
             "rotationOffset": item.get("rotationOffset", 0),

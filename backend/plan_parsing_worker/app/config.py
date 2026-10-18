@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # OpenAI configuration (furniture background removal)
     OPENAI_API_KEY: str = Field(..., description="OpenAI API Key")
-    OPENAI_MODEL: str = Field(default="gpt-6-sol", description="OpenAI model for furniture background removal")
+    OPENAI_IMAGE_MODEL: str = Field(default="gpt-image-1.5", description="OpenAI image model for furniture background removal (Images edit)")
 
     # Google Cloud / Firebase configuration
     FIREBASE_PROJECT_ID: str = Field(default="soraplan", description="Google Cloud Project ID")

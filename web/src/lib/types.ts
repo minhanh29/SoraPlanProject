@@ -234,8 +234,11 @@ export interface Asset {
   imagePath: string | null;
   glbPath: string | null;
   glbWebPath: string | null;
+  thumbPath?: string | null;
   /** Ready-to-load URLs: public catalog URLs for system assets, signed URLs (≤ 7 days) for user assets. */
   imageUrl: string | null;
+  /** WebP, longest side 512 px (transparent cut-outs stay transparent); null until made, use imageUrl then. */
+  thumbUrl?: string | null;
   glbUrl: string | null;
   glbWebUrl: string | null;
   /** Native model bounding box in meters (as exported). Null until measured. */
@@ -398,4 +401,6 @@ export interface UserProfile {
   displayName?: string | null;
   photoUrl?: string | null;
   role: "user" | "admin";
+  /** "pending" on a new account until the sample projects are copied in (POST /users/me/samples). */
+  samples?: "pending" | "copying" | "done" | null;
 }

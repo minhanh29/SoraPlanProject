@@ -13,7 +13,8 @@
       "h": 0.407
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_TV_stand_thumb.webp"
   },
   {
     "id": "sys_industrial_In_bath",
@@ -29,7 +30,8 @@
       "h": 0.316
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_bath_thumb.webp"
   },
   {
     "id": "sys_industrial_In_bed_1",
@@ -45,7 +47,8 @@
       "h": 0.771
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_bed_1_thumb.webp"
   },
   {
     "id": "sys_industrial_In_bed_2",
@@ -61,7 +64,8 @@
       "h": 0.722
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_bed_2_thumb.webp"
   },
   {
     "id": "sys_industrial_In_bed_master",
@@ -77,7 +81,8 @@
       "h": 0.707
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_bed_master_thumb.webp"
   },
   {
     "id": "sys_industrial_In_closet_storage",
@@ -93,7 +98,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_closet_storage_thumb.webp"
   },
   {
     "id": "sys_industrial_In_fridge",
@@ -109,7 +115,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_fridge_thumb.webp"
   },
   {
     "id": "sys_industrial_In_kitchen_chair_1",
@@ -125,7 +132,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_kitchen_chair_1_thumb.webp"
   },
   {
     "id": "sys_industrial_In_kitchen_chair_2",
@@ -141,7 +149,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_kitchen_chair_2_thumb.webp"
   },
   {
     "id": "sys_industrial_In_kitchen_counter",
@@ -157,7 +166,8 @@
       "h": 1.099
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_kitchen_counter_thumb.webp"
   },
   {
     "id": "sys_industrial_In_kitchen_sink",
@@ -173,7 +183,8 @@
       "h": 0.593
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_kitchen_sink_thumb.webp"
   },
   {
     "id": "sys_industrial_In_kitchen_table_1",
@@ -189,7 +200,8 @@
       "h": 0.538
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_kitchen_table_1_thumb.webp"
   },
   {
     "id": "sys_industrial_In_kitchen_table_2",
@@ -205,7 +217,8 @@
       "h": 0.553
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_kitchen_table_2_thumb.webp"
   },
   {
     "id": "sys_industrial_In_lightstand",
@@ -221,7 +234,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_lightstand_thumb.webp"
   },
   {
     "id": "sys_industrial_In_living_chair",
@@ -237,7 +251,8 @@
       "h": 1.405
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_living_chair_thumb.webp"
   },
   {
     "id": "sys_industrial_In_living_table",
@@ -253,7 +268,8 @@
       "h": 0.543
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_living_table_thumb.webp"
   },
   {
     "id": "sys_industrial_In_sofa",
@@ -269,7 +285,8 @@
       "h": 0.649
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_sofa_thumb.webp"
   },
   {
     "id": "sys_industrial_In_stool",
@@ -285,7 +302,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_stool_thumb.webp"
   },
   {
     "id": "sys_industrial_In_toilet",
@@ -301,7 +319,8 @@
       "h": 1.708
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_toilet_thumb.webp"
   },
   {
     "id": "sys_industrial_In_toilet_sink",
@@ -317,7 +336,8 @@
       "h": 0.731
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_toilet_sink_thumb.webp"
   },
   {
     "id": "sys_industrial_In_washing_dryer",
@@ -333,7 +353,8 @@
       "h": 1.172
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Industrial/In_washing_dryer_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_TV_stand",
@@ -349,7 +370,8 @@
       "h": 0.283
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_TV_stand_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_bath",
@@ -365,7 +387,8 @@
       "h": 0.338
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_bath_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_bed_1",
@@ -381,7 +404,8 @@
       "h": 0.712
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_bed_1_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_bed_2",
@@ -397,7 +421,8 @@
       "h": 0.745
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_bed_2_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_closet_storage",
@@ -413,7 +438,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_closet_storage_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_fridge",
@@ -429,7 +455,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_fridge_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_kitchen_bench",
@@ -445,7 +472,8 @@
       "h": 0.551
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_bench_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_kitchen_chair",
@@ -461,7 +489,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_chair_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_kitchen_counter",
@@ -477,7 +506,8 @@
       "h": 1.903
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_counter_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_kitchen_sink",
@@ -493,7 +523,8 @@
       "h": 0.609
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_sink_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_kitchen_table",
@@ -509,7 +540,8 @@
       "h": 0.75
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_table_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_kitchen_table_2",
@@ -525,7 +557,8 @@
       "h": 0.666
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_table_2_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_living_chair",
@@ -541,7 +574,8 @@
       "h": 1.652
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_living_chair_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_living_table",
@@ -557,7 +591,8 @@
       "h": 0.963
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_living_table_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_master_bed",
@@ -573,7 +608,8 @@
       "h": 0.779
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_master_bed_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_nightstand",
@@ -589,7 +625,8 @@
       "h": 1.428
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_nightstand_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_sink",
@@ -605,7 +642,8 @@
       "h": 0.846
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_sink_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_sofa",
@@ -621,7 +659,8 @@
       "h": 0.587
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_sofa_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_toilet",
@@ -637,7 +676,8 @@
       "h": 1.65
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_toilet_thumb.webp"
   },
   {
     "id": "sys_japandi_Ja_washing_dryer",
@@ -653,6 +693,7 @@
       "h": 1.162
     },
     "frontAxis": "+z",
-    "rotationOffset": 0
+    "rotationOffset": 0,
+    "thumbPath": "assets-web/Japandi/Ja_washing_dryer_thumb.webp"
   }
 ]

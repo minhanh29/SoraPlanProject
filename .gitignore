@@ -84,3 +84,6 @@ tmp/
 /build/
 # Art generation cache (scripts/art/generate.py)
 scripts/art/.raw/
+
+# Videos (tour exports, demo recordings)
+*.mp4
