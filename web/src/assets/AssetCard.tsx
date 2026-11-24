@@ -56,6 +56,7 @@ export default function AssetCard({
         <div className="asset-card__name" title={asset.name}>
           {asset.name}
         </div>
+        {asset.description && <p className="asset-card__description" title={asset.description}>{asset.description}</p>}
         <div className="asset-card__meta">
           <span className="asset-card__cat">{asset.category}</span>
           {asset.createdAt && <span>{shortDate(asset.createdAt)}</span>}

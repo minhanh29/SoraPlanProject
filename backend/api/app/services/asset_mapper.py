@@ -1,7 +1,7 @@
 """FloorPlan furniture/fixtures → catalog assets for a style (docs/10-chat-refactor-plan.md §5.4).
 
-Pure and deterministic except for the optional `classify` callback (Gemini) used for labels the
-table cannot place. Output is stored on projects/{id}.mapping and .missing.
+Category and geometry matching with optional Gemini callbacks for unknown labels and description-aware
+whole-asset placements. Output is stored on projects/{id}.mapping and .missing.
 """
 import logging
 import math
@@ -71,7 +71,7 @@ LABEL_KEYWORDS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"\b(night ?stand|bedside)\b", re.I), "Nightstand"),
     (re.compile(r"\bbed\b", re.I), "Bed"),
     (re.compile(r"\b(wardrobe|closet|dresser|cupboard|armoire|storage|cabinet|shelf|shelves)\b", re.I), "Wardrobe & Storage"),
-    (re.compile(r"\b(fridge|refrigerator|freezer)\b", re.I), "Kitchen Appliance"),
+    (re.compile(r"\b(fridge|refrigerator|freezer|ref)\b", re.I), "Kitchen Appliance"),
     (re.compile(r"\b(washer|dryer|washing|laundry)\b", re.I), "Appliance"),
     (re.compile(r"\b(bathtub|tub)\b", re.I), "Bathtub"),
     (re.compile(r"\b(toilet|wc)\b", re.I), "Toilet"),
@@ -81,6 +81,16 @@ LABEL_KEYWORDS: List[Tuple[re.Pattern, str]] = [
 ]
 
 ClassifyFn = Callable[[List[Dict[str, str]], List[str]], Dict[str, Optional[str]]]
+
+# Native L-kitchen corner is top-left unless the asset declares another corner in its model frame.
+CORNER_YAW = {"top-left": 0.0, "bottom-left": math.pi / 2, "bottom-right": math.pi, "top-right": -math.pi / 2}
+
+
+def is_l_kitchen(asset: dict) -> bool:
+    if asset.get("category") != "Kitchen Counter":
+        return False
+    return bool(re.search(r"\bl[ -]shaped\b", asset.get("name") or "", re.I)
+                or re.match(r"\s*(?:an?\s+)?l[ -]shaped\b", asset.get("description") or "", re.I))
 
 
 def plan_boxes(plan: dict) -> List[dict]:
@@ -273,18 +283,26 @@ def fit_asset(
     category: Optional[str],
     walls: Sequence[Tuple[Tuple[float, float], Tuple[float, float]]],
     neighbors: Sequence[Neighbor] = (),
+    corner_orientation: Optional[str] = None,
 ) -> Tuple[Dict[str, float], float]:
     """Fit a model into a plan box (meters), and the extra yaw (multiple of 90°).
 
     The yaw keeps the model's long side along the box's long side; seats face a nearby table, other items turn
-    their back to the wall behind them. The footprint fills the box (each floor axis may stretch up to
+    their back to the wall behind them. Composite kitchens instead align their native corner to the plan corner.
+    The footprint fills the box (each floor axis may stretch up to
     MAX_FOOTPRINT_STRETCH past a uniform fit) and the height is pulled into the category's plausible range.
     Returns (dims {w, d, h} in the raw model frame, rotation_offset radians).
     """
     cat_h = CATEGORY_HEIGHT_M.get(category or "", 0.8)
+    corner_offset = None
+    if corner_orientation in CORNER_YAW:
+        native_corner = (asset or {}).get("cornerOrientation") or "top-left"
+        corner_offset = CORNER_YAW[corner_orientation] - CORNER_YAW.get(native_corner, 0.0) - base_rotation_y
+        corner_offset = (corner_offset + math.pi) % (2 * math.pi) - math.pi
     native = _native(asset)
     if not native:
-        return {"w": round(box_w, 3), "d": round(box_d, 3), "h": cat_h}, 0.0
+        quarter = corner_offset is not None and abs(abs(corner_offset) - math.pi / 2) < 1e-6
+        return {"w": round(box_d if quarter else box_w, 3), "d": round(box_w if quarter else box_d, 3), "h": cat_h}, corner_offset or 0.0
 
     nw, nd, nh = native
     box_long_x = box_w >= box_d
@@ -298,7 +316,10 @@ def fit_asset(
         offsets = [math.pi / 2, -math.pi / 2]
 
     front_axis = _axis_angle((asset or {}).get("frontAxis") or "+z")
-    best_offset = _choose_offset(offsets, base_rotation_y, front_axis, box_w, box_d, center, category, walls, neighbors)
+    if corner_offset is not None:
+        best_offset = corner_offset
+    else:
+        best_offset = _choose_offset(offsets, base_rotation_y, front_axis, box_w, box_d, center, category, walls, neighbors)
 
     quarter = abs(abs(best_offset) - math.pi / 2) < 1e-6
     ex, ez = (nd, nw) if quarter else (nw, nd)  # native extent along the box's x / z
@@ -336,6 +357,7 @@ def map_plan(
     previous: Optional[Dict[str, dict]] = None,
     classify: Optional[ClassifyFn] = None,
     user_uid: Optional[str] = None,
+    match: Optional[Callable] = None,
 ) -> Tuple[Dict[str, dict], List[dict]]:
     """Map every furniture/fixture box to an asset. Returns (mapping, missing)."""
     previous = previous or {}
@@ -383,7 +405,6 @@ def map_plan(
 
     first_category = {cid: (cats or [None])[0] for cid, cats in categories.items()}
     mapping: Dict[str, dict] = {}
-    missing: List[dict] = []
     for b in boxes:
         cid = b["id"]
         label = b.get("label") or (b.get("furnitureType") or b.get("fixtureType") or "Item").replace("_", " ").title()
@@ -394,7 +415,7 @@ def map_plan(
         center = (cx * k, cy * k)
         base_rot = -math.radians(float(b.get("rotation") or 0))
 
-        if prev.get("skipped"):
+        if prev.get("skipped") and not prev.get("includedIn"):
             mapping[cid] = {**prev, "label": label}
             continue
 
@@ -407,7 +428,9 @@ def map_plan(
             category = prev.get("category") or prev_asset.get("category") or category
         else:
             for cat in cats:
-                options = [a for a in usable if a.get("category") == cat and a.get("style") == style]
+                options = [a for a in usable if a.get("isSystem", True)
+                           and a.get("category") == cat and a.get("style") == style
+                           and (not is_l_kitchen(a) or prev.get("componentIds") and prev.get("assetId") == a["id"])]
                 if not options:
                     continue
                 category = cat
@@ -429,7 +452,6 @@ def map_plan(
                 "rotationOffset": 0.0,
                 "skipped": False,
             }
-            missing.append({"componentId": cid, "label": label, "category": category})
             continue
 
         auto_dims, offset = fit_asset(box_w, box_d, base_rot, center, asset, category, walls,
@@ -445,7 +467,20 @@ def map_plan(
             "rotationOffset": offset,
             "skipped": False,
         }
-    return mapping, missing
+    from .asset_matching import refine_mapping
+
+    for cid, entry in previous.items():
+        if cid in mapping and entry.get("skipped") and entry.get("componentIds"):
+            for child in entry["componentIds"]:
+                if child != cid and child in mapping:
+                    mapping[child].update({"assetId": None, "dims": None, "autoDims": None, "includedIn": cid})
+    groups = [{"componentIds": e["componentIds"], "assetId": e["assetId"]}
+              for cid, e in previous.items() if e.get("componentIds") and not e.get("skipped")
+              and e.get("assetId") and mapping.get(cid, {}).get("assetId") == e["assetId"]]
+    if groups:
+        mapping = refine_mapping(plan, style, assets, mapping, lambda context, catalog: groups, user_uid)
+    mapping = refine_mapping(plan, style, assets, mapping, match, user_uid)
+    return mapping, unresolved(mapping)
 
 
 def refit_entry(plan: dict, component_id: str, entry: dict, asset: Optional[dict],
@@ -458,6 +493,7 @@ def refit_entry(plan: dict, component_id: str, entry: dict, asset: Optional[dict
     box = next((b for b in plan_boxes(plan) if b["id"] == component_id), None)
     if not box:
         return entry
+    box = {**box, **(entry.get("placementBox") or {})}
     walls = [
         ((float(w["x1"]) * k, float(w["y1"]) * k), (float(w["x2"]) * k, float(w["y2"]) * k))
         for w in plan.get("walls") or []
@@ -471,7 +507,9 @@ def refit_entry(plan: dict, component_id: str, entry: dict, asset: Optional[dict
         asset,
         entry.get("category"),
         walls,
-        _neighbors(plan, k, {cid: e.get("category") for cid, e in (mapping or {}).items()}, component_id),
+        _neighbors(plan, k, {cid: e.get("category") for cid, e in (mapping or {}).items()
+                            if not e.get("includedIn") and not e.get("skipped")}, component_id),
+        corner_orientation=entry.get("cornerOrientation") if is_l_kitchen(asset or {}) else None,
     )
     out = {**entry, "autoDims": dims, "rotationOffset": offset}
     if entry.get("dimsSource") != "user" or not entry.get("dims"):
@@ -485,5 +523,5 @@ def unresolved(mapping: Dict[str, dict]) -> List[dict]:
     return [
         {"componentId": cid, "label": e.get("label") or cid, "category": e.get("category")}
         for cid, e in mapping.items()
-        if not e.get("assetId") and not e.get("skipped")
+        if not e.get("assetId") and not e.get("skipped") and not e.get("includedIn")
     ]

@@ -233,6 +233,10 @@ class FakeGemini:
     def classify_labels(self, items, categories):
         return {i["id"]: self.labels.get(i["label"]) for i in items}
 
+    def match_assets(self, plan, assets):
+        self.asset_match_calls = getattr(self, "asset_match_calls", []) + [{"plan": plan, "assets": assets}]
+        return getattr(self, "asset_matches", [])
+
     def direct_tour(self, system, parts, temperature=0.3):
         """Tour director: returns `self.tour_reply` (JSON text) or raises `self.tour_error`."""
         self.calls.append({"system": system, "tour_parts": parts})

@@ -1,8 +1,8 @@
 // Selection gizmo drawn around the selected item: outline, rotate ring (with a front marker), four top-corner
 // handles (uniform scale), four top-edge handles (stretch one side, the opposite side stays put) and a top
 // handle (height only). Handles keep a constant on-screen size in either projection.
-import { useMemo, useRef } from "react";
-import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { ItemInstance } from "../../lib/types";
 import { BoxOutline } from "./Items";
@@ -51,11 +51,16 @@ export default function Gizmo({ item, color, warnColor, warning, showHandles, on
   const knob = useRef<THREE.Mesh>(null);
 
   const tmp = useMemo(() => new THREE.Vector3(), []);
-  useFrame(({ camera, size }) => {
-    const px = (o: THREE.Object3D) => HANDLE_PX * worldPerPixel(camera, o.getWorldPosition(tmp), size.height);
+  const camera = useThree((s) => s.camera);
+  const viewportHeight = useThree((s) => s.size.height);
+  const sizeHandles = useCallback((camera: THREE.Camera, height: number) => {
+    const px = (o: THREE.Object3D) => HANDLE_PX * worldPerPixel(camera, o.getWorldPosition(tmp), height);
     handles.current?.children.forEach((c) => c.scale.setScalar(px(c)));
     if (knob.current) knob.current.scale.setScalar(px(knob.current) * 1.2);
-  });
+  }, [tmp]);
+  // Set the pick volumes before the first frame, including when the camera is close to an item.
+  useLayoutEffect(() => sizeHandles(camera, viewportHeight), [sizeHandles, camera, viewportHeight, w, d, h, item.position, showHandles]);
+  useFrame(({ camera, size }) => sizeHandles(camera, size.height));
 
   const ring = useMemo(() => new THREE.RingGeometry(radius - 0.025, radius + 0.025, 96), [radius]);
   const ringHit = useMemo(() => new THREE.TorusGeometry(radius, 0.14, 6, 64), [radius]);

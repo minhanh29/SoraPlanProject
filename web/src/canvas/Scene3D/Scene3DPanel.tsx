@@ -11,6 +11,11 @@ import { useAssetIndex } from "../../hooks/useAssets";
 import { realDims } from "../../lib/furniture";
 import { cssVar } from "../../lib/theme";
 import SceneView, { type SnapshotApi, type TourSetup } from "./SceneView";
+import FurniturePanel from "./FurniturePanel";
+import StyleSwitcher from "./StyleSwitcher";
+import WalkthroughBar from "./WalkthroughBar";
+import type { WalkMotion, WalkthroughSetup } from "./FirstPersonCamera";
+import { walkSpace, walkStart, type FloorPoint } from "./walkthrough";
 import Toolbar from "./Toolbar";
 import ReplacePicker from "./ReplacePicker";
 import AddPicker from "./AddPicker";
@@ -32,6 +37,7 @@ import {
 import { canExportVideo, downloadBlob } from "./exportVideo";
 import { freeSpot, pointInPolygon } from "./geometry";
 import { useSceneColors } from "./useSceneColors";
+import { useStylePreload } from "./useStylePreload";
 import "./scene3d.css";
 
 const REALISTIC_KEY = "soraplan.realistic";
@@ -99,7 +105,28 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [replacing, setReplacing] = useState<ItemInstance | null>(null);
   const [adding, setAdding] = useState(false);
+  const [furnitureOpen, setFurnitureOpen] = useState(false);
+  const [walk, setWalk] = useState<{ start: FloorPoint } | null>(null);
+  const motionRef = useRef<WalkMotion>({ forward: 0, right: 0 });
+  const exitWalk = useCallback(() => {
+    setWalk(null);
+    setSelectedId(null);
+    setFurnitureOpen(false);
+  }, []);
+  const walkthrough: WalkthroughSetup | null = useMemo(() => walk ? { ...walk, motionRef, onExit: exitWalk } : null, [walk, exitWalk]);
   const { apply, graph } = scene;
+  useStylePreload(graph, assets);
+
+  const startWalk = () => {
+    if (!graph) return;
+    const start = walkStart(walkSpace(graph));
+    if (!start) { toast("No clear walking space. Move or resize furniture to make room.", "error"); return; }
+    setSelectedId(null);
+    setFurnitureOpen(false);
+    setAdding(false);
+    setReplacing(null);
+    setWalk({ start });
+  };
 
   // ---------------------------------------------------------------- tour
   const [touring, setTouring] = useState(false);
@@ -119,7 +146,7 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
   const needsThumb = conversation.thumbnailKind !== "scene" || !!conversation.thumbnailStale;
   const hasGraph = !!graph;
   useEffect(() => {
-    if (!needsThumb || !hasGraph || touring || selectedId) return;
+    if (!needsThumb || !hasGraph || touring || walk || selectedId) return;
     const t = window.setTimeout(async () => {
       const snap = snapshotRef.current;
       if (!snap || snapshotting.current) return;
@@ -133,7 +160,7 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
       }
     }, 2500);
     return () => window.clearTimeout(t);
-  }, [needsThumb, hasGraph, touring, selectedId, project.id]);
+  }, [needsThumb, hasGraph, touring, walk, selectedId, project.id]);
 
   const style = graph?.meta.style;
   const [tourPlan, setTourPlan] = useState<Tour | null>(null);
@@ -211,6 +238,7 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
 
   const startTour = () => {
     setSelectedId(null);
+    setFurnitureOpen(false);
     setOverlay(false);
     tourTime.current = 0;
     setPlaying(false);
@@ -378,6 +406,7 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
           onRequestReplace={setReplacing}
           realistic={realistic}
           tour={tourSetup}
+          walkthrough={walkthrough}
           renderDpr={exportState?.dpr}
           frameloop={exportState ? "never" : "always"}
           snapshotRef={snapshotRef}
@@ -385,7 +414,24 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
         {touring && <TourOverlay ref={overlayApi} />}
       </div>
 
-      {touring && !tourPlan ? (
+      {walk ? (
+        <WalkthroughBar
+          rooms={graph.levels[0]?.rooms || []}
+          furnitureOpen={furnitureOpen}
+          motionRef={motionRef}
+          canUndo={scene.canUndo}
+          canRedo={scene.canRedo}
+          onUndo={scene.undo}
+          onRedo={scene.redo}
+          onToggleFurniture={() => setFurnitureOpen((open) => !open)}
+          onRoom={(id) => {
+            const start = walkStart(walkSpace(graph), id);
+            if (start) setWalk({ ...walk, start });
+            else toast("This room has no clear walking space. Edit furniture to make room.", "error");
+          }}
+          onExit={exitWalk}
+        />
+      ) : touring && !tourPlan ? (
         <div className="s3d-planning card" role="status" aria-live="polite">
           <Spinner size={16} />
           <div>
@@ -427,6 +473,8 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
             canOverlay={!!plan}
             canUndo={scene.canUndo}
             canRedo={scene.canRedo}
+            furnitureOpen={furnitureOpen}
+            onFurniture={() => setFurnitureOpen((open) => !open)}
             onReset={() => cameraRef.current?.reset()}
             onTop={() => cameraRef.current?.top()}
             onToggleCutaway={() => setCutaway((c) => !c)}
@@ -448,6 +496,10 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
           />
           {/* Presentation: render quality and the cinematic tour */}
           <div className="s3d-corner s3d-toolbar__group" role="toolbar" aria-label="Presentation">
+            <button className="s3d-tool" onClick={startWalk} title="First-person walkthrough: walk freely through your home" aria-label="First-person walkthrough">
+              <Icon name="move" />
+              <span className="s3d-tool__label">Walk</span>
+            </button>
             <button
               className={`s3d-tool ${realistic ? "is-active" : ""}`}
               onClick={toggleRealistic}
@@ -462,8 +514,8 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
               <span className="s3d-tool__label">Tour</span>
             </button>
           </div>
-          <div className="s3d-hint" aria-hidden="true">
-            <span className="pill">{graph.meta.style}</span>
+          <div className="s3d-hint">
+            <StyleSwitcher key={project.id} projectId={project.id} style={graph.meta.style} version={scene.version} disabled={scene.saving || conversation.busy} onApplied={scene.acceptScene} />
             <span>{itemCount} items</span>
             {overlay && (
               <span className="s3d-hint__legend">
@@ -475,12 +527,24 @@ export default function Scene3DPanel({ conversation, project, files, onClose }: 
               </span>
             )}
             <span className="s3d-hint__keys">
-              Drag item to move · R turn 90° · ⌘/Ctrl+D duplicate · Del delete · Space+drag or
+              Drag item to move · Handles resize · Furniture for exact size & position · R turn 90° · ⌘/Ctrl+D duplicate · Del delete · Space+drag or
               two-finger scroll · Middle mouse moves camera
             </span>
           </div>
         </>
       )}
+      {!touring && furnitureOpen && <FurniturePanel
+        items={graph.levels[0]?.items || []}
+        rooms={graph.levels[0]?.rooms || []}
+        units={units}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        onApply={apply}
+        onClose={() => {
+          setFurnitureOpen(false);
+          setSelectedId(null);
+        }}
+      />}
       <ReplacePicker
         item={replacing}
         assets={assets}

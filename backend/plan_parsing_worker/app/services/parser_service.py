@@ -74,6 +74,11 @@ Your job is not to describe the image. Your job is to locate every meaningful ar
 - "box_2d" is the TIGHT box around the drawn symbol's outline as it appears in the image: its true drawn size,
   not a standard size, and excluding text labels, door swing arcs and nearby objects.
 - L-shaped or U-shaped counters and sectional sofas: one box per straight run, so no box covers empty floor.
+- Preserve the labels and adjacency of kitchen counter blocks, kitchen sink, stove and "Ref." (refrigerator).
+  When contiguous top and left runs form a perpendicular corner along two walls, they belong to one
+  L-shaped kitchen for subsequent 3D asset matching, rather than individual 3D assets. Keep their editable
+  source boxes separate here; the placement stage combines their bounding footprint and corner orientation.
+  A third parallel peninsula counter stays a separate standalone counter, even if it touches one of the runs.
 - A rectangle drawn around a room name is a text frame, not furniture. Rugs are not furniture.
 - Closets and wardrobes (drawn as a rail with zig-zag hanger lines) are "wardrobe" furniture: one box per run.
 - "angle" is 0 for every object drawn parallel to the walls, whichever way it faces (the box already gives its
@@ -171,6 +176,8 @@ Compare the two images carefully and fix every mistake:
    Closets drawn with zig-zag hanger lines are "wardrobe" furniture: add any that are missing.
    Boxes never overlap: where two boxes share a spot or one sits on top of / inside another, keep the one that
    matches the drawing and delete or shrink the other (split a counter around a sink or stove set into it).
+   Preserve contiguous kitchen counter/sink/stove/Ref. boxes along the two walls of an L-shaped kitchen for
+   one composite 3D placement downstream. Keep a third parallel peninsula counter separate from that L.
 5. Walls lie on the drawn walls' centerlines, connected walls share endpoints, and door/window openings stay as
    gaps between wall segments. Cabinets, closets, shelving and counters are NOT walls: delete walls drawn on
    them. Fix, add or delete walls accordingly.

@@ -57,6 +57,14 @@ builds a scene measured in real meters, then furnishes it in the style you choos
 | 🎬 | **AI-directed tours** | Gemini plans a cinematic walkthrough you can export as a 1080p video, right in the browser |
 | ⚡ | **Live everywhere** | Firestore listeners push every change from the AI straight to the screen — no refresh |
 
+Assets have a **Shape & included elements** description, editable in the asset library and required for new
+photo uploads. All 41 bundled assets have descriptions based on their catalog previews. During furnishing,
+Gemini uses these descriptions and the parsed geometry to select complete models and combine their drawn
+parts into one placement. For example, an L-shaped kitchen containing a sink, stove and fridge is placed once
+over its combined footprint, without extra models for those included fixtures. The original parsed symbols
+remain editable. Existing uploads can be described through **Edit asset**; existing scenes use the new matching
+when their style is reapplied. If semantic matching fails, category and proportion matching remains available.
+
 <table>
 <tr>
 <td width="60%"><img src="media/tour.jpg" alt="AI-directed tour"/></td>

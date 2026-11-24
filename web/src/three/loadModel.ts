@@ -14,6 +14,16 @@ export interface LoadedModel {
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
 const cache = new Map<string, Promise<LoadedModel>>();
+const loaded = new Map<string, LoadedModel>();
+
+/** Resolved models can be rendered in the same frame as a style change. */
+export function getLoadedModel(urls: string[]): LoadedModel | null {
+  for (const url of urls) {
+    const model = loaded.get(url);
+    if (model) return model;
+  }
+  return null;
+}
 
 function loadOne(url: string): Promise<LoadedModel> {
   let p = cache.get(url);
@@ -33,7 +43,9 @@ function loadOne(url: string): Promise<LoadedModel> {
       const group = new THREE.Group();
       root.position.sub(new THREE.Vector3(center.x, box.min.y, center.z));
       group.add(root);
-      return { scene: group, size };
+      const model = { scene: group, size };
+      loaded.set(url, model);
+      return model;
     });
     p.catch(() => cache.delete(url));
     cache.set(url, p);

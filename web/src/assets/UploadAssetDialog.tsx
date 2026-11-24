@@ -103,6 +103,7 @@ export default function UploadAssetDialog({
   const [showCutout, setShowCutout] = useState(true);
   const [removingBg, setRemovingBg] = useState(false);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [step, setStep] = useState<Step>("idle");
   const [progress, setProgress] = useState(0);
@@ -118,6 +119,7 @@ export default function UploadAssetDialog({
     setCutout(null);
     setShowCutout(true);
     setName(preset?.name || "");
+    setDescription("");
     setCategory(preset?.category || "");
     setStep("idle");
     setProgress(0);
@@ -180,7 +182,7 @@ export default function UploadAssetDialog({
   }
 
   async function submit() {
-    if (!file || !name.trim() || !category || busy) return;
+    if (!file || !name.trim() || !description.trim() || !category || busy) return;
     setError(null);
     try {
       const useCutout = !!cutout && showCutout;
@@ -200,6 +202,7 @@ export default function UploadAssetDialog({
       setStep("confirming");
       const asset = await api.confirmAsset(assetId, {
         name: name.trim(),
+        description: description.trim(),
         category,
         style: null,
         ...(preset?.projectId && preset?.componentId ? { projectId: preset.projectId, componentId: preset.componentId } : {}),
@@ -226,7 +229,7 @@ export default function UploadAssetDialog({
           <button className="btn btn--ghost" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button className="btn btn--primary" onClick={submit} disabled={!file || !name.trim() || !category || busy}>
+          <button className="btn btn--primary" onClick={submit} disabled={!file || !name.trim() || !description.trim() || !category || busy}>
             {step === "uploading" ? (
               <>
                 <Spinner /> Uploading {progress}%
@@ -342,6 +345,25 @@ export default function UploadAssetDialog({
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="field asset-description-field">
+        <label htmlFor="upload-asset-description">Shape & included elements</label>
+        <textarea
+          id="upload-asset-description"
+          className="input"
+          value={description}
+          maxLength={2000}
+          rows={3}
+          required
+          aria-describedby="upload-asset-description-help"
+          placeholder="e.g. L-shaped kitchen counter with sink, stove and fridge already included."
+          onChange={(e) => setDescription(e.target.value)}
+          disabled={busy}
+        />
+        <span id="upload-asset-description-help" className="subtle">
+          Describe the footprint and everything built into the model so it can be placed as one complete object.
+        </span>
       </div>
 
       {step === "uploading" && (

@@ -5,6 +5,7 @@ from google.cloud import storage as gcloud_storage
 from google.cloud.exceptions import NotFound
 
 from ..config import get_settings
+from ..errors import AppException
 
 logger = logging.getLogger("api.storage")
 
@@ -12,7 +13,7 @@ _CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 _iam_credentials = None
 
 
-def _iam_signing_kwargs() -> dict:
+def _iam_signing_kwargs(service_account_email: Optional[str] = None) -> dict:
     """Credentials for signing via the IAM signBlob API.
 
     The Storage client's own token is scoped to devstorage only, which IAM rejects
@@ -27,9 +28,9 @@ def _iam_signing_kwargs() -> dict:
     if not _iam_credentials.valid:
         # Also resolves service_account_email from the metadata server on Cloud Run
         _iam_credentials.refresh(google.auth.transport.requests.Request())
-    email = getattr(_iam_credentials, "service_account_email", None)
+    email = service_account_email or getattr(_iam_credentials, "service_account_email", None)
     if not email or email == "default":
-        raise RuntimeError("Cannot determine service account email for URL signing")
+        raise RuntimeError("Set GCS_SIGNING_SERVICE_ACCOUNT when signing URLs with local user ADC")
     return {"service_account_email": email, "access_token": _iam_credentials.token}
 
 
@@ -70,7 +71,7 @@ class StorageService:
         creds = getattr(self.client, "_credentials", None)
         if creds is None or hasattr(creds, "sign_bytes"):
             return {}
-        return _iam_signing_kwargs()
+        return _iam_signing_kwargs(self.settings.GCS_SIGNING_SERVICE_ACCOUNT)
 
     def _unsigned_fallback(self, blob_path: str, error: Exception) -> str:
         """Plain object URL for local/test runs only; GCS rejects it for private buckets."""
@@ -144,12 +145,14 @@ class StorageService:
             )
             return signed_url
         except Exception as e:
-            logger.warning(
-                "Could not generate standard V4 signed upload URL for %s: %s. Using fallback URL.",
+            logger.error(
+                "Could not generate V4 signed upload URL for %s: %s",
                 blob_path,
                 e,
             )
-            return self._unsigned_fallback(blob_path, e)
+            # An unsigned PUT URL cannot authorize a browser upload to a private bucket.
+            raise AppException(status_code=503, code="UPLOAD_SIGNING_UNAVAILABLE", title="Upload unavailable",
+                               detail="File uploads are temporarily unavailable. Please try again shortly.") from e
 
     def blob_exists(self, blob_path: str) -> bool:
         """Check whether a blob exists in the bucket."""

@@ -13,15 +13,16 @@ import mimetypes
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
 from ..config import get_settings
 from ..errors import AppException, ForbiddenException, NotFoundException
 from ..models.user import UserProfile
-from .asset_mapper import CATALOG_CATEGORIES, plan_boxes, refit_entry
-from .common import SERVER_TIMESTAMP, load_system_catalog, utcnow
+from .asset_mapper import CATALOG_CATEGORIES, plan_boxes, refit_entry, unresolved
+from .asset_matching import refine_mapping, release_group
+from .common import SERVER_TIMESTAMP, load_system_asset_metadata, load_system_catalog, load_system_descriptions, utcnow
 from .glb import glb_dims
 from .meshy_service import MeshyService
 from .storage_service import StorageService
@@ -50,6 +51,7 @@ def system_asset_doc(item: dict, catalog_base_url: str) -> dict:
         "ownerUid": None,
         "isSystem": True,
         "name": item["name"],
+        "description": item.get("description", ""),
         "category": item["category"],
         "style": item.get("style"),
         "imagePath": item.get("imagePath"),
@@ -68,11 +70,13 @@ def system_asset_doc(item: dict, catalog_base_url: str) -> dict:
 
 
 class AssetService:
-    def __init__(self, db, storage_service: StorageService, meshy_service: Optional[MeshyService] = None):
+    def __init__(self, db, storage_service: StorageService, meshy_service: Optional[MeshyService] = None,
+                 match_assets: Optional[Callable] = None):
         self.db = db
         self.storage = storage_service
         self.meshy = meshy_service or MeshyService()
         self.settings = get_settings()
+        self.match_assets = match_assets
 
     # ------------------------------------------------------------------ reads
 
@@ -82,11 +86,22 @@ class AssetService:
     def get(self, asset_id: str) -> Optional[dict]:
         snap = self._ref(asset_id).get()
         if snap.exists:
-            return {"id": asset_id, **(snap.to_dict() or {})}
+            return self._with_description({"id": asset_id, **(snap.to_dict() or {})})
         for item in load_system_catalog():
             if item["id"] == asset_id:
                 return system_asset_doc(item, self.settings.catalog_base_url)
         return None
+
+    @staticmethod
+    def _with_description(asset: dict) -> dict:
+        # Existing seeded catalog docs gain the bundled description without overwriting admin edits.
+        metadata = load_system_asset_metadata().get(asset["id"], {}) if asset.get("isSystem") else {}
+        if not asset.get("cornerOrientation") and metadata.get("cornerOrientation"):
+            asset = {**asset, "cornerOrientation": metadata["cornerOrientation"]}
+        if asset.get("description") is None:
+            description = load_system_descriptions().get(asset["id"], "") if asset.get("isSystem") else ""
+            asset = {**asset, "description": description}
+        return asset
 
     def get_readable(self, asset_id: str, uid: str) -> dict:
         a = self.get(asset_id)
@@ -97,13 +112,13 @@ class AssetService:
     def system_assets(self) -> List[dict]:
         docs = [{"id": s.id, **(s.to_dict() or {})} for s in self.db.collection("assets").where("isSystem", "==", True).stream()]
         if docs:
-            return docs
+            return [self._with_description(a) for a in docs]
         # Firestore not seeded yet (scripts/migrate_assets.py): use the bundled catalog
         return [system_asset_doc(i, self.settings.catalog_base_url) for i in load_system_catalog()]
 
     def user_assets(self, uid: str) -> List[dict]:
         docs = [{"id": s.id, **(s.to_dict() or {})} for s in self.db.collection("assets").where("ownerUid", "==", uid).stream()]
-        return [d for d in docs if not d.get("isSystem")]
+        return [self._with_description(d) for d in docs if not d.get("isSystem")]
 
     def placeable_assets(self, uid: str) -> List[dict]:
         return self.system_assets() + self.user_assets(uid)
@@ -185,6 +200,7 @@ class AssetService:
         style: Optional[str] = None,
         project_id: Optional[str] = None,
         component_id: Optional[str] = None,
+        description: str = "",
     ) -> dict:
         if self._ref(asset_id).get().exists:
             raise AppException(status_code=409, code="ASSET_EXISTS", detail="This upload was already confirmed")
@@ -198,6 +214,9 @@ class AssetService:
             proj = self.db.collection("projects").document(project_id).get()
             if not proj.exists or (proj.to_dict() or {}).get("ownerUid") != uid:
                 raise ForbiddenException(detail="You do not have access to this project", code="PROJECT_ACCESS_DENIED")
+            if ((proj.to_dict() or {}).get("mapping", {}).get(component_id) or {}).get("includedIn"):
+                raise AppException(status_code=409, code="COMPONENT_INCLUDED",
+                                   detail="This part is already included in a complete asset. Change the complete asset first.")
             links.append({"projectId": project_id, "componentId": component_id})
 
         doc = {
@@ -205,6 +224,7 @@ class AssetService:
             "ownerUid": uid,
             "isSystem": False,
             "name": name.strip(),
+            "description": description.strip(),
             "category": category,
             "style": style if style in STYLES else None,
             "imagePath": source,
@@ -351,13 +371,18 @@ class AssetService:
         ref = self.db.collection("projects").document(project_id)
         project = ref.get().to_dict() or {}
         mapping = dict(project.get("mapping") or {})
+        if component_id in mapping:
+            release_group(mapping, component_id)
         entry = dict(mapping.get(component_id) or {"label": component_id, "dimsSource": "auto", "skipped": False})
-        entry.update({"assetId": asset_id, "category": entry.get("category") or category, "skipped": False})
+        entry.update({"assetId": asset_id, "category": category, "skipped": False, "dimsSource": "auto"})
         entry.setdefault("dims", None)
         entry.setdefault("autoDims", None)
         entry.setdefault("rotationOffset", 0.0)
         mapping[component_id] = entry
-        missing = [m for m in project.get("missing") or [] if m.get("componentId") != component_id]
+        if project.get("floorPlan"):
+            mapping = refine_mapping(project["floorPlan"], project.get("style"), self.placeable_assets(project["ownerUid"]), mapping, self.match_assets,
+                                     project.get("ownerUid"), required_component_id=component_id)
+        missing = unresolved(mapping)
         ref.update({"mapping": mapping, "missing": missing, "updatedAt": SERVER_TIMESTAMP})
 
     def _refit_linked(self, project_id: str, component_id: str, asset: dict) -> None:
@@ -381,6 +406,7 @@ class AssetService:
             ops: List[dict] = [{"op": "item.resize", "id": item["id"], "dims": entry["dims"]}]
             box = next((b for b in plan_boxes(project["floorPlan"]) if b["id"] == component_id), None)
             if box:
+                box = {**box, **(entry.get("placementBox") or {})}
                 target = -math.radians(float(box.get("rotation") or 0)) + float(entry.get("rotationOffset") or 0)
                 if abs(target - float(item.get("rotationY") or 0)) > 1e-6:
                     ops.append({"op": "item.rotate", "id": item["id"], "rotationY": target})
@@ -402,6 +428,8 @@ class AssetService:
         stale_catalog: List[str] = []
         if patch.get("name"):
             fields["name"] = patch["name"].strip()
+        if patch.get("description") is not None:
+            fields["description"] = patch["description"].strip()
         if patch.get("category"):
             if patch["category"] not in CATALOG_CATEGORIES:
                 raise AppException(status_code=400, code="INVALID_CATEGORY", detail="Unknown category")

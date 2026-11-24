@@ -53,6 +53,10 @@ class Settings(BaseSettings):
         default=86400,
         description="Signed URL expiration in seconds (default 24h)",
     )
+    GCS_SIGNING_SERVICE_ACCOUNT: Optional[str] = Field(
+        default=None,
+        description="Service account email for IAM URL signing when using local user ADC. The caller needs signBlob permission on it.",
+    )
     CATALOG_BUCKET_NAME: str = Field(
         default="soraplan-catalog",
         description="Public-read bucket holding preset furniture under assets/{Style}/",

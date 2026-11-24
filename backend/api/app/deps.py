@@ -68,12 +68,25 @@ def get_project_service(
     return ProjectService(db=db, storage_service=storage_service, meshy_service=meshy_service)
 
 
+_gemini: GeminiClient | None = None
+
+
+def get_gemini() -> GeminiClient:
+    """One client per process (it holds the HTTP connection pool)."""
+    global _gemini
+    if _gemini is None:
+        _gemini = GeminiClient()
+    return _gemini
+
+
 def get_asset_service(
     db: gcloud_firestore.Client = Depends(get_db),
     storage_service: StorageService = Depends(get_storage_service),
     meshy_service: MeshyService = Depends(get_meshy_service),
+    gemini: GeminiClient = Depends(get_gemini),
 ) -> AssetService:
-    return AssetService(db=db, storage_service=storage_service, meshy_service=meshy_service)
+    return AssetService(db=db, storage_service=storage_service, meshy_service=meshy_service,
+                        match_assets=gemini.match_assets)
 
 
 def get_conversation_service(db: gcloud_firestore.Client = Depends(get_db)) -> ConversationService:
@@ -85,17 +98,6 @@ def get_scene_service(
     asset_service: AssetService = Depends(get_asset_service),
 ) -> SceneService:
     return SceneService(db=db, asset_lookup=asset_service.get)
-
-
-_gemini: GeminiClient | None = None
-
-
-def get_gemini() -> GeminiClient:
-    """One client per process (it holds the HTTP connection pool)."""
-    global _gemini
-    if _gemini is None:
-        _gemini = GeminiClient()
-    return _gemini
 
 
 def get_workflow(
@@ -116,6 +118,7 @@ def get_workflow(
         scenes=scene_service,
         classify=gemini.classify_labels,
         render_home=gemini.render_home,
+        match_assets=gemini.match_assets,
     )
 
 

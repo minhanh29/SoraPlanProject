@@ -121,9 +121,88 @@ def test_list_scopes(client, fake_db, fake_storage):
     system = client.get("/v1/assets?scope=system", headers=AUTH).json()
     assert len(system) == 41 and all(a["isSystem"] for a in system)  # bundled catalog when Firestore is empty
     assert system[0]["glbWebUrl"].startswith("https://storage.googleapis.com/soraplan-catalog/assets-web/")
+    assert all(a["description"] for a in system)
     upload(client, fake_storage)
     mine = client.get("/v1/assets?scope=mine", headers=AUTH).json()
     assert [a["name"] for a in mine] == ["My sofa"]
+
+
+def test_asset_descriptions_are_saved_edited_and_validated(client, fake_db, fake_storage):
+    description = "L-shaped kitchen counter with sink, stove and fridge already included."
+    asset = upload(client, fake_storage, description=f"  {description}  ", category="Kitchen Counter")
+    assert asset["description"] == description
+    assert fake_db.doc(f"assets/{asset['id']}")["description"] == description
+    response = client.patch(f"/v1/assets/{asset['id']}", json={"description": "Straight counter, sink only."}, headers=AUTH)
+    assert response.status_code == 200 and response.json()["description"] == "Straight counter, sink only."
+    assert client.get("/v1/assets?scope=mine", headers=AUTH).json()[0]["description"] == "Straight counter, sink only."
+    assert client.patch(f"/v1/assets/{asset['id']}", json={"description": "x" * 2001}, headers=AUTH).status_code == 422
+    response = client.patch(f"/v1/assets/{asset['id']}", json={"description": ""}, headers=AUTH)
+    assert response.status_code == 200 and response.json()["description"] == ""
+
+
+def test_seeded_system_descriptions_fall_back_and_respect_admin_edits(admin_client, fake_db):
+    from app.services.common import load_system_catalog
+
+    preset = load_system_catalog()[0]
+    fake_db.collection("assets").document(preset["id"]).set({"isSystem": True, "name": preset["name"]})
+    assert admin_client.get("/v1/assets?scope=system", headers=AUTH).json()[0]["description"] == preset["description"]
+    response = admin_client.patch(f"/v1/assets/{preset['id']}", json={"description": "Custom complete model."}, headers=AUTH)
+    assert response.status_code == 200
+    assert admin_client.get("/v1/assets?scope=system", headers=AUTH).json()[0]["description"] == "Custom complete model."
+
+
+def test_upload_composite_groups_parts_and_replacement_releases_them(
+    client, fake_db, fake_storage, fake_gemini, fake_meshy, worker_calls, monkeypatch,
+):
+    from app.services.asset_mapper import map_plan
+    from .test_asset_matching import group_reply, kitchen_plan
+
+    cid = to_reviewing(client, fake_db, fake_storage, worker_calls)
+    plan = kitchen_plan()
+    mapping, missing = map_plan(plan, "Japandi", [])
+    fake_db.docs[f"projects/{cid}"].update({"floorPlan": plan, "mapping": mapping, "missing": missing, "style": "Japandi"})
+    fake_db.docs[f"conversations/{cid}"]["stage"] = "resolving_missing"
+    fake_gemini.match_assets = group_reply
+    asset = upload(client, fake_storage, name="My complete kitchen", category="Kitchen Counter",
+                   description="L-shaped kitchen counter with sink, stove and fridge already included.",
+                   projectId=cid, componentId="run1")
+    project = fake_db.doc(f"projects/{cid}")
+    assert project["mapping"]["sink"]["includedIn"] == "run1"
+    assert project["mapping"]["run1"]["assetId"] == asset["id"]
+    assert [m["componentId"] for m in project["missing"]] == ["separate"]
+    assert client.patch(f"/v1/projects/{cid}/mapping", json={"componentId": "sink", "restore": True}, headers=AUTH).status_code == 409
+
+    # Replacing with a standalone model restores independent symbols to the missing list.
+    fake_db.collection("assets").document("standalone").set({"id": "standalone", "isSystem": True, "name": "Counter",
+        "category": "Kitchen Counter", "style": "Japandi", "description": "", "status": "ready", "dims": None})
+    response = client.patch(f"/v1/projects/{cid}/mapping", json={"componentId": "run1", "assetId": "standalone"}, headers=AUTH)
+    assert response.status_code == 200, response.text
+    assert "includedIn" not in response.json()["mapping"]["sink"]
+    assert "placementBox" not in response.json()["mapping"]["run1"]
+    assert "sink" in {m["componentId"] for m in fake_db.doc(f"projects/{cid}")["missing"]}
+
+    # Selecting the user's complete asset again groups the same parts through the mapping API.
+    response = client.patch(f"/v1/projects/{cid}/mapping", json={"componentId": "run1", "assetId": asset["id"]}, headers=AUTH)
+    assert response.status_code == 200, response.text
+    assert response.json()["mapping"]["sink"]["includedIn"] == "run1"
+    response = client.post(f"/v1/conversations/{cid}/actions", json={"type": "continue"}, headers=AUTH)
+    assert response.status_code == 200, response.text
+    items = fake_db.doc(f"scenes/{cid}")["graph"]["levels"][0]["items"]
+    assert len(items) == 1 and items[0]["assetId"] == asset["id"]
+    assert items[0]["position"] == [2.5, 0, 2.8]
+    # Completion refits the one placeholder to the merged footprint, rather than its first straight run.
+    class Response:
+        content = glb()
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr("app.services.asset_service.requests.get", lambda url, timeout: Response())
+    fake_meshy.status["task_1"] = {"status": "SUCCEEDED", "model_urls": {"glb": "https://meshy/x.glb"}}
+    assert client.post(f"/internal/assets/{asset['id']}/poll", json={"attempt": 1}).json() == {"running": False}
+    items = fake_db.doc(f"scenes/{cid}")["graph"]["levels"][0]["items"]
+    assert len(items) == 1 and items[0]["position"] == [2.5, 0, 2.8]
+    assert items[0]["dims"] == fake_db.doc(f"projects/{cid}")["mapping"]["run1"]["autoDims"]
 
 
 def test_rename_and_delete_own_asset(client, fake_db, fake_storage):

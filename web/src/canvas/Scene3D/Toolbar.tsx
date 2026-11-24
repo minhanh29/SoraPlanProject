@@ -61,6 +61,8 @@ interface Props {
   canOverlay: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  furnitureOpen: boolean;
+  onFurniture: () => void;
   onReset: () => void;
   onTop: () => void;
   onToggleCutaway: () => void;
@@ -113,6 +115,9 @@ export default function Toolbar(p: Props) {
         <ColorButton label="Floor" value={p.floorColor} swatches={FLOOR_SWATCHES} onPick={p.onFloorColor} />
       </div>
       <div className="s3d-toolbar__group">
+        <button className={`s3d-tool ${p.furnitureOpen ? "is-active" : ""}`} onClick={p.onFurniture} title="Resize and relocate furniture" aria-label="Edit furniture" aria-pressed={p.furnitureOpen}>
+          <Icon name="box" /><span className="s3d-tool__label">Furniture</span>
+        </button>
         <button className="s3d-tool s3d-tool--primary" onClick={p.onAdd} title="Add furniture" aria-label="Add furniture">
           <Icon name="plus" />
           <span className="s3d-tool__label">Add</span>

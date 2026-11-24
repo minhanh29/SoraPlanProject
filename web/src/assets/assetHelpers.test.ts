@@ -26,11 +26,12 @@ describe("filterAssets", () => {
   const list = [
     mk({ id: "1", name: "Industrial Sofa", category: "Sofa", style: "Industrial" }),
     mk({ id: "2", name: "Japandi Bed", category: "Bed", style: "Japandi" }),
-    mk({ id: "3", name: "Oak thing", category: "Dining Table", style: "Japandi" }),
+    mk({ id: "3", name: "Oak thing", description: "Round top with integrated storage", category: "Dining Table", style: "Japandi" }),
   ];
   it("matches name or category case-insensitively", () => {
     expect(filterAssets(list, "SOFA").map((a) => a.id)).toEqual(["1"]);
     expect(filterAssets(list, "dining").map((a) => a.id)).toEqual(["3"]);
+    expect(filterAssets(list, "ROUND").map((a) => a.id)).toEqual(["3"]);
   });
   it("applies the style filter", () => {
     expect(filterAssets(list, "", "Japandi").map((a) => a.id)).toEqual(["2", "3"]);

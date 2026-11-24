@@ -1,5 +1,7 @@
 """GeminiClient retry rules (no network: the SDK client is replaced by a stub)."""
 import pytest
+import json
+from types import SimpleNamespace
 
 from app.services import gemini_client as gc
 from app.services.gemini_client import GeminiClient, GeminiError
@@ -62,3 +64,24 @@ def test_quick_429s_are_retried(clock):
     c, calls = _client([_ApiError("429 RESOURCE_EXHAUSTED"), _ApiError("429 RESOURCE_EXHAUSTED"), "ok"], clock)
     assert c.stream_turn("sys", [{"role": "user", "text": "hi"}], [], lambda _t: None).text == "ok"
     assert len(calls) == 3
+
+
+@pytest.mark.parametrize("reply,expected", [
+    ('{"placements": [{"componentIds": ["counter", "sink"], "assetId": "kitchen"}]}',
+     [{"componentIds": ["counter", "sink"], "assetId": "kitchen"}]),
+    ("invalid json", []),
+    ("[]", []),
+])
+def test_whole_asset_match_request_and_response(reply, expected):
+    captured = {}
+
+    def generate_content(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(text=reply)
+
+    client = GeminiClient(model="m")
+    client._client = SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+    assets = [{"id": "kitchen", "description": "L-shaped counter with sink already included."}]
+    assert client.match_assets({"objects": [{"id": "counter"}]}, assets) == expected
+    assert json.loads(captured["contents"])["assets"] == assets
+    assert captured["config"].response_mime_type == "application/json"

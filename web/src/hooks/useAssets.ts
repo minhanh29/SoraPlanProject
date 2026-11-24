@@ -5,10 +5,24 @@ import { api } from "../lib/api";
 import type { Asset } from "../lib/types";
 import { useQuery } from "./useFirestore";
 import { useAuth } from "./useAuth";
+import { assetDescription } from "../assets/assetHelpers";
 
 /** System catalog (public URLs stored on the docs). */
 export function useSystemAssets() {
-  return useQuery<Asset>("assets:system", () => query(collection(db, "assets"), where("isSystem", "==", true)));
+  const live = useQuery<Asset>("assets:system", () => query(collection(db, "assets"), where("isSystem", "==", true)));
+  const [catalog, setCatalog] = useState<Asset[] | null>(null);
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    api.listAssets("system").then((assets) => { if (active) setCatalog(assets); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [user?.uid]);
+  return useMemo(() => {
+    if (!live?.length) return catalog || live;
+    const descriptions = new Map((catalog || []).map((a) => [a.id, a.description]));
+    return live.map((a) => ({ ...a, description: a.description ?? (assetDescription(a) || descriptions.get(a.id) || "") }));
+  }, [live, catalog]);
 }
 
 /**

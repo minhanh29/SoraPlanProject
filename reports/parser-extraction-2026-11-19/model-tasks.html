@@ -1,0 +1,147 @@
+<section class="section" id="model-tasks">
+<div class="section-number">NEW / INSIDE THE 66.096-SECOND CALL</div>
+<h2>Six responsibilities, one response.</h2>
+<p class="lead">The code sends one image and one instruction to Gemini and waits for a complete JSON response. The responsibilities below explain what that request asks the model to accomplish. They are not six separately observed API calls or a trace of the model’s internal execution.</p>
+<div class="note"><strong>Evidence boundary:</strong> 66.096 seconds is the measured client-side request timer. It includes SDK/client work, transport, and remote processing. No evidence divides it into individual perception, reasoning, or generation times. The numbering below is for explanation; the model’s internal task order is unknown.</div>
+<div class="task-controls" role="group" aria-label="Responsibilities inside extraction">
+<button type="button" data-model-task="input" aria-pressed="true">A. Image + instruction<small>What the request contains</small></button>
+<button type="button" data-model-task="footprint" aria-pressed="false">B. Footprint + scale<small>Building bounds and dimensions</small></button>
+<button type="button" data-model-task="walls" aria-pressed="false">C. Walls + openings<small>Connected centerline segments</small></button>
+<button type="button" data-model-task="objects" aria-pressed="false">D. Furniture + fixtures<small>Types, labels, and tight boxes</small></button>
+<button type="button" data-model-task="rooms" aria-pressed="false">E. Room geometry<small>Names and interior polygons</small></button>
+<button type="button" data-model-task="json" aria-pressed="false">F. JSON response<small>All geometry in one document</small></button>
+</div>
+<div class="task-guide" aria-live="polite"><h3 id="task-heading">A. Interpret the image and instruction</h3><p id="task-explanation"></p></div>
+<div class="grid2">
+<figure class="task-visual">
+<svg id="task-image" viewBox="460 125 1830 1400" role="img" aria-labelledby="task-image-title task-image-description">
+<title id="task-image-title">Repository floor-plan example</title>
+<desc id="task-image-description">Unmodified repository sample with optional manually authored highlights. This is not the actual measured request image or a model-generated result.</desc>
+<image href="__SAMPLE_IMAGE__" x="0" y="0" width="2732" height="1908"/>
+<g id="task-image-overlay"></g>
+</svg>
+<figcaption><strong>Image source:</strong> <code>samples/floorplan_1.png</code>, 2732 × 1908 pixels. This repository example is not verified as the measured request image. Every overlay is a hand-authored illustration, not an actual model detection or intermediate frame.</figcaption>
+<div class="task-visual-key"><span>Green: example footprint / object boxes</span><span>Red: wall centerlines</span><span>Purple: room polygon</span><span>Amber: written dimensions</span></div>
+</figure>
+<div>
+<div><span class="badge">Source-code evidence</span> <span class="task-timing">Per-responsibility timing: unavailable</span></div>
+<div class="task-evidence" aria-live="polite"><p id="task-source" class="small muted"></p><blockquote id="task-quote"></blockquote><p id="task-reason" class="small"></p></div>
+<div class="task-data"><p class="small"><strong id="task-example-label">Input contract</strong></p><pre id="task-output"></pre></div>
+<p class="small muted" id="task-output-caveat" style="margin-top:10px"></p>
+</div>
+</div>
+<div class="task-constraints">
+<h3>What makes this a large request?</h3>
+<p>The instruction asks for every relevant component and precise coordinates in a single response. Each wall segment, room vertex, furniture box, type, label, angle, and confidence adds output. The model must also distinguish walls from cabinets, objects from text, and door openings from continuous walls. These requirements are documented in the prompt; their individual share of latency is not measured.</p>
+<div class="table-wrap"><table><caption class="sr-only">Evidence for all six model responsibilities</caption><thead><tr><th>Responsibility</th><th>Concrete evidence in current source</th><th>Requested result</th></tr></thead><tbody>
+<tr><td>A. Image + instruction</td><td>Text part and image-byte part in one <code>generate_content()</code> request; high media resolution — lines 528–538</td><td>One multimodal input. Logged latest image: 964 × 709; total prompt tokens: 2,521</td></tr>
+<tr><td>B. Footprint + scale</td><td><code>1. FOOTPRINT &amp; SCALE</code> — lines 55–59</td><td><code>footprint_box_2d</code>, <code>width</code>, <code>height</code>, <code>units</code></td></tr>
+<tr><td>C. Walls + openings</td><td>Centerlines, shared endpoints, split around door/window openings — lines 61–69</td><td><code>walls[].line</code>, thickness, exterior flag, confidence</td></tr>
+<tr><td>D. Furniture + fixtures</td><td>One entry per symbol, tight boxes, separate straight runs, no overlapping boxes — lines 71–89</td><td><code>furniture[]</code> and <code>fixtures[]</code> with types and geometry</td></tr>
+<tr><td>E. Room geometry</td><td>Inner-wall polygons, names and written room dimensions — lines 91–95</td><td><code>rooms[].polygon</code>, name, stated dimensions, confidence</td></tr>
+<tr><td>F. JSON response</td><td>Prompt schema — lines 97–128; JSON MIME mode — line 536; latency/token event — lines 541–545</td><td>One complete response. Latest log: 5,295 candidate tokens; 66,096 ms</td></tr>
+</tbody></table></div>
+<p class="small muted" style="margin-top:12px">All line references above point to <code>backend/plan_parsing_worker/app/services/parser_service.py</code> in the source snapshot used to build this report. Source requirements prove what the implementation requests, not that every requirement was satisfied by the deployed model. The deployed prompt text and raw extraction response were not retained in the logs.</p>
+<p class="small">Individual representative images: <a href="images/input.png">A · image input</a> / <a href="images/footprint.png">B · footprint and dimensions</a> / <a href="images/walls.png">C · walls and gaps</a> / <a href="images/objects.png">D · furniture and fixtures</a> / <a href="images/rooms.png">E · room polygon</a> / <a href="images/json.png">F · combined geometry illustration</a>. These images are also included in the report bundle.</p>
+<details><summary>Show the actual logged extraction event behind 66.096 seconds</summary><pre id="task-measured-event"></pre><p class="small muted" id="task-measured-time"></p></details>
+<div class="note caution"><strong>Outside these 66.096 seconds:</strong> the separate AI review calls run later. Assigning IDs, drawing review overlays, converting coordinates to feet/meters, validating the final FloorPlan, saving to Firestore, catalog matching, and 3D scene building are not the model responsibilities illustrated here. Some request-construction work is inside the current timer, so 66.096 seconds must not be described as pure model compute.</div>
+</div>
+</section>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const data = JSON.parse(document.getElementById('report-data').textContent);
+  const call = data.runs[data.runs.length - 1].calls[0];
+  const base = 'backend/plan_parsing_worker/app/services/parser_service.py';
+  const footprint = '<rect class="task-highlight" x="630" y="322" width="1520" height="1136"/>';
+  const dimensions = '<rect class="task-dimension" x="1335" y="135" width="105" height="60"/><rect class="task-dimension" x="490" y="855" width="65" height="85"/>';
+  const walls = '<path class="task-wall" d="M642 335H1185 M1375 335H1775 M2028 335H2138 M642 395V740 M642 822V953 M1002 530V803 M642 813H880 M982 813H1315"/>';
+  const objects = '<rect class="task-highlight" x="724" y="344" width="187" height="214"/><rect class="task-highlight" x="680" y="969" width="119" height="307"/><rect class="task-highlight" x="1468" y="671" width="56" height="73"/>';
+  const room = '<polygon class="task-room" points="655,350 980,350 980,800 655,800"/>';
+  const tasks = {
+    input: {
+      heading: 'A. Interpret the image and instruction',
+      explanation: 'The request contains both the floor-plan pixels and detailed geometry rules. It asks Gemini to reconstruct the drawing in normalized image coordinates, rather than return a prose description. There is no separate OCR or segmentation API call in this worker.',
+      lines: 'Request wrapper, lines 528–538; coordinate rules, lines 49–53.',
+      quote: 'types.Part.from_text(text=instruction),\ntypes.Part.from_bytes(data=image_bytes, mime_type=media_type)',
+      reason: 'Evidence shows a single multimodal request with MEDIA_RESOLUTION_HIGH. It does not expose the provider’s image encoding, patch processing, internal reasoning, or their timing.',
+      output: {image: {format: 'PNG', width: 964, height: 709, bytes: 147374}, promptTokensTotal: 2521, normalizedCoordinates: '0–1000 over the whole image'},
+      label: 'Logged metadata + source coordinate contract',
+      caveat: 'Image metadata and token count are measured. The displayed larger repository image is representative and is not established as the actual request image.',
+      overlay: ''
+    },
+    footprint: {
+      heading: 'B. Locate the building footprint and infer physical scale',
+      explanation: 'The prompt asks for the tight bounds of the exterior walls, excluding dimension margins and title blocks. It also asks the model to read overall width/height from annotations or estimate them from standard object sizes when dimensions are missing.',
+      lines: 'FOOTPRINT & SCALE, lines 55–59; cropped-image guidance, lines 131–133.',
+      quote: '"footprint_box_2d": the tight box around the OUTER faces of the exterior walls of the building.',
+      reason: 'The green rectangle illustrates the building extent. Amber highlights the written 40′ and 30′ annotations. In the measured cropped workflow the earlier corner-detection API call was skipped, but this footprint/scale responsibility remains in the extraction prompt.',
+      output: {footprint_box_2d: [169,231,764,787], width: 40, height: 30, units: 'ft'},
+      label: 'Illustrative output fields',
+      caveat: 'Manually estimated bounds for the repository sample; these coordinates and dimensions are not recovered model output. Feet/meters conversion of individual components happens later in local code.',
+      overlay: footprint + dimensions
+    },
+    walls: {
+      heading: 'C. Trace walls while preserving door and window gaps',
+      explanation: 'The prompt asks for wall centerlines, thickness, exterior/interior classification, and connected endpoints. Each door or window opening must become a gap between wall segments. Cabinets and furniture outlines must not be mistaken for walls.',
+      lines: 'WALLS, lines 61–69; wall output fields, lines 107–108.',
+      quote: 'Wherever a wall has a door or window opening, SPLIT the wall into separate segments before and after the opening and leave the opening as a blank gap.',
+      reason: 'Red highlights illustrate several centerlines. Notice the breaks at openings: tracing an entire perimeter as one continuous line would violate the prompt. Each additional segment contributes geometry to the response, but its time cost is not separately known.',
+      output: {walls: [{line:[176,235,176,434],thickness:9,exterior:true,confidence:0.9}]},
+      label: 'Illustrative wall entry',
+      caveat: 'A representative hand-authored segment, not an observed model prediction. The prompt does not request separate door/window objects.',
+      overlay: walls
+    },
+    objects: {
+      heading: 'D. Identify furniture and fixtures, then bound each symbol',
+      explanation: 'For each drawn symbol, the prompt asks for a semantic type, label, tight box, orientation, and confidence. It requires separate entries for individual chairs and nightstands, separate straight runs for L/U shapes, and boxes that exclude nearby text and empty floor.',
+      lines: 'FURNITURE & FIXTURES, lines 71–89; object schema, lines 110–126.',
+      quote: '"box_2d" is the TIGHT box around the drawn symbol\'s outline as it appears in the image: its true drawn size, not a standard size, and excluding text labels, door swing arcs and nearby objects.',
+      reason: 'Green highlights show a bed, sofa, and sink. The geometry must match each drawing; the instruction does not permit replacing every bed with a generic standard-sized box. This is symbol extraction, not choosing 3D catalog assets.',
+      output: {furniture:[{furnitureType:'bed',label:'Bed',box_2d:[180,265,292,333],angle:0,confidence:0.9}],fixtures:[{fixtureType:'sink',box_2d:[352,537,390,558],angle:0,confidence:0.9}]},
+      label: 'Illustrative object entries',
+      caveat: 'All coordinates and confidence values here are explanatory examples. No original extraction object list or object count was captured.',
+      overlay: objects
+    },
+    rooms: {
+      heading: 'E. Outline rooms and associate the written labels',
+      explanation: 'The prompt asks for a polygon following each room’s inner wall faces, ordered clockwise, plus its name, written dimensions if shown, and confidence. Text reading and geometry have to agree on which region is being named.',
+      lines: 'ROOMS, lines 91–95; room output fields, lines 104–105.',
+      quote: '"polygon": the room\'s inner wall faces as [y, x] points, clockwise. "name" comes from the plan label.',
+      reason: 'The purple region illustrates Bedroom #2. It follows the interior space instead of tracing a box around the room-name text. The written 9′ × 12′ dimensions describe this room; they are separate from the overall building dimensions.',
+      output: {rooms:[{name:'BEDROOM #2',polygon:[[183,240],[183,359],[419,359],[419,240]],statedDimensions:{width:9,height:12},confidence:0.9}]},
+      label: 'Illustrative room entry',
+      caveat: 'The polygon and confidence are manually authored. The room name and dimension text are visible in the repository example, not extracted from the measured response.',
+      overlay: room
+    },
+    json: {
+      heading: 'F. Return the complete structured response',
+      explanation: 'All requested footprint, wall, room, furniture, and fixture fields must fit into one JSON document. The SDK call is synchronous, so the worker receives the completed response before it can decode the JSON and assign local IDs.',
+      lines: 'Prompt output contract, lines 97–128; response_mime_type, line 536; latency/token logging, lines 541–545.',
+      quote: 'Return ONLY a valid JSON object matching this exact schema:',
+      reason: 'The actual latest event records 5,295 candidate output tokens and 66,096 ms elapsed. It does not give the JSON byte size, object counts, thinking tokens, time to first token, or a separate generation duration. The image overlays combine the previous illustrations; they are not a model-result screenshot.',
+      output: {event:'gemini_plan_call',model:call.model,latencyMs:call.latency_ms,tokens:call.tokens},
+      label: 'Actual logged event payload',
+      caveat: 'Measured event values, not illustrative values. The original response body was not retained; 5,295 tokens cannot be converted into a known object count or decoding-time measurement.',
+      overlay: footprint + walls + objects + room
+    }
+  };
+  function renderTask(key) {
+    const task=tasks[key];
+    document.getElementById('task-heading').textContent=task.heading;
+    document.getElementById('task-explanation').textContent=task.explanation;
+    document.getElementById('task-source').textContent=base+' — '+task.lines;
+    document.getElementById('task-quote').textContent=task.quote;
+    document.getElementById('task-reason').textContent=task.reason;
+    document.getElementById('task-output').textContent=JSON.stringify(task.output,null,2);
+    document.getElementById('task-example-label').textContent=task.label;
+    document.getElementById('task-output-caveat').textContent=task.caveat;
+    document.getElementById('task-image-overlay').innerHTML=task.overlay;
+    document.getElementById('task-image-title').textContent=task.heading+' — manual illustration on repository sample';
+    document.querySelectorAll('[data-model-task]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.modelTask===key)));
+  }
+  document.querySelectorAll('[data-model-task]').forEach(button=>button.addEventListener('click',()=>renderTask(button.dataset.modelTask)));
+  renderTask('input');
+  document.getElementById('task-measured-event').textContent=JSON.stringify({event:'gemini_plan_call',model:call.model,latencyMs:call.latency_ms,tokens:call.tokens},null,2);
+  document.getElementById('task-measured-time').textContent='Cloud Logging timestamp: '+call.at+' (20 November report update; the measurement remains from 19 November at about 21:33 ICT).';
+});
+</script>

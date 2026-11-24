@@ -20,6 +20,7 @@ Design: [`docs/10-chat-refactor-plan.md`](../../docs/10-chat-refactor-plan.md).
 | PUT | `/projects/{id}/plan` | Save the edited 2D plan (bumps `floorPlanVersion`) |
 | PATCH | `/projects/{id}/mapping` | Rescale a matched model, reset it, or assign an asset to a box |
 | POST | `/projects/{id}/scene/ops` · `/scene/undo` · `/scene/redo` | 3D edits as op batches (409 `SCENE_VERSION_CONFLICT`); history shared with AI edits |
+| POST | `/projects/{id}/scene/style` | Switch Japandi / Industrial while preserving furniture placement and sizes; accepts `{style, baseVersion}` |
 | GET / POST / PATCH / DELETE | `/assets…` | Library: list (`scope=system|mine`), upload URL, confirm (starts Meshy), edit / promote (admin), delete |
 | POST | `/assets/remove-background` | Cut furniture out of a photo (proxied to the private worker) |
 | GET | `/jobs/{id}` | Parse job status (marks stale jobs failed and resets the chat) |
@@ -52,6 +53,18 @@ gcloud auth application-default login          # Vertex AI (Gemini) with your ac
 .venv/bin/python -m pytest -q tests            # fully mocked (in-memory Firestore/Storage/Meshy/Gemini)
 .venv/bin/python -m evals.run_chat_tools       # real Gemini, target ≥ 18/20
 ```
+
+When testing local API changes, set `VITE_API_BASE_URL=http://localhost:8000/v1` in
+`web/.env.local`. Otherwise the frontend uses the hosted API configured in `web/public/config.js`,
+which may not have newly added endpoints and can return `404 Not Found`. Vite reloads when this
+override changes; refresh the browser afterward. Hosted users need the updated API deployed.
+
+For local uploads with `gcloud auth application-default login`, leave `FIREBASE_CREDENTIALS_PATH`
+empty and set `GCS_SIGNING_SERVICE_ACCOUNT=soraplan-api@soraplan.iam.gserviceaccount.com` in
+`backend/api/.env`. The developer account must already have `iam.serviceAccounts.signBlob`
+permission on that service account, and the service account needs access to the uploads bucket.
+An existing service-account key file also works. Upload signing failures return a clear API error;
+they never return an unsigned upload URL for the private bucket.
 
 Without `MESHY_POLL_QUEUE` the API polls Meshy from a background thread; without `CLOUD_TASKS_QUEUE` it calls
 the parsing worker directly. `UPDATE_GOLDEN=1 pytest tests/test_scene_builder.py` refreshes the golden scene.

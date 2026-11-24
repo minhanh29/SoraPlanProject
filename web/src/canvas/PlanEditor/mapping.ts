@@ -1,10 +1,23 @@
 // Mapping-step math: decorations per plan box, footprint <-> dims, stretch detection. Pure.
-import type { Asset, Dims, MappingEntry, MissingEntry, PlanUnits } from "../../lib/types";
+import type { Asset, Dims, FloorPlan, MappingEntry, MissingEntry, PlanUnits } from "../../lib/types";
 import { rad2deg } from "../../lib/units";
-import { isBox, type EditorObject } from "./model";
+import { buildEditorObjects, isBox, type EditorObject } from "./model";
 import type { Decoration } from "./render";
 
 export type MapState = "matched" | "generating" | "failed" | "missing" | "skipped";
+
+/** A complete model occupies its combined footprint; its included symbols do not become extra stickers. */
+export function buildMappingObjects(plan: FloorPlan, mapping: Record<string, MappingEntry>): EditorObject[] {
+  return buildEditorObjects(plan)
+    .filter((o) => !mapping[o.id]?.includedIn)
+    .map((o) => {
+      const entry = mapping[o.id];
+      const placement = entry?.placementBox;
+      return isBox(o) && placement
+        ? { ...o, name: entry.label || o.name, x: placement.x, y: placement.y, w: placement.width, h: placement.height, rotation: placement.rotation }
+        : o;
+    });
+}
 
 export function entryState(entry: MappingEntry | undefined, asset: Asset | undefined, inMissing: boolean): MapState {
   if (!entry) return inMissing ? "missing" : "missing";

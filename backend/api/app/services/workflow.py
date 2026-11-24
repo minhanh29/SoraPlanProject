@@ -19,12 +19,14 @@ from ..config import get_settings
 from ..errors import AppException, ConflictException
 from . import crop_service
 from .asset_mapper import map_plan, refit_entry, unresolved
+from .asset_matching import refine_mapping, release_group
 from .asset_service import AssetService, SIGNED_URL_TTL
 from .common import SERVER_TIMESTAMP, get_owned, load_styles, utcnow
 from .conversation_service import ConversationService
 from .project_service import ProjectService
 from .scene_builder import build_scene
 from .scene_ops import SceneService
+from .scene_style import style_ops
 from .storage_service import StorageService
 
 logger = logging.getLogger("api.workflow")
@@ -193,6 +195,7 @@ class Workflow:
         scenes: SceneService,
         classify: Optional[Callable] = None,
         render_home: Optional[Callable[[bytes, str], bytes]] = None,
+        match_assets: Optional[Callable] = None,
     ):
         self.db = db
         self.storage = storage
@@ -202,6 +205,7 @@ class Workflow:
         self.scenes = scenes
         self.classify = classify
         self.render_home = render_home
+        self.match_assets = match_assets
         self.settings = get_settings()
 
     # ------------------------------------------------------------------ helpers
@@ -246,6 +250,8 @@ class Workflow:
         pid = ref.id
         title = title_from_filename(file_name)
         path = f"{uid}/{pid}/original{PLAN_TYPES[ctype]}"
+        # Verify upload authorization before persisting a project the user cannot upload to.
+        url = self.storage.generate_signed_upload_url(path, ctype, expiration_seconds=900)
         ref.set({
             "id": pid,
             "ownerUid": uid,
@@ -266,7 +272,6 @@ class Workflow:
             "updatedAt": SERVER_TIMESTAMP,
         })
         self.conversations.create(pid, uid, title)
-        url = self.storage.generate_signed_upload_url(path, ctype, expiration_seconds=900)
         return {"projectId": pid, "conversationId": pid, "signedUploadUrl": url, "contentType": ctype}
 
     def upload_complete(self, conversation_id: str, uid: str) -> str:
@@ -408,6 +413,29 @@ class Workflow:
 
     # ------------------------------------------------------------------ style + mapping
 
+    def switch_scene_style(self, project_id: str, uid: str, style: str, base_version: int) -> dict:
+        project = get_owned(self.db, "projects", project_id, uid)
+        conv = self.conversations.get(project.get("conversationId") or project_id, uid)
+        self._require_stage(conv, ["scene_ready"], "switch the interior style")
+        if conv.get("busy"):
+            raise ConflictException(detail="Wait for the current change to finish", code="PROJECT_BUSY")
+        if style not in load_styles():
+            raise AppException(status_code=400, code="INVALID_STYLE", detail="Unknown interior style")
+        scene = self.scenes.get(project_id, uid)
+        if scene["version"] != base_version:
+            raise ConflictException(detail="The scene changed. Try switching the style again.", code="SCENE_VERSION_CONFLICT")
+        if scene["graph"]["meta"]["style"] == style:
+            return {"newVersion": scene["version"], "retainedItems": 0,
+                    "scene": {k: scene[k] for k in ("version", "graph", "undoStack", "redoStack")}}
+        assets = self.assets.placeable_assets(uid)
+        by_id = {a["id"]: a for a in assets}
+        ops, retained = style_ops(scene["graph"], style, assets)
+        # The catalog is already authorized and loaded. Do not fetch the same asset from
+        # Firestore again for each furniture instance in the replacement batch.
+        result = self.scenes.apply_batch(project_id, uid, ops, origin="ui", base_version=base_version,
+                                         label=f"Switch to {style}", asset_lookup=by_id.get, include_scene=True)
+        return {"newVersion": result["newVersion"], "retainedItems": retained, "scene": result["scene"]}
+
     def select_style(self, ctx: Ctx, style: str) -> dict:
         conv, project = self._load(ctx)
         self._require_stage(conv, ["choosing_style", "resolving_missing", "scene_ready"], "select_style")
@@ -426,6 +454,7 @@ class Workflow:
                 previous=project.get("mapping") or {},
                 classify=self.classify,
                 user_uid=ctx.uid,
+                match=self.match_assets,
             )
             self._project_ref(project["id"]).update({"style": style, "mapping": mapping, "missing": missing, "updatedAt": SERVER_TIMESTAMP})
             matched = sum(1 for e in mapping.values() if e.get("assetId"))
@@ -450,6 +479,9 @@ class Workflow:
         if entry is None:
             raise AppException(status_code=404, code="COMPONENT_NOT_FOUND", detail=f"No plan object '{component_id}'")
         entry = dict(entry)
+        if entry.get("includedIn"):
+            raise AppException(status_code=409, code="COMPONENT_INCLUDED",
+                               detail="This part is already included in a complete asset. Change the complete asset first.")
 
         if restore:
             # Undo a Skip: back to "needs a model" (only meaningful before the 3D build)
@@ -460,12 +492,16 @@ class Workflow:
 
         if asset_id:
             asset = self.assets.get_readable(asset_id, uid)
+            release_group(mapping, component_id)
+            entry = dict(mapping[component_id])
             # The chosen model defines what the box is (symbol, height range, seat orientation)
             entry.update({"assetId": asset_id, "category": asset.get("category") or entry.get("category"), "skipped": False,
                           "dimsSource": "auto"})
             entry = refit_entry(project["floorPlan"], component_id, entry, asset, project.get("mapping"))
             mapping[component_id] = entry
-            missing = [m for m in project.get("missing") or [] if m.get("componentId") != component_id]
+            mapping = refine_mapping(project["floorPlan"], project.get("style"), self.assets.placeable_assets(uid), mapping,
+                                     self.match_assets, uid, required_component_id=component_id)
+            missing = unresolved(mapping)
             self._project_ref(project_id).update({"mapping": mapping, "missing": missing, "updatedAt": SERVER_TIMESTAMP})
             return mapping
 
