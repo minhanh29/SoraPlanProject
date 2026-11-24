@@ -3,7 +3,7 @@
 // Batches are sent one at a time; a 409 (SCENE_VERSION_CONFLICT) waits for the newer snapshot, then replays
 // the batch once if its items still exist. Undo/redo are server-side so UI and AI edits share one history.
 
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import type { SceneDoc, SceneGraph, SceneOp } from "../lib/types";
 import { toast } from "../components/ui";
@@ -30,6 +30,9 @@ export interface SceneStore {
   canUndo: boolean;
   canRedo: boolean;
   loading: boolean;
+  saving: boolean;
+  /** Display a committed API result immediately; the live Firestore stream takes over when it catches up. */
+  acceptScene: (snapshot: SceneDoc) => void;
   /** Apply ops optimistically and send them as one batch. */
   apply: (ops: SceneOp[], label?: string) => void;
   undo: () => void;
@@ -39,13 +42,24 @@ export interface SceneStore {
 let batchSeq = 0;
 
 export function useScene(projectId: string | null): SceneStore {
-  const doc = useDoc<SceneDoc>(projectId ? `scenes/${projectId}` : null);
+  const live = useDoc<SceneDoc>(projectId ? `scenes/${projectId}` : null);
+  const [acknowledged, setAcknowledged] = useState<{ projectId: string; scene: SceneDoc } | null>(null);
+  const doc = acknowledged?.projectId === projectId && acknowledged.scene.version > (live?.version ?? 0) ? acknowledged.scene : live;
   const queue = useRef<PendingBatch[]>([]);
   const busy = useRef(false);
   const lastAck = useRef(0);
   const docRef = useRef<SceneDoc | null | undefined>(doc);
   docRef.current = doc;
   const [, rerender] = useReducer((n: number) => n + 1, 0);
+
+  const acceptScene = useCallback((snapshot: SceneDoc) => {
+    if (!projectId || snapshot.graph.projectId !== projectId || snapshot.version < (docRef.current?.version ?? 0)) return;
+    setAcknowledged({ projectId, scene: snapshot });
+  }, [projectId]);
+
+  useEffect(() => {
+    if (acknowledged && (acknowledged.projectId !== projectId || (live?.version ?? 0) >= acknowledged.scene.version)) setAcknowledged(null);
+  }, [live, projectId, acknowledged]);
 
   const remove = (b: PendingBatch) => {
     queue.current = queue.current.filter((x) => x !== b);
@@ -149,6 +163,8 @@ export function useScene(projectId: string | null): SceneStore {
     canUndo: (doc?.undoStack?.length ?? 0) > 0,
     canRedo: (doc?.redoStack?.length ?? 0) > 0,
     loading: doc === undefined,
+    saving: queue.current.length > 0 || busy.current,
+    acceptScene,
     apply,
     undo,
     redo,

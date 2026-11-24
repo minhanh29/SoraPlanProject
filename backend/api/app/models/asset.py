@@ -18,6 +18,7 @@ class AssetUploadUrlResponse(BaseSchema):
 
 class ConfirmAssetRequest(BaseSchema):
     name: str = Field(..., min_length=1, max_length=120)
+    description: str = Field(default="", max_length=2000)
     category: str = Field(..., min_length=1, max_length=60)
     style: Optional[str] = None
     project_id: Optional[str] = None
@@ -26,6 +27,7 @@ class ConfirmAssetRequest(BaseSchema):
 
 class UpdateAssetRequest(BaseSchema):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=2000)
     category: Optional[str] = Field(default=None, min_length=1, max_length=60)
     style: Optional[str] = None
     is_system: Optional[bool] = None

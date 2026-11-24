@@ -59,7 +59,8 @@ def confirm(
     user: UserProfile = Depends(get_current_user),
     assets: AssetService = Depends(get_asset_service),
 ) -> dict:
-    return _public(assets.confirm(user.uid, asset_id, body.name, body.category, body.style, body.project_id, body.component_id))
+    return _public(assets.confirm(user.uid, asset_id, body.name, body.category, body.style, body.project_id,
+                                  body.component_id, description=body.description))
 
 
 @router.patch("/{asset_id}", summary="Rename / recategorize; admins can promote to system (style + category required)")

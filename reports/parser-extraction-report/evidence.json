@@ -1,0 +1,534 @@
+{
+  "title": "Plan extraction: timing, model input/output, and optimization",
+  "date": "2026-11-19",
+  "updated_date": "2026-11-20",
+  "timezone": "Asia/Ho_Chi_Minh (UTC+07)",
+  "source": {
+    "path": "backend/plan_parsing_worker/app/services/parser_service.py",
+    "sha256": "6ca59219947b0d4ad79753a5317c8d7d245fabcb21505b340750cac3b3c18975",
+    "runtime_revision": "soraplan-plan-parsing-worker-00011-bz6",
+    "caveat": "Local parser file is modified. Prompt/request reconstruction reflects this source snapshot, not a verified deployed prompt."
+  },
+  "method": "Existing successful Gemini latency logs plus differences between surrounding Cloud Logging timestamps. No new model requests.",
+  "missing": [
+    "original extraction JSON",
+    "exact wire request and deployed prompt",
+    "thinking-token count",
+    "first-token latency",
+    "SDK retry spans",
+    "individual local operation spans",
+    "provider-internal phase timings"
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "received_at": "2026-11-15T09:29:48.137857Z",
+      "request": {
+        "at": "2026-11-15T09:29:39.220158Z",
+        "latency_ms": 92897.716149,
+        "cold": true
+      },
+      "calls": [
+        {
+          "at": "2026-11-15T09:30:56.151092Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 65994,
+          "tokens": {
+            "prompt": 2493,
+            "output": 5265
+          }
+        },
+        {
+          "at": "2026-11-15T09:31:00.880833Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 4482,
+          "tokens": {
+            "prompt": 7355,
+            "output": 144
+          }
+        },
+        {
+          "at": "2026-11-15T09:31:12.136875Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 11154,
+          "tokens": {
+            "prompt": 7260,
+            "output": 28
+          }
+        }
+      ],
+      "reviews": [
+        {
+          "round": 1,
+          "edits": {
+            "update": 1,
+            "delete": 3,
+            "add": 1,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Deleted wardrobe boxes over empty closet rooms and split the L-shaped kitchen counter x9 into two straight counter boxes."
+        },
+        {
+          "round": 2,
+          "edits": {
+            "update": 0,
+            "delete": 0,
+            "add": 0,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "The current parse accurately captures all walls, rooms, furniture, and fixtures."
+        }
+      ],
+      "local_time": "15 Nov \u00b7 16:29 ICT",
+      "download_at": "2026-11-15T09:29:48.443565Z",
+      "download_end_at": "2026-11-15T09:29:48.906541Z",
+      "corners_skipped": true,
+      "image": {
+        "width": 965,
+        "height": 711,
+        "format": "PNG",
+        "bytes": 147420
+      },
+      "image_loaded_at": "2026-11-15T09:29:49.126292Z",
+      "extract_marker_at": "2026-11-15T09:29:49.126349Z",
+      "finished_at": "2026-11-15T09:31:12.544272Z",
+      "extract_span_ms": 67024.743,
+      "pre_timer_residual_ms": 1030.743,
+      "review_bridge_ms": 247.741,
+      "review2_bridge_ms": 102.042,
+      "finalize_ms": 407.397,
+      "worker_app_ms": 84406.415,
+      "cold_wait_ms": 8917.699,
+      "boundary_total_ms": 93324.114
+    },
+    {
+      "run": 2,
+      "received_at": "2026-11-15T12:16:06.234208Z",
+      "request": {
+        "at": "2026-11-15T12:15:58.366064Z",
+        "latency_ms": 162693.796591,
+        "cold": true
+      },
+      "calls": [
+        {
+          "at": "2026-11-15T12:17:13.494407Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 65158,
+          "tokens": {
+            "prompt": 2493,
+            "output": 5144
+          }
+        },
+        {
+          "at": "2026-11-15T12:18:34.458933Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 80761,
+          "tokens": {
+            "prompt": 7251,
+            "output": 331
+          }
+        },
+        {
+          "at": "2026-11-15T12:18:41.217090Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 6650,
+          "tokens": {
+            "prompt": 7155,
+            "output": 167
+          }
+        }
+      ],
+      "reviews": [
+        {
+          "round": 1,
+          "edits": {
+            "update": 8,
+            "delete": 2,
+            "add": 0,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Fixed the corrupted polygon for closet r6, resolved overlapping vanity counter and sink boxes, and reshaped the kitchen counter and appliance boxes so they do not cover empty floor."
+        },
+        {
+          "round": 2,
+          "edits": {
+            "update": 2,
+            "delete": 0,
+            "add": 1,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Updated kitchen counter boxes x14 and x15 to cover their full drawn outlines, and added the missing closet shelving f24 next to the washer/dryer."
+        }
+      ],
+      "local_time": "15 Nov \u00b7 19:16 ICT",
+      "download_at": "2026-11-15T12:16:06.585859Z",
+      "download_end_at": "2026-11-15T12:16:07.101256Z",
+      "corners_skipped": true,
+      "image": {
+        "width": 964,
+        "height": 714,
+        "format": "PNG",
+        "bytes": 147419
+      },
+      "image_loaded_at": "2026-11-15T12:16:07.338227Z",
+      "extract_marker_at": "2026-11-15T12:16:07.338380Z",
+      "finished_at": "2026-11-15T12:18:41.531396Z",
+      "extract_span_ms": 66156.027,
+      "pre_timer_residual_ms": 998.027,
+      "review_bridge_ms": 203.526,
+      "review2_bridge_ms": 108.157,
+      "finalize_ms": 314.306,
+      "worker_app_ms": 155297.188,
+      "cold_wait_ms": 7868.144,
+      "boundary_total_ms": 163165.332
+    },
+    {
+      "run": 3,
+      "received_at": "2026-11-15T12:21:33.331760Z",
+      "request": {
+        "at": "2026-11-15T12:21:33.305402Z",
+        "latency_ms": 146245.514467,
+        "cold": false
+      },
+      "calls": [
+        {
+          "at": "2026-11-15T12:22:46.019791Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 72405,
+          "tokens": {
+            "prompt": 2521,
+            "output": 5571
+          }
+        },
+        {
+          "at": "2026-11-15T12:23:52.948668Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 66783,
+          "tokens": {
+            "prompt": 7228,
+            "output": 212
+          }
+        },
+        {
+          "at": "2026-11-15T12:23:59.253708Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 6219,
+          "tokens": {
+            "prompt": 7233,
+            "output": 250
+          }
+        }
+      ],
+      "reviews": [
+        {
+          "round": 1,
+          "edits": {
+            "update": 2,
+            "delete": 2,
+            "add": 2,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Deleted vanity counter boxes overlapping sinks and split kitchen counters around the sink and stove."
+        },
+        {
+          "round": 2,
+          "edits": {
+            "update": 4,
+            "delete": 0,
+            "add": 2,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Updated laundry closet fixture type and added bathroom vanity counters."
+        }
+      ],
+      "local_time": "15 Nov \u00b7 19:21 ICT",
+      "download_at": "2026-11-15T12:21:33.387373Z",
+      "download_end_at": "2026-11-15T12:21:33.506975Z",
+      "corners_skipped": true,
+      "image": {
+        "width": 961,
+        "height": 705,
+        "format": "PNG",
+        "bytes": 147255
+      },
+      "image_loaded_at": "2026-11-15T12:21:33.613202Z",
+      "extract_marker_at": "2026-11-15T12:21:33.613571Z",
+      "finished_at": "2026-11-15T12:23:59.580338Z",
+      "extract_span_ms": 72406.22,
+      "pre_timer_residual_ms": 1.22,
+      "review_bridge_ms": 145.877,
+      "review2_bridge_ms": 86.04,
+      "finalize_ms": 326.63,
+      "worker_app_ms": 146248.578,
+      "cold_wait_ms": 26.358,
+      "boundary_total_ms": 146274.936
+    },
+    {
+      "run": 4,
+      "received_at": "2026-11-17T07:57:49.667175Z",
+      "request": {
+        "at": "2026-11-17T07:57:41.657229Z",
+        "latency_ms": 93616.623,
+        "cold": true
+      },
+      "calls": [
+        {
+          "at": "2026-11-17T07:58:53.955245Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 62207,
+          "tokens": {
+            "prompt": 2521,
+            "output": 4824
+          }
+        },
+        {
+          "at": "2026-11-17T07:59:03.527772Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 9344,
+          "tokens": {
+            "prompt": 7318,
+            "output": 136
+          }
+        },
+        {
+          "at": "2026-11-17T07:59:15.386525Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 11769,
+          "tokens": {
+            "prompt": 7318,
+            "output": 282
+          }
+        }
+      ],
+      "reviews": [
+        {
+          "round": 1,
+          "edits": {
+            "update": 3,
+            "delete": 0,
+            "add": 0,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Expanded kitchen counter segments x12 and x13 up to the north wall and aligned the top of kitchen sink x10."
+        },
+        {
+          "round": 2,
+          "edits": {
+            "update": 9,
+            "delete": 0,
+            "add": 0,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Updated nightstand boxes, coffee table box, and exterior wall segments."
+        }
+      ],
+      "local_time": "17 Nov \u00b7 14:57 ICT",
+      "download_at": "2026-11-17T07:57:49.983404Z",
+      "download_end_at": "2026-11-17T07:57:50.546105Z",
+      "corners_skipped": true,
+      "image": {
+        "width": 966,
+        "height": 711,
+        "format": "PNG",
+        "bytes": 147435
+      },
+      "image_loaded_at": "2026-11-17T07:57:50.786664Z",
+      "extract_marker_at": "2026-11-17T07:57:50.786735Z",
+      "finished_at": "2026-11-17T07:59:15.732541Z",
+      "extract_span_ms": 63168.51,
+      "pre_timer_residual_ms": 961.51,
+      "review_bridge_ms": 228.527,
+      "review2_bridge_ms": 89.753,
+      "finalize_ms": 346.016,
+      "worker_app_ms": 86065.366,
+      "cold_wait_ms": 8009.946,
+      "boundary_total_ms": 94075.312
+    },
+    {
+      "run": 5,
+      "received_at": "2026-11-17T10:53:39.690464Z",
+      "request": {
+        "at": "2026-11-17T10:53:32.478270Z",
+        "latency_ms": 104670.376,
+        "cold": true
+      },
+      "calls": [
+        {
+          "at": "2026-11-17T10:54:53.592388Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 71828,
+          "tokens": {
+            "prompt": 2493,
+            "output": 5600
+          }
+        },
+        {
+          "at": "2026-11-17T10:55:05.972617Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 12139,
+          "tokens": {
+            "prompt": 7220,
+            "output": 371
+          }
+        },
+        {
+          "at": "2026-11-17T10:55:17.145434Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 11060,
+          "tokens": {
+            "prompt": 7361,
+            "output": 397
+          }
+        }
+      ],
+      "reviews": [
+        {
+          "round": 1,
+          "edits": {
+            "update": 2,
+            "delete": 2,
+            "add": 5,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Split kitchen counters around sink and stove, removed overlapping vanity counters, and added missing laundry closet wardrobe and wall-mounted bedroom TVs."
+        },
+        {
+          "round": 2,
+          "edits": {
+            "update": 2,
+            "delete": 0,
+            "add": 7,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Split kitchen counters around the stove, sink, and refrigerator so everything is tightly covered without overlaps, and added bathroom vanity counters."
+        }
+      ],
+      "local_time": "17 Nov \u00b7 17:53 ICT",
+      "download_at": "2026-11-17T10:53:40.061453Z",
+      "download_end_at": "2026-11-17T10:53:40.507978Z",
+      "corners_skipped": true,
+      "image": {
+        "width": 966,
+        "height": 717,
+        "format": "PNG",
+        "bytes": 147489
+      },
+      "image_loaded_at": "2026-11-17T10:53:40.742129Z",
+      "extract_marker_at": "2026-11-17T10:53:40.742226Z",
+      "finished_at": "2026-11-17T10:55:17.581412Z",
+      "extract_span_ms": 72850.162,
+      "pre_timer_residual_ms": 1022.162,
+      "review_bridge_ms": 241.229,
+      "review2_bridge_ms": 112.817,
+      "finalize_ms": 435.978,
+      "worker_app_ms": 97890.948,
+      "cold_wait_ms": 7212.194,
+      "boundary_total_ms": 105103.142
+    },
+    {
+      "run": 6,
+      "received_at": "2026-11-19T14:32:13.958892Z",
+      "request": {
+        "at": "2026-11-19T14:32:07.510584Z",
+        "latency_ms": 88876.118819,
+        "cold": true
+      },
+      "calls": [
+        {
+          "at": "2026-11-19T14:33:21.792262Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 66096,
+          "tokens": {
+            "prompt": 2521,
+            "output": 5295
+          }
+        },
+        {
+          "at": "2026-11-19T14:33:30.079843Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 8045,
+          "tokens": {
+            "prompt": 7428,
+            "output": 213
+          }
+        },
+        {
+          "at": "2026-11-19T14:33:36.530486Z",
+          "model": "gemini-4-argon",
+          "latency_ms": 6338,
+          "tokens": {
+            "prompt": 7332,
+            "output": 161
+          }
+        }
+      ],
+      "reviews": [
+        {
+          "round": 1,
+          "edits": {
+            "update": 3,
+            "delete": 3,
+            "add": 1,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Deleted sliding closet door boxes f4, f8, f26, expanded sink x5 and stove x6 to include their counter depth, added the missing wardrobe beside W/D, and marked w37 as exterior."
+        },
+        {
+          "round": 2,
+          "edits": {
+            "update": 4,
+            "delete": 0,
+            "add": 0,
+            "set_footprint": 0,
+            "skipped": 0
+          },
+          "summary": "Shrank nightstand boxes f2, f3, f6, and f7 so they no longer overlap with the adjacent bed boxes f1 and f5."
+        }
+      ],
+      "local_time": "19 Nov \u00b7 21:32 ICT",
+      "download_at": "2026-11-19T14:32:14.217455Z",
+      "download_end_at": "2026-11-19T14:32:14.594277Z",
+      "corners_skipped": true,
+      "image": {
+        "width": 964,
+        "height": 709,
+        "format": "PNG",
+        "bytes": 147374
+      },
+      "image_loaded_at": "2026-11-19T14:32:14.833193Z",
+      "extract_marker_at": "2026-11-19T14:32:14.833251Z",
+      "finished_at": "2026-11-19T14:33:36.891514Z",
+      "extract_span_ms": 66959.011,
+      "pre_timer_residual_ms": 863.011,
+      "review_bridge_ms": 242.581,
+      "review2_bridge_ms": 112.643,
+      "finalize_ms": 361.028,
+      "worker_app_ms": 82932.622,
+      "cold_wait_ms": 6448.308,
+      "boundary_total_ms": 89380.93
+    }
+  ],
+  "summary": {
+    "count": 6,
+    "extraction_mean_s": 67.28133333333334,
+    "extraction_median_s": 66.045
+  },
+  "illustration": {
+    "source": "samples/floorplan_1.png",
+    "width": 2732,
+    "height": 1908,
+    "sha256": "cb1c56ad6c9cd16c53a6031f2ab9a1fffd82ba964c91cdec43865005dbdaca51",
+    "caveat": "Repository example, not a verified copy of the measured request image. All overlays and example coordinates are manually authored, not original model output."
+  }
+}

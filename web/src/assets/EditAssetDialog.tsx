@@ -7,6 +7,7 @@ import { useAuth } from "../hooks/useAuth";
 export default function EditAssetDialog({ asset, onClose }: { asset: Asset | null; onClose: () => void }) {
   const { isAdmin } = useAuth();
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [isSystem, setIsSystem] = useState(false);
   const [style, setStyle] = useState<StyleId | "">("");
@@ -16,6 +17,7 @@ export default function EditAssetDialog({ asset, onClose }: { asset: Asset | nul
   useEffect(() => {
     if (!asset) return;
     setName(asset.name);
+    setDescription(asset.description || "");
     setCategory(asset.category || "");
     setIsSystem(asset.isSystem);
     setStyle(asset.style || "");
@@ -32,7 +34,7 @@ export default function EditAssetDialog({ asset, onClose }: { asset: Asset | nul
     setBusy(true);
     setError(null);
     try {
-      const patch: Parameters<typeof api.updateAsset>[1] = { name: name.trim() };
+      const patch: Parameters<typeof api.updateAsset>[1] = { name: name.trim(), description: description.trim() };
       if (showCategory && category) patch.category = category;
       if (isAdmin) {
         patch.isSystem = isSystem;
@@ -74,6 +76,20 @@ export default function EditAssetDialog({ asset, onClose }: { asset: Asset | nul
         <div className="field">
           <label htmlFor="edit-asset-name">Name</label>
           <input id="edit-asset-name" className="input" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} autoFocus />
+        </div>
+        <div className="field">
+          <label htmlFor="edit-asset-description">Shape & included elements</label>
+          <textarea
+            id="edit-asset-description"
+            className="input"
+            value={description}
+            maxLength={2000}
+            rows={3}
+            placeholder="e.g. L-shaped kitchen counter with sink, stove and fridge already included."
+            onChange={(e) => setDescription(e.target.value)}
+            disabled={busy}
+          />
+          <span className="subtle">Used to match the floorplan and place the complete model without duplicating its included parts.</span>
         </div>
         {showCategory && (
           <div className="field">

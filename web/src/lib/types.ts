@@ -178,6 +178,12 @@ export interface MappingEntry {
   /** Extra yaw (radians) chosen by the mapper so the model faces away from the nearest wall. */
   rotationOffset?: number;
   skipped: boolean;
+  /** Parsed parts represented by one complete asset. */
+  includedIn?: string;
+  componentIds?: string[];
+  placementBox?: { x: number; y: number; width: number; height: number; rotation: number };
+  /** The two occupied wall edges of a composite kitchen in plan coordinates. */
+  cornerOrientation?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
 }
 
 export interface MissingEntry { componentId: string; label: string; category: string | null }
@@ -229,6 +235,8 @@ export interface Asset {
   ownerUid: string | null;
   isSystem: boolean;
   name: string;
+  /** Footprint shape and elements already included in this complete model. */
+  description?: string;
   category: string;
   style: StyleId | null;
   imagePath: string | null;
@@ -244,6 +252,8 @@ export interface Asset {
   /** Native model bounding box in meters (as exported). Null until measured. */
   dims: Dims | null;
   frontAxis: "+z" | "-z" | "+x" | "-x";
+  /** Native model corner, when the asset is an L-shaped kitchen. */
+  cornerOrientation?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
   status: AssetStatus;
   progress: number;
   error?: string | null;

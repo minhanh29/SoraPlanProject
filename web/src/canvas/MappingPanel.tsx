@@ -13,9 +13,9 @@ import UploadAssetDialog, { type UploadAssetPreset } from "../assets/UploadAsset
 import ResolveModelDialog, { type ResolveTarget } from "./ResolveModelDialog";
 import PlanCanvas, { type PlanCanvasControls } from "./PlanEditor/PlanEditor";
 import { LayersMenu, ZoomControls, isTypingTarget } from "./PlanEditor/Toolbar";
-import { buildEditorObjects, isBox, type BoxObj } from "./PlanEditor/model";
+import { isBox, type BoxObj } from "./PlanEditor/model";
 import { DEFAULT_LAYERS, type LayerVisibility } from "./PlanEditor/hitTest";
-import { buildDecorations, clampDims, entryState, sameAssetIds, scaleDims } from "./PlanEditor/mapping";
+import { buildDecorations, buildMappingObjects, clampDims, entryState, sameAssetIds, scaleDims } from "./PlanEditor/mapping";
 import MappingInspector from "./MappingInspector";
 import "./panels.css";
 
@@ -44,7 +44,7 @@ export default function MappingPanel({ conversation, project, files, onClose }: 
   const assets = useAssetIndex();
   const imageFor = useImageCache();
 
-  const objects = useMemo(() => (plan ? buildEditorObjects(plan) : []), [plan]);
+  const objects = useMemo(() => (plan ? buildMappingObjects(plan, mapping) : []), [plan, project.mapping]);
   const k = plan ? planScale(plan) : 1;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layers, setLayers] = useState<LayerVisibility>({ ...DEFAULT_LAYERS, grid: false });

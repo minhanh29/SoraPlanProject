@@ -1,0 +1,45 @@
+You are the quality reviewer of a floor-plan digitisation engine.
+Image 1 is the original floor plan. Image 2 is the same plan with the current parse drawn on top:
+red lines = walls, blue boxes = furniture, green boxes = fixtures, purple outlines = rooms, orange box = footprint.
+Every item is tagged with its id. The current parse is also given as JSON below.
+
+All coordinates are normalized image coordinates: integers 0-1000 over the WHOLE image, [0, 0] top-left,
+[1000, 1000] bottom-right. Boxes are [ymin, xmin, ymax, xmax], points [y, x], lines [y1, x1, y2, x2].
+
+Compare the two images carefully and fix every mistake:
+1. Each furniture/fixture symbol DRAWN in image 1 has exactly one box that tightly covers its drawn outline.
+   Move or resize boxes that are offset, too big or too small. Add missing ones; delete duplicates.
+2. Delete boxes that sit on text labels, dimension strings, door swings, empty floor or outside the building,
+   and boxes for things that are not drawn.
+3. "angle" is 0 for objects drawn parallel to the walls (whichever way they face). Only diagonally drawn objects
+   get their clockwise angle in degrees, with box_2d still the tight axis-aligned box around them.
+4. Fix wrong types and labels (e.g. a nightstand typed as a chair).
+   A box that covers mostly empty floor is wrong: split L-shaped counters/sofas into one box per straight run.
+   A rectangle framing a room name is a text frame and rugs are not furniture: delete those boxes.
+   Closets drawn with zig-zag hanger lines are "wardrobe" furniture: add any that are missing.
+   Boxes never overlap: where two boxes share a spot or one sits on top of / inside another, keep the one that
+   matches the drawing and delete or shrink the other (split a counter around a sink or stove set into it).
+   Preserve contiguous kitchen counter/sink/stove/Ref. boxes along the two walls of an L-shaped kitchen for
+   one composite 3D placement downstream. Keep a third parallel peninsula counter separate from that L.
+5. Walls lie on the drawn walls' centerlines, connected walls share endpoints, and door/window openings stay as
+   gaps between wall segments. Cabinets, closets, shelving and counters are NOT walls: delete walls drawn on
+   them. Fix, add or delete walls accordingly.
+6. Room outlines follow the inner wall faces and carry the plan's room names.
+7. The footprint box covers the outer faces of the exterior walls, and width/height/units match the overall
+   dimension strings. Correct them with "set_footprint" if not.
+Go through EVERY id in the JSON one by one before answering; do not stop at the first few problems.
+Only change what is wrong. If everything is right, return no edits and "done": true.
+
+Return ONLY a valid JSON object:
+{
+  "edits": [
+    {"op": "update", "id": "<id>", <only the fields to change: box_2d, angle, label, furnitureType, fixtureType, line, thickness, exterior, polygon, name>},
+    {"op": "delete", "id": "<id>"},
+    {"op": "add", "kind": "furniture" | "fixture" | "wall" | "room", <the item's fields, same schema as the JSON>},
+    {"op": "set_footprint", "footprint_box_2d": [ymin, xmin, ymax, xmax], "width": <number>, "height": <number>, "units": "ft" or "m"}
+  ],
+  "done": true/false,
+  "summary": "<one sentence on what you changed>"
+}
+
+Current parse:

@@ -119,8 +119,9 @@ def build_scene(
     items: List[dict] = []
     for b in plan_boxes(plan):
         entry = mapping.get(b["id"])
-        if not entry or entry.get("skipped") or not entry.get("assetId"):
+        if not entry or entry.get("skipped") or entry.get("includedIn") or not entry.get("assetId"):
             continue
+        b = {**b, **(entry.get("placementBox") or {})}
         cx, cy = box_center(b)
         center = (cx * k, cy * k)
         dims = entry.get("dims") or {"w": float(b["width"]) * k, "d": float(b["height"]) * k, "h": 0.8}

@@ -3,11 +3,12 @@ import { Dialog } from "../components/ui";
 import ModelPreview from "../three/ModelPreview";
 import { assetModelUrls } from "../hooks/useAssets";
 import { formatLength } from "../lib/units";
-import { statusLabel } from "./assetHelpers";
+import { assetDescription, statusLabel } from "./assetHelpers";
 import "./assets.css";
 
 export default function ModelViewerDialog({ asset, onClose }: { asset: Asset | null; onClose: () => void }) {
   const status = asset ? statusLabel(asset) : null;
+  const description = asset ? assetDescription(asset) : "";
   return (
     <Dialog open={!!asset} onClose={onClose} title={asset?.name} width={640}>
       {asset && (
@@ -25,6 +26,12 @@ export default function ModelViewerDialog({ asset, onClose }: { asset: Asset | n
                     : "The 3D model appears here when it's ready."}
               </p>
             </div>
+          )}
+          {description && (
+            <section className="viewer__description" aria-label="Shape & included elements">
+              <h3>Shape &amp; included elements</h3>
+              <p>{description}</p>
+            </section>
           )}
           <dl className="viewer__facts">
             <div>

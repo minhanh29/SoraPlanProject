@@ -4,27 +4,27 @@ import { memo, useEffect, useMemo, useState } from "react";
 import type { ThreeEvent } from "@react-three/fiber";
 import { Html, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
-import { fitScale, loadModel, type LoadedModel } from "../../three/loadModel";
+import { fitScale, getLoadedModel, loadModel, type LoadedModel } from "../../three/loadModel";
 import { assetModelUrls } from "../../hooks/useAssets";
 import type { Asset, Dims, ItemInstance } from "../../lib/types";
 
 export function useModel(urls: string[], enabled: boolean): LoadedModel | null | "error" {
-  const [model, setModel] = useState<LoadedModel | null | "error">(null);
+  const [result, setResult] = useState<{ key: string; model: LoadedModel | null | "error" }>({ key: "", model: null });
   const key = urls.join("|");
   useEffect(() => {
     if (!enabled || !urls.length) {
-      setModel(null);
       return;
     }
     let alive = true;
     loadModel(urls)
-      .then((m) => alive && setModel(m))
-      .catch(() => alive && setModel("error"));
+      .then((model) => alive && setResult({ key, model }))
+      .catch(() => alive && setResult({ key, model: "error" }));
     return () => {
       alive = false;
     };
   }, [key, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
-  return model;
+  if (!enabled) return null;
+  return getLoadedModel(urls) ?? (result.key === key ? result.model : null);
 }
 
 /** Edges of a box of `dims` sitting on y = 0 (selection / warning outline). */

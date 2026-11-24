@@ -10,6 +10,8 @@ from ..models.conversation import (
     SavePlanResponse,
     SceneThumbnailRequest,
     SceneThumbnailResponse,
+    SwitchSceneStyleRequest,
+    SwitchSceneStyleResponse,
     TourPlanRequest,
     TourPlanResponse,
     UpdateMappingRequest,
@@ -22,6 +24,17 @@ from ..services.tour_planner import TourPlanner
 from ..services.workflow import Workflow
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+@router.post("/{project_id}/scene/style", response_model=SwitchSceneStyleResponse,
+             summary="Switch the finished home's collection while preserving furniture placement and dimensions")
+def switch_scene_style(
+    project_id: str,
+    body: SwitchSceneStyleRequest,
+    user: UserProfile = Depends(get_current_user),
+    workflow: Workflow = Depends(get_workflow),
+):
+    return workflow.switch_scene_style(project_id, user.uid, body.style, body.base_version)
 
 
 @router.get("/{project_id}/files", response_model=ProjectFilesResponse, summary="Fresh signed URLs of the plan images")

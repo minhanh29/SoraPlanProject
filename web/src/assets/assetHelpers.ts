@@ -1,14 +1,23 @@
 import type { Asset, StyleId } from "../lib/types";
+import systemCatalog from "../../../backend/api/app/data/system_assets.json";
+import additionalSystemDescriptions from "../../../backend/api/app/data/system_asset_descriptions.json";
+
+const systemDescriptions = new Map([...systemCatalog, ...additionalSystemDescriptions].map((asset) => [asset.id, asset.description]));
+
+/** Older system records can omit the description; explicit edits (including clearing it) take priority. */
+export function assetDescription(asset: Pick<Asset, "id" | "isSystem" | "description">): string {
+  return asset.description ?? (asset.isSystem ? systemDescriptions.get(asset.id) : undefined) ?? "";
+}
 
 export type StyleFilter = "all" | StyleId;
 
-/** Case-insensitive search on name and category, plus an optional style filter. */
+/** Case-insensitive search on name, description and category, plus an optional style filter. */
 export function filterAssets(assets: Asset[], search: string, style: StyleFilter = "all"): Asset[] {
   const q = search.trim().toLowerCase();
   return assets.filter((a) => {
     if (style !== "all" && a.style !== style) return false;
     if (!q) return true;
-    return (a.name || "").toLowerCase().includes(q) || (a.category || "").toLowerCase().includes(q);
+    return [a.name, a.description, a.category].some((value) => (value || "").toLowerCase().includes(q));
   });
 }
 

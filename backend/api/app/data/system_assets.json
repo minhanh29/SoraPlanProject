@@ -14,7 +14,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_TV_stand_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_TV_stand_thumb.webp",
+    "description": "Long, low rectangular TV console with a dark wood cabinet, broad drawer front, horizontal metal handle and recessed base. Includes one complete straight storage console; the television is separate."
   },
   {
     "id": "sys_industrial_In_bath",
@@ -31,7 +32,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_bath_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_bath_thumb.webp",
+    "description": "Rectangular inset bathtub with a white outer surround, broad flat rim and rounded rectangular bathing basin. Includes the tub shell, integrated rim, drain and overflow opening as one bathroom fixture; taps and shower fittings are separate."
   },
   {
     "id": "sys_industrial_In_bed_1",
@@ -48,7 +50,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_bed_1_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_bed_1_thumb.webp",
+    "description": "Rectangular bed assembly with a black tubular metal frame, open rail headboard and footboard, mattress, cream bedding, stacked pillows and a dark textured throw across the foot. All bed parts and textiles share one footprint; bedside tables are separate."
   },
   {
     "id": "sys_industrial_In_bed_2",
@@ -65,7 +68,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_bed_2_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_bed_2_thumb.webp",
+    "description": "Rectangular bed assembly with a black tubular metal frame, open rail headboard and footboard, mattress, burgundy duvet and pillows, a small cream accent cushion and a taupe throw. Includes the furnished bed as one asset; bedside tables are separate."
   },
   {
     "id": "sys_industrial_In_bed_master",
@@ -82,7 +86,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_bed_master_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_bed_master_thumb.webp",
+    "description": "Rectangular double-bed assembly with a low dark wood platform, broad padded headboard, mattress, navy bedding, dark pillows, a brown accent cushion and a draped beige throw. Includes the frame and all bedding in one footprint; bedside storage is separate."
   },
   {
     "id": "sys_industrial_In_closet_storage",
@@ -99,7 +104,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_closet_storage_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_closet_storage_thumb.webp",
+    "description": "Tall rectangular open wardrobe with a dark wood frame, narrow shelves down both sides, an open central hanging bay, upper hanging rail and divided lower storage. Includes the shelving, folded linens and stored contents as one straight wardrobe assembly."
   },
   {
     "id": "sys_industrial_In_fridge",
@@ -116,7 +122,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_fridge_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_fridge_thumb.webp",
+    "description": "Tall rectangular refrigerator with dark wood-effect door panels, separate upper refrigerator and lower freezer compartments, and vertical handles. Includes one complete freestanding fridge-freezer cabinet in a single compact footprint."
   },
   {
     "id": "sys_industrial_In_kitchen_chair_1",
@@ -133,7 +140,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_kitchen_chair_1_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_kitchen_chair_1_thumb.webp",
+    "description": "Single dining chair with a compact rounded-square footprint, a slender curved metal frame, wraparound arm rails, padded brown seat and backrest, and four narrow legs. Includes one complete chair; the dining table and other chairs are separate."
   },
   {
     "id": "sys_industrial_In_kitchen_chair_2",
@@ -150,7 +158,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_kitchen_chair_2_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_kitchen_chair_2_thumb.webp",
+    "description": "Single dining chair with a compact rounded-square footprint, a curved brown upholstered backrest, padded seat, open gap beneath the back and four tapered legs with curved side supports. Includes one complete chair; the dining table is separate."
   },
   {
     "id": "sys_industrial_In_kitchen_counter",
@@ -167,7 +176,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_kitchen_counter_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_kitchen_counter_thumb.webp",
+    "description": "Straight fitted kitchen assembly along one wall, combining dark base cupboards and drawers, overhead cabinets, tall storage at both ends, a continuous worktop and backsplash, an integrated cooktop, extractor hood, under-cabinet lighting and a glass-front undercounter appliance. Place the entire cabinet-and-appliance assembly as one rectangular footprint; the sink unit and standalone refrigerator are separate."
   },
   {
     "id": "sys_industrial_In_kitchen_sink",
@@ -184,7 +194,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_kitchen_sink_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_kitchen_sink_thumb.webp",
+    "description": "Straight rectangular kitchen sink assembly combining dark cabinet segments, a stone-effect worktop, two adjacent inset metal sink basins, a shared faucet and projecting storage sections. Both basins, the faucet, counter and cabinets are included in one footprint; cooking appliances and the refrigerator are separate."
   },
   {
     "id": "sys_industrial_In_kitchen_table_1",
@@ -201,7 +212,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_kitchen_table_1_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_kitchen_table_1_thumb.webp",
+    "description": "Long rectangular dining table with a thick gray stone-effect tabletop and two broad slab supports underneath. Includes the tabletop and both supports as one straight table; chairs, benches and place settings are separate."
   },
   {
     "id": "sys_industrial_In_kitchen_table_2",
@@ -218,7 +230,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_kitchen_table_2_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_kitchen_table_2_thumb.webp",
+    "description": "Long rectangular dining table with a wood plank tabletop, dark metal edging, two rectangular metal end frames and a low connecting stretcher. Includes the complete table and support frame in one footprint; dining chairs and benches are separate."
   },
   {
     "id": "sys_industrial_In_lightstand",
@@ -235,7 +248,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_lightstand_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_lightstand_thumb.webp",
+    "description": "Compact box-shaped dark wood bedside cabinet with a square top, a broad drawer and an open lower shelf, topped by a small spherical lamp with an angled opening. Includes both the nightstand and lamp as one asset in the same footprint."
   },
   {
     "id": "sys_industrial_In_living_chair",
@@ -252,7 +266,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_living_chair_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_living_chair_thumb.webp",
+    "description": "Single orange upholstered lounge armchair with a rounded footprint, deep padded seat, curved wraparound back and arms, and short angled wood legs. Includes the complete armchair as one seat; side tables and other seating are separate."
   },
   {
     "id": "sys_industrial_In_living_table",
@@ -269,7 +284,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_living_table_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_living_table_thumb.webp",
+    "description": "Low rectangular coffee table with a recessed wood plank top framed by dark metal and two broad metal end supports. Includes the tabletop and support structure as one straight table; sofas and chairs are separate."
   },
   {
     "id": "sys_industrial_In_sofa",
@@ -286,7 +302,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_sofa_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_sofa_thumb.webp",
+    "description": "Straight two-seat sofa with a rectangular footprint, dark gray upholstery, two broad seat cushions, padded back cushions and arms, loose accent pillows and a beige throw draped over one side. Includes the sofa and textiles as one asset; there is no chaise or corner extension."
   },
   {
     "id": "sys_industrial_In_stool",
@@ -303,7 +320,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_stool_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_stool_thumb.webp",
+    "description": "Round backless stool with a circular dark wood seat, four splayed wood legs and connecting cross braces. Includes one complete stool in a compact circular footprint; tables and additional stools are separate."
   },
   {
     "id": "sys_industrial_In_toilet",
@@ -320,7 +338,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_toilet_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_toilet_thumb.webp",
+    "description": "Compact white floor-standing toilet with an elongated oval bowl and closed seat, a rounded pedestal base and a rectangular rear cistern with a top flush button. Includes the bowl, seat, base and cistern as one complete bathroom fixture."
   },
   {
     "id": "sys_industrial_In_toilet_sink",
@@ -337,7 +356,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_toilet_sink_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_toilet_sink_thumb.webp",
+    "description": "Long rectangular bathroom vanity combining a gray stone-effect surround and countertop, two inset rectangular white basins, two individual faucets and one continuous open lower shelf. Both sinks, both taps and the vanity body are included in a single straight footprint; mirrors are separate."
   },
   {
     "id": "sys_industrial_In_washing_dryer",
@@ -354,7 +374,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Industrial/In_washing_dryer_thumb.webp"
+    "thumbPath": "assets-web/Industrial/In_washing_dryer_thumb.webp",
+    "description": "Side-by-side laundry assembly with two rectangular dark appliance cabinets, one front-loading washing machine and one front-loading tumble dryer, each with a large circular front door. Includes both machines together in one wide rectangular footprint; place the pair once rather than treating it as a single machine."
   },
   {
     "id": "sys_japandi_Ja_TV_stand",
@@ -371,7 +392,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_TV_stand_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_TV_stand_thumb.webp",
+    "description": "Long, low rectangular TV console with a pale wood cabinet, broad handleless front panels and a minimal box-shaped profile. Includes one complete straight storage console; the television is separate."
   },
   {
     "id": "sys_japandi_Ja_bath",
@@ -388,7 +410,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_bath_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_bath_thumb.webp",
+    "description": "Rectangular inset bathtub with a white outer surround, broad flat rim and rounded rectangular bathing basin. Includes the tub shell, integrated rim, drain and overflow opening as one bathroom fixture; taps and shower fittings are separate."
   },
   {
     "id": "sys_japandi_Ja_bed_1",
@@ -405,7 +428,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_bed_1_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_bed_1_thumb.webp",
+    "description": "Rectangular bed assembly with a low light-wood platform and headboard, mattress, two cream pillows, white bedding and a beige throw draped across the foot and side. Includes the frame and all bedding in one footprint; bedside tables are separate."
   },
   {
     "id": "sys_japandi_Ja_bed_2",
@@ -422,7 +446,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_bed_2_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_bed_2_thumb.webp",
+    "description": "Rectangular bed assembly with a low light-wood frame, broad headboard, mattress, two cream pillows, white bedding and a folded textured beige throw across the foot. Includes the furnished bed as one asset; bedside tables are separate."
   },
   {
     "id": "sys_japandi_Ja_closet_storage",
@@ -439,7 +464,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_closet_storage_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_closet_storage_thumb.webp",
+    "description": "Tall rectangular open light-wood wardrobe with narrow shelves down both sides, an open central hanging bay, an upper hanging rail and divided bottom cubbies. Includes the cabinet frame, shelving, folded linens and stored contents as one straight storage assembly."
   },
   {
     "id": "sys_japandi_Ja_fridge",
@@ -456,7 +482,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_fridge_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_fridge_thumb.webp",
+    "description": "Tall rectangular refrigerator with pale wood-effect front panels and separate upper refrigerator and lower freezer compartments with recessed handles. Includes one complete fridge-freezer cabinet in a single compact footprint; surrounding kitchen cabinetry is separate."
   },
   {
     "id": "sys_japandi_Ja_kitchen_bench",
@@ -473,7 +500,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_kitchen_bench_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_bench_thumb.webp",
+    "description": "Long, narrow rectangular dining bench with a flat light-wood plank seat, four square legs and a supporting apron beneath the seat. Includes one complete straight backless bench; the dining table and chairs are separate."
   },
   {
     "id": "sys_japandi_Ja_kitchen_chair",
@@ -490,7 +518,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_kitchen_chair_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_chair_thumb.webp",
+    "description": "Single light-wood dining chair with a compact square footprint, curved horizontal backrest, woven seat, four slender legs and connecting stretchers. Includes one complete armless chair; the dining table and additional seating are separate."
   },
   {
     "id": "sys_japandi_Ja_kitchen_counter",
@@ -507,7 +536,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_kitchen_counter_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_counter_thumb.webp",
+    "description": "Straight rectangular kitchen cabinet assembly in light wood, combining multiple cupboard and drawer segments, an inset speckled stone-effect work surface, an integrated two-zone cooktop and a glass-front built-in appliance. All cabinetry, work surface and cooking elements belong to one asset; the double-sink unit and standalone refrigerator are separate."
   },
   {
     "id": "sys_japandi_Ja_kitchen_sink",
@@ -524,7 +554,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_kitchen_sink_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_sink_thumb.webp",
+    "description": "Straight rectangular kitchen sink assembly combining light-wood cabinet segments, a speckled stone-effect worktop, two adjacent inset metal sink basins, a shared faucet and projecting storage sections. Both basins, the faucet, counter and cabinets are included in one footprint; cooking appliances and the refrigerator are separate."
   },
   {
     "id": "sys_japandi_Ja_kitchen_table",
@@ -541,7 +572,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_kitchen_table_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_table_thumb.webp",
+    "description": "Rectangular light-wood dining table with a thick plank top, four square legs and a supporting apron beneath the tabletop. Includes one complete straight table; dining chairs, benches and place settings are separate."
   },
   {
     "id": "sys_japandi_Ja_kitchen_table_2",
@@ -558,7 +590,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_kitchen_table_2_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_kitchen_table_2_thumb.webp",
+    "description": "Long rectangular dining table with a thin speckled light stone-effect top and two broad light-wood slab supports. Includes the tabletop and both supports as one straight table; dining chairs and benches are separate."
   },
   {
     "id": "sys_japandi_Ja_living_chair",
@@ -575,7 +608,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_living_chair_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_living_chair_thumb.webp",
+    "description": "Single low lounge armchair with a rectangular footprint, light-wood frame, angled woven seat and backrest, shaped wood armrests and splayed legs. Includes the complete chair with its woven surfaces; side tables and cushions are separate."
   },
   {
     "id": "sys_japandi_Ja_living_table",
@@ -592,7 +626,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_living_table_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_living_table_thumb.webp",
+    "description": "Low rectangular light-wood coffee table with a broad top and two solid slab end supports. Includes the table plus the visible tabletop arrangement of small ceramic vessels, a branch and a light-colored book or tray as one asset; seating is separate."
   },
   {
     "id": "sys_japandi_Ja_master_bed",
@@ -609,7 +644,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_master_bed_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_master_bed_thumb.webp",
+    "description": "Rectangular double-bed assembly with a low light-wood platform, broad wood-framed headboard, mattress, white bedding, two large pillows, a small neutral accent cushion and a taupe throw. Includes the complete bed and textiles in one footprint; bedside tables are separate."
   },
   {
     "id": "sys_japandi_Ja_nightstand",
@@ -626,7 +662,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_nightstand_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_nightstand_thumb.webp",
+    "description": "Compact light-wood nightstand with a square footprint, flat top, two slab sides and a lower shelf forming an open front storage cubby. Includes one complete bedside table; lamps and decorative objects are separate."
   },
   {
     "id": "sys_japandi_Ja_sink",
@@ -643,7 +680,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_sink_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_sink_thumb.webp",
+    "description": "Long rectangular bathroom vanity combining light-wood base cabinets and drawers, a speckled stone-effect countertop, two inset rectangular white basins and two individual faucets. Both sinks, both taps, the counter and storage cabinet are included in one straight footprint; mirrors are separate."
   },
   {
     "id": "sys_japandi_Ja_sofa",
@@ -660,7 +698,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_sofa_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_sofa_thumb.webp",
+    "description": "Straight two-seat sofa with a rectangular footprint, cream upholstery, two deep seat cushions, two broad back cushions, rounded padded arms and a low light-wood plinth base. Includes one complete sofa; there is no chaise or corner extension."
   },
   {
     "id": "sys_japandi_Ja_toilet",
@@ -677,7 +716,8 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_toilet_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_toilet_thumb.webp",
+    "description": "Compact white floor-standing toilet with an elongated oval bowl and closed seat, a rounded pedestal base and a rectangular rear cistern with a top flush button. Includes the bowl, seat, base and cistern as one complete bathroom fixture."
   },
   {
     "id": "sys_japandi_Ja_washing_dryer",
@@ -694,6 +734,7 @@
     },
     "frontAxis": "+z",
     "rotationOffset": 0,
-    "thumbPath": "assets-web/Japandi/Ja_washing_dryer_thumb.webp"
+    "thumbPath": "assets-web/Japandi/Ja_washing_dryer_thumb.webp",
+    "description": "Side-by-side laundry assembly with two rectangular light neutral appliance cabinets, one front-loading washing machine and one front-loading tumble dryer, each with a large circular front door. Includes both machines together in one wide rectangular footprint; place the pair once rather than treating it as a single machine."
   }
 ]

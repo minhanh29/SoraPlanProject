@@ -12,6 +12,7 @@ import type {
   OpBatchRequest,
   OpResult,
   ProjectFiles,
+  SceneDoc,
   StyleId,
   UserProfile,
 } from "./types";
@@ -114,6 +115,8 @@ export const api = {
   ) => request<{ mapping: Record<string, MappingEntry> }>("PATCH", `/projects/${id}/mapping`, body),
 
   // scene
+  switchSceneStyle: (id: string, style: StyleId, baseVersion: number) =>
+    request<{ newVersion: number; retainedItems: number; scene?: SceneDoc }>("POST", `/projects/${id}/scene/style`, { style, baseVersion }),
   applyOps: (id: string, batch: OpBatchRequest) => request<OpResult>("POST", `/projects/${id}/scene/ops`, batch),
   undo: (id: string) => request<{ newVersion: number }>("POST", `/projects/${id}/scene/undo`),
   redo: (id: string) => request<{ newVersion: number }>("POST", `/projects/${id}/scene/redo`),
@@ -124,9 +127,9 @@ export const api = {
     request<{ assetId: string; signedUploadUrl: string; contentType: string }>("POST", "/assets/upload-url", file),
   confirmAsset: (
     id: string,
-    body: { name: string; category: string; style?: StyleId | null; projectId?: string; componentId?: string },
+    body: { name: string; description?: string; category: string; style?: StyleId | null; projectId?: string; componentId?: string },
   ) => request<Asset>("POST", `/assets/${id}/confirm`, body),
-  updateAsset: (id: string, patch: { name?: string; category?: string; style?: StyleId | null; isSystem?: boolean }) =>
+  updateAsset: (id: string, patch: { name?: string; description?: string; category?: string; style?: StyleId | null; isSystem?: boolean }) =>
     request<Asset>("PATCH", `/assets/${id}`, patch),
   deleteAsset: (id: string) => request<void>("DELETE", `/assets/${id}`),
   removeBackground: (file: Blob, name: string) => {

@@ -10,7 +10,7 @@ import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..errors import AppException, ConflictException, NotFoundException
-from .common import SERVER_TIMESTAMP, get_owned
+from .common import SERVER_TIMESTAMP, get_owned, load_styles
 from .geometry import obb_corners, obb_overlap
 
 logger = logging.getLogger("api.scene_ops")
@@ -98,6 +98,13 @@ def apply_ops(
     g = copy.deepcopy(graph)
     level = _level(g)
     level.setdefault("items", [])
+    assets: Dict[str, Optional[dict]] = {}
+
+    def lookup(asset_id: str) -> Optional[dict]:
+        if asset_id not in assets:
+            assets[asset_id] = asset_lookup(asset_id) if asset_lookup else None
+        return assets[asset_id]
+
     inverse: List[dict] = []
     applied: List[dict] = []
 
@@ -145,7 +152,7 @@ def apply_ops(
             asset_id = op.get("assetId")
             if not asset_id or not isinstance(asset_id, str):
                 raise OpError("item.replace needs assetId")
-            asset = asset_lookup(asset_id) if asset_lookup else None
+            asset = lookup(asset_id)
             if asset_lookup and asset is None:
                 raise OpError(f"Unknown asset '{asset_id}'")
             new_dims = _dims(op["dims"]) if op.get("dims") else refit_dims_for_asset(it["dims"], asset)
@@ -196,6 +203,20 @@ def apply_ops(
                 w["color"] = (op.get("walls") or {}).get(w["id"])
             for r in level.get("rooms") or []:
                 r["floorColor"] = (op.get("rooms") or {}).get(r["id"])
+        elif kind == "scene.style":
+            style = op.get("style")
+            styles = load_styles()
+            if not isinstance(style, str) or style not in styles:
+                raise OpError("Unknown interior style")
+            palette = op.get("palette") or styles[style]["palette"]
+            if not isinstance(palette, dict):
+                raise OpError("Style palette must be an object")
+            colors = {k: _color(palette.get(k)) for k in ("wall", "floor", "accent")}
+            if not all(colors.values()):
+                raise OpError("Style palette needs wall, floor and accent colors")
+            inverse.insert(0, {"op": "scene.style", "style": g["meta"]["style"], "palette": dict(g["meta"]["palette"])})
+            g["meta"]["style"] = style
+            g["meta"]["palette"] = colors
         else:
             raise OpError(f"Unsupported op '{kind}'")
         applied.append(op)
@@ -292,6 +313,7 @@ class SceneService:
 
     def _commit(self, project_id: str, scene: dict, graph: dict, undo: List[str], redo: List[str]) -> int:
         version = int(scene.get("version") or 0) + 1
+        style_changed = graph["meta"]["style"] != scene["graph"]["meta"]["style"]
         graph["version"] = version
         self._ref(project_id).update({
             "version": version,
@@ -300,6 +322,14 @@ class SceneService:
             "redoStack": redo[-HISTORY_LIMIT:],
             "updatedAt": SERVER_TIMESTAMP,
         })
+        if style_changed:
+            # Undo/redo must update the saved project style as well as the rendered scene.
+            project_ref = self.db.collection("projects").document(project_id)
+            project = project_ref.get().to_dict() or {}
+            project_ref.update({"style": graph["meta"]["style"], "updatedAt": SERVER_TIMESTAMP})
+            conv_ref = self.db.collection("conversations").document(project.get("conversationId") or project_id)
+            if conv_ref.get().exists:
+                conv_ref.update({"thumbnailStale": True, "updatedAt": SERVER_TIMESTAMP})
         scene.update({"version": version, "graph": graph, "undoStack": undo, "redoStack": redo})
         return version
 
@@ -311,6 +341,8 @@ class SceneService:
         origin: str,
         base_version: Optional[int] = None,
         label: Optional[str] = None,
+        asset_lookup: Optional[AssetLookup] = None,
+        include_scene: bool = False,
     ) -> dict:
         scene = self.get(project_id, uid)
         current = int(scene.get("version") or 0)
@@ -320,7 +352,7 @@ class SceneService:
                 code="SCENE_VERSION_CONFLICT",
             )
         try:
-            graph, inverse, applied = apply_ops(scene["graph"], ops, self.asset_lookup)
+            graph, inverse, applied = apply_ops(scene["graph"], ops, asset_lookup or self.asset_lookup)
         except OpError as e:
             raise AppException(status_code=400, code="INVALID_SCENE_OP", detail=str(e))
         warnings = compute_warnings(graph, touched_item_ids(applied))
@@ -341,7 +373,10 @@ class SceneService:
             "createdAt": SERVER_TIMESTAMP,
         })
         logger.info("Scene %s v%d: %d ops from %s (%s)", project_id, new_version, len(applied), origin, label or "")
-        return {"batchId": batch_ref.id, "newVersion": new_version, "applied": len(applied), "warnings": warnings}
+        result = {"batchId": batch_ref.id, "newVersion": new_version, "applied": len(applied), "warnings": warnings}
+        if include_scene:
+            result["scene"] = {k: scene[k] for k in ("version", "graph", "undoStack", "redoStack")}
+        return result
 
     def _replay(self, project_id: str, uid: str, direction: str) -> dict:
         scene = self.get(project_id, uid)

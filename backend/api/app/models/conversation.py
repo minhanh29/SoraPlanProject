@@ -183,3 +183,13 @@ class OpResultResponse(BaseSchema):
 
 class VersionResponse(BaseSchema):
     new_version: int
+
+
+class SwitchSceneStyleRequest(BaseSchema):
+    style: Literal["Japandi", "Industrial"]
+    base_version: int = Field(..., ge=1)
+
+
+class SwitchSceneStyleResponse(VersionResponse):
+    retained_items: int = 0
+    scene: Optional[Dict[str, Any]] = None

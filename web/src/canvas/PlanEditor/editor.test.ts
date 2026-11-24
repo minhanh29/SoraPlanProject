@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { FloorPlan } from "../../lib/types";
+import type { FloorPlan, MappingEntry } from "../../lib/types";
 import { buildEditorObjects, exportFloorPlan, type BoxObj, type WallObj } from "./model";
 import { fitView, toScreen, toWorld, zoomAt } from "./view";
 import { distanceToSegment, hitTest, pointInBox, rectHandleAt } from "./hitTest";
 import { History } from "./history";
 import { resizeBox, snapRotation } from "./interactions";
 import { boxFromDrag, makeUserBox } from "./AddBoxTool";
-import { isStretched, parseLength, setAxis } from "./mapping";
+import { buildMappingObjects, isStretched, parseLength, setAxis } from "./mapping";
 
 const plan: FloorPlan = {
   id: "fp_1",
@@ -141,6 +141,16 @@ describe("interactions", () => {
 });
 
 describe("mapping helpers", () => {
+  it("shows a composite once at its combined footprint without changing the editable plan", () => {
+    const original = JSON.stringify(plan);
+    const entry: MappingEntry = { assetId: "kitchen", category: "Kitchen Counter", label: "Complete kitchen", dims: null,
+      autoDims: null, dimsSource: "auto", skipped: false, componentIds: ["f1", "x1"],
+      placementBox: { x: 2, y: 10, width: 16, height: 12, rotation: 0 } };
+    const objects = buildMappingObjects(plan, { f1: entry, x1: { ...entry, assetId: null, includedIn: "f1" } });
+    expect(objects.map((o) => o.id)).toEqual(["w1", "f1"]);
+    expect(objects[1]).toMatchObject({ x: 2, y: 10, w: 16, h: 12, rotation: 0, name: "Complete kitchen" });
+    expect(JSON.stringify(plan)).toBe(original);
+  });
   it("parses lengths in cm and ft-in", () => {
     expect(parseLength("210", "m")).toBeCloseTo(2.1);
     expect(parseLength("1.5 m", "m")).toBeCloseTo(1.5);

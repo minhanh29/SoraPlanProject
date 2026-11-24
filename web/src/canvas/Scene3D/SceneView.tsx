@@ -2,7 +2,8 @@
 // (select, drag-move on the floor, rotate ring, corner scale, keyboard shortcuts), plus the optional
 // plan overlay used to validate the parse, the realistic render (post-processing, textured floors, glass)
 // and the cinematic tour (camera driven by TourDirector, editing off, cutaway walls on the aerial shots, full walls
-// and interior ceilings inside).
+// and interior ceilings inside). Walkthrough mode uses a separate eye-level camera with collision-aware
+// movement and direct furniture editing.
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { ContactShadows, Environment, Html } from "@react-three/drei";
@@ -12,11 +13,13 @@ import type { Asset, Dims, FloorPlan, ItemInstance, PlanUnits, SceneGraph, Scene
 import { assetModelUrls } from "../../hooks/useAssets";
 import { loadModel } from "../../three/loadModel";
 import IsoCamera, { isPanKeyHeld, type CameraApi, type Projection } from "./IsoCamera";
+import FirstPersonCamera, { type WalkthroughSetup } from "./FirstPersonCamera";
 import Walls, { TourWalls } from "./Walls";
 import Floors from "./Floors";
 import { ItemView } from "./Items";
 import Gizmo, { ringRadius } from "./Gizmo";
 import { worldPerPixel } from "./cameraScale";
+import { floorDragPoint, startFloorDrag, type FloorDrag } from "./floorDrag";
 import PlanOverlay, { type OverlayImageStatus } from "./PlanOverlay";
 import RealisticEffects from "./RealisticEffects";
 import Interior from "./Interior";
@@ -57,6 +60,7 @@ export interface SceneViewProps {
   realistic: boolean;
   /** Cinematic tour in progress (camera driven, editing off), or null. */
   tour: TourSetup | null;
+  walkthrough?: WalkthroughSetup | null;
   /** Canvas pixel ratio and frame loop: the video export renders at its own resolution, frame by frame. */
   renderDpr?: number;
   frameloop?: "always" | "never";
@@ -81,14 +85,15 @@ export interface TourSetup {
 
 type Preview = { id: string; position?: Vec3; rotationY?: number; dims?: Dims };
 
-type Drag =
+type Drag = (
   | { mode: "pending" | "move"; id: string; startX: number; startY: number; offset: [number, number] }
   | { mode: "rotate"; id: string; center: [number, number]; startAngle: number; startRot: number }
   | { mode: "scale"; id: string; center: [number, number]; rot: number; startDims: Dims }
   /** Side handle: the opposite side (`fixed`, floor coords) stays put while the dragged side follows the pointer. */
   | { mode: "edge"; id: string; axis: "w" | "d"; sign: 1 | -1; rot: number; fixed: [number, number]; y: number; startDims: Dims }
   /** Height handle: vertical screen motion → meters (scale at the item, corrected for camera tilt). */
-  | { mode: "height"; id: string; startY: number; metersPerPx: number; startDims: Dims };
+  | { mode: "height"; id: string; startY: number; metersPerPx: number; startDims: Dims }
+) & { floorDrag?: FloorDrag };
 
 const MIN_SIDE = 0.05; // m
 const MAX_SIDE = 12;
@@ -153,23 +158,32 @@ function contentBox({ data, width, height }: ImageData) {
 
 function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(() => void) | null> }) {
   const { graph, assets, units, colors, cutaway, cameraRef, apply, undo, redo, onRequestReplace, missedRef } = props;
-  const { selectedId: rawSelectedId, onSelect: setSelectedId, overlay: rawOverlay, projection, tour } = props;
+  const { selectedId: rawSelectedId, onSelect: setSelectedId, overlay: rawOverlay, projection, tour, walkthrough } = props;
   const touring = !!tour;
+  const walking = !!walkthrough;
   const realistic = props.realistic || touring;
   // The tour shows the finished home: no selection or overlays; its own walls (TourWalls) ignore the cutaway toggle
   const selectedId = touring ? null : rawSelectedId;
-  const overlay = touring ? null : rawOverlay;
-  const wallsCut = cutaway && !touring;
-  const interiorRef = useRef(false);
+  const overlay = touring || walking ? null : rawOverlay;
+  const wallsCut = cutaway && !touring && !walking;
+  const interiorRef = useRef(walking);
+  // Walk mode always shows full walls, ceilings and room lights.
+  useEffect(() => { if (!touring) interiorRef.current = walking; }, [walking, touring]);
   const composerRef = useRef<EffectComposerImpl | null>(null);
   const level = graph.levels[0];
   const { camera, gl } = useThree();
   const size = useThree((s) => s.size);
   const controls = useThree((st) => st.controls) as { enabled: boolean } | null;
-  /** Stop OrbitControls at once (IsoCamera re-enables it when the drag ends). */
-  const holdControls = useCallback(() => {
+  const manipulatingRef = useRef(false);
+  const capturedPointer = useRef<number | null>(null);
+  /** Claim the pointer before the first-person look handler sees it. */
+  const holdControls = useCallback((e: ThreeEvent<PointerEvent>) => {
+    manipulatingRef.current = true;
+    capturedPointer.current = e.pointerId;
+    gl.domElement.setPointerCapture(e.pointerId);
+    if (walking) gl.domElement.focus({ preventScroll: true });
     if (controls) controls.enabled = false;
-  }, [controls]);
+  }, [controls, gl, walking]);
   const [preview, setPreviewState] = useState<Preview | null>(null);
   const [dragMode, setDragMode] = useState<Drag["mode"] | null>(null);
   const [loadModels, setLoadModels] = useState(false);
@@ -239,13 +253,17 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
   const angleOf = (x: number, z: number, c: [number, number]) => Math.atan2(-(z - c[1]), x - c[0]);
 
   // ---------------------------------------------------------------- drag lifecycle
-  const endDrag = useCallback(() => {
+  const endDrag = useCallback((commit = true) => {
     const d = drag.current;
     const p = previewRef.current;
     drag.current = null;
+    manipulatingRef.current = false;
+    const pointerId = capturedPointer.current;
+    capturedPointer.current = null;
+    if (pointerId !== null && gl.domElement.hasPointerCapture(pointerId)) gl.domElement.releasePointerCapture(pointerId);
     setDragMode(null);
     document.body.style.cursor = "";
-    if (!d || !p) {
+    if (!commit || !d || !p) {
       setPreview(null);
       return;
     }
@@ -261,12 +279,12 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
     const label = d.mode === "rotate" ? "Rotate" : d.mode === "move" || d.mode === "pending" ? "Move" : "Resize";
     if (ops.length) apply(ops, `${label} ${base?.label || "item"}`);
     setPreview(null);
-  }, [apply, graph]);
+  }, [apply, graph, gl]);
 
   const onMove = useCallback(
     (e: PointerEvent) => {
       const d = drag.current;
-      if (!d) return;
+      if (!d || e.pointerId !== capturedPointer.current) return;
       const item = itemsRef.current.find((i) => i.id === d.id);
       if (!item) return;
       if (d.mode === "pending") {
@@ -276,17 +294,19 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
         document.body.style.cursor = "grabbing";
       }
       const cur = drag.current!;
+      const hitAt = (y = 0) => cur.floorDrag ? floorDragPoint(cur.floorDrag, e.clientX, e.clientY) : hitPlane(e.clientX, e.clientY, y);
       if (cur.mode === "move") {
-        const hit = hitPlane(e.clientX, e.clientY);
+        const hit = hitAt();
         if (!hit) return;
-        setPreview({ id: cur.id, position: [snap(hit.x + cur.offset[0]), item.position[1], snap(hit.z + cur.offset[1])] });
+        const offset = cur.floorDrag ? [0, 0] : cur.offset;
+        setPreview({ id: cur.id, position: [snap(hit.x + offset[0]), item.position[1], snap(hit.z + offset[1])] });
       } else if (cur.mode === "rotate") {
-        const hit = hitPlane(e.clientX, e.clientY);
+        const hit = hitAt();
         if (!hit) return;
         const raw = cur.startRot + (angleOf(hit.x, hit.z, cur.center) - cur.startAngle);
         setPreview({ id: cur.id, rotationY: e.altKey ? normalizeAngle(raw) : snapAngle(raw) });
       } else if (cur.mode === "scale") {
-        const hit = hitPlane(e.clientX, e.clientY, cur.startDims.h);
+        const hit = hitAt(item.position[1] + cur.startDims.h);
         if (!hit) return;
         const { ax, az } = itemAxes(cur.rot);
         const dx = hit.x - cur.center[0];
@@ -307,7 +327,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
         }
         setPreview({ id: cur.id, dims });
       } else if (cur.mode === "edge") {
-        const hit = hitPlane(e.clientX, e.clientY, cur.y);
+        const hit = hitAt(cur.y);
         if (!hit) return;
         const { ax, az } = itemAxes(cur.rot);
         const [dx, dz] = cur.axis === "w" ? ax : az;
@@ -332,22 +352,32 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
   }, [missedRef, setSelectedId]);
 
   useEffect(() => {
-    const up = () => drag.current && endDrag();
+    const up = (e: PointerEvent) => { if (drag.current && e.pointerId === capturedPointer.current) endDrag(); };
+    const cancel = (e: PointerEvent) => { if (drag.current && e.pointerId === capturedPointer.current) endDrag(false); };
+    const blur = () => { if (drag.current) endDrag(false); };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("blur", blur);
+    gl.domElement.addEventListener("lostpointercapture", cancel);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("blur", blur);
+      gl.domElement.removeEventListener("lostpointercapture", cancel);
     };
-  }, [onMove, endDrag]);
+  }, [onMove, endDrag, gl]);
+
+  const screenDrag = useCallback((e: ThreeEvent<PointerEvent>, origin = e.eventObject.getWorldPosition(new THREE.Vector3())) =>
+    walking ? startFloorDrag(camera, origin, e.nativeEvent, size.height) : undefined,
+  [walking, camera, size.height]);
 
   const onItemDown = useCallback(
     (item: ItemInstance, e: ThreeEvent<PointerEvent>) => {
-      if (touring || e.button !== 0 || isPanKeyHeld()) return; // middle/right-drag and Space+drag pan the view
+      if (touring || e.button !== 0 || isPanKeyHeld() || manipulatingRef.current) return; // middle/right-drag and Space+drag pan the view
       e.stopPropagation();
-      holdControls();
+      holdControls(e);
       setSelectedId(item.id);
       const hit = hitPlane(e.nativeEvent.clientX, e.nativeEvent.clientY);
       drag.current = {
@@ -356,43 +386,45 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
         startX: e.nativeEvent.clientX,
         startY: e.nativeEvent.clientY,
         offset: hit ? [item.position[0] - hit.x, item.position[2] - hit.z] : [0, 0],
+        floorDrag: screenDrag(e, new THREE.Vector3(...item.position)),
       };
       setDragMode("pending");
     },
-    [hitPlane, holdControls, setSelectedId, touring],
+    [hitPlane, holdControls, setSelectedId, touring, screenDrag],
   );
 
   const onRotateStart = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
-      if (!selected) return;
-      const hit = hitPlane(e.nativeEvent.clientX, e.nativeEvent.clientY);
+      if (!selected || manipulatingRef.current) return;
+      const hit = walking ? e.point : hitPlane(e.nativeEvent.clientX, e.nativeEvent.clientY);
       if (!hit) return;
-      holdControls();
+      holdControls(e);
       const center: [number, number] = [selected.position[0], selected.position[2]];
-      drag.current = { mode: "rotate", id: selected.id, center, startAngle: angleOf(hit.x, hit.z, center), startRot: selected.rotationY };
+      drag.current = { mode: "rotate", id: selected.id, center, startAngle: angleOf(hit.x, hit.z, center), startRot: selected.rotationY, floorDrag: screenDrag(e, hit) };
       setDragMode("rotate");
       document.body.style.cursor = "grabbing";
     },
-    [selected, hitPlane, holdControls],
+    [selected, hitPlane, holdControls, walking, screenDrag],
   );
 
-  const onScaleStart = useCallback(() => {
-    if (!selected) return;
-    holdControls();
+  const onScaleStart = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (!selected || manipulatingRef.current) return;
+    holdControls(e);
     drag.current = {
       mode: "scale",
       id: selected.id,
       center: [selected.position[0], selected.position[2]],
       rot: selected.rotationY,
       startDims: { ...selected.dims },
+      floorDrag: screenDrag(e),
     };
     setDragMode("scale");
-  }, [selected, holdControls]);
+  }, [selected, holdControls, screenDrag]);
 
   const onEdgeStart = useCallback(
-    (axis: "w" | "d", sign: 1 | -1) => {
-      if (!selected) return;
-      holdControls();
+    (axis: "w" | "d", sign: 1 | -1, e: ThreeEvent<PointerEvent>) => {
+      if (!selected || manipulatingRef.current) return;
+      holdControls(e);
       const { ax, az } = itemAxes(selected.rotationY);
       const [dx, dz] = axis === "w" ? ax : az;
       const half = selected.dims[axis] / 2;
@@ -403,19 +435,20 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
         sign,
         rot: selected.rotationY,
         fixed: [selected.position[0] - dx * sign * half, selected.position[2] - dz * sign * half],
-        y: selected.dims.h, // the handles sit on the top face
+        y: selected.position[1] + selected.dims.h, // the handles sit on the top face
         startDims: { ...selected.dims },
+        floorDrag: screenDrag(e),
       };
       setDragMode("edge");
     },
-    [selected, holdControls],
+    [selected, holdControls, screenDrag],
   );
 
   const onHeightStart = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
-      if (!selected) return;
-      holdControls();
-      const top = new THREE.Vector3(selected.position[0], selected.dims.h, selected.position[2]);
+      if (!selected || manipulatingRef.current) return;
+      holdControls(e);
+      const top = new THREE.Vector3(selected.position[0], selected.position[1] + selected.dims.h, selected.position[2]);
       const look = new THREE.Vector3();
       camera.getWorldDirection(look);
       // A vertical segment of h meters shows as h·cos(elevation) on screen; near top-down, cap the gain
@@ -434,14 +467,16 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
 
   const focusItem = useCallback(
     (item: ItemInstance) => {
+      if (touring) return;
       setSelectedId(item.id);
+      if (walking) return;
       const r = Math.hypot(item.dims.w, item.dims.d) / 2;
       cameraRef.current?.focus({
         min: new THREE.Vector3(item.position[0] - r, 0, item.position[2] - r),
         max: new THREE.Vector3(item.position[0] + r, item.dims.h, item.position[2] + r),
       });
     },
-    [cameraRef, setSelectedId],
+    [cameraRef, setSelectedId, touring, walking],
   );
 
   const removeItem = useCallback(
@@ -486,9 +521,12 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
         return;
       }
       if (e.key === "Escape") {
+        if (drag.current) endDrag(false);
         setSelectedId(null);
         return;
       }
+      // Arrows always walk in first-person mode, including with furniture selected.
+      if (walking && e.key.startsWith("Arrow")) return;
       const item = itemsRef.current.find((i) => i.id === selectedId);
       if (drag.current) return;
       if (e.key.toLowerCase() === "f" && !mod) {
@@ -536,7 +574,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, setSelectedId, apply, undo, redo, removeItem, duplicateItem, focusItem, cameraRef, camera, touring]);
+  }, [selectedId, setSelectedId, apply, undo, redo, removeItem, duplicateItem, focusItem, cameraRef, camera, touring, walking, endDrag]);
 
   /** Every item's GLB loaded (the video must not show placeholder boxes). */
   const preloadModels = useCallback(async () => {
@@ -612,7 +650,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
   return (
     <>
       <color attach="background" args={[colors.background]} />
-      <IsoCamera ref={cameraRef} bounds={bounds} locked={dragMode !== null || touring} projection={touring ? "perspective" : projection} />
+      {walkthrough ? <FirstPersonCamera graph={graph} {...walkthrough} manipulatingRef={manipulatingRef} /> : <IsoCamera ref={cameraRef} bounds={bounds} locked={dragMode !== null || touring} projection={touring ? "perspective" : projection} />}
       {/* Realistic: warmer, stronger sun and less flat fill, so form comes from light and AO */}
       <hemisphereLight args={["#ffffff", "#b9b2a6", realistic ? 0.25 : 0.75]} />
       <ambientLight intensity={realistic ? 0.04 : 0.25} />
@@ -639,7 +677,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
         <Environment preset="apartment" environmentIntensity={realistic ? 0.35 : 0.45} />
       </Suspense>
       {realistic && <RealisticEffects ref={composerRef} high={props.frameloop === "never"} />}
-      {touring && <Interior rooms={level?.rooms || []} height={level?.ceilingHeight || 2.7} interiorRef={interiorRef} />}
+      {(touring || walking) && <Interior rooms={level?.rooms || []} height={level?.ceilingHeight || 2.7} interiorRef={interiorRef} />}
       {tour && (
         <TourDirector
           ref={tour.apiRef}
@@ -683,7 +721,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
           asset={it.assetId ? assets[it.assetId] : undefined}
           loadModels={loadModels}
           accent={graph.meta.palette.accent}
-          showLabel={!touring}
+          showLabel={!touring && !walking}
           onPointerDown={onItemDown}
           onDoubleClick={focusItem}
         />
@@ -691,7 +729,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
 
       {/* Overlap warnings stay on dropped items */}
       {items
-        .filter((it) => !touring && !snapping && overlaps.has(it.id) && it.id !== selectedId)
+        .filter((it) => !touring && !walking && !snapping && overlaps.has(it.id) && it.id !== selectedId)
         .map((it) => (
           <Gizmo key={`w-${it.id}`} item={it} color={colors.danger} warnColor={colors.danger} warning showHandles={false} onRotateStart={noop} onScaleStart={noop} onEdgeStart={noop} onHeightStart={noop} />
         ))}
@@ -710,7 +748,7 @@ function SceneContents(props: SceneViewProps & { missedRef: MutableRefObject<(()
             onHeightStart={onHeightStart}
           />
           <AboveItem item={selected}>
-            <Html zIndexRange={[30, 10]}>
+            <Html zIndexRange={[30, 10]} wrapperClass="s3d-selection-label">
               <div className="s3d-anchor">
                 <SelectionChip
                   item={selected}

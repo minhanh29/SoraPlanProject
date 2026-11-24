@@ -40,3 +40,16 @@ def load_system_catalog() -> List[Dict[str, Any]]:
     """The preset catalog shipped with the service (same ids as Firestore assets/sys_*)."""
     with open(os.path.join(_DATA_DIR, "system_assets.json"), encoding="utf-8") as f:
         return json.load(f)
+
+
+@lru_cache()
+def load_system_asset_metadata() -> Dict[str, Dict[str, Any]]:
+    """Supplemental metadata for promoted system assets without recreating their library records."""
+    with open(os.path.join(_DATA_DIR, "system_asset_descriptions.json"), encoding="utf-8") as f:
+        return {item["id"]: item for item in json.load(f)}
+
+
+@lru_cache()
+def load_system_descriptions() -> Dict[str, str]:
+    """Preset descriptions plus system assets promoted from uploads, keyed by their actual ids."""
+    return {item["id"]: item["description"] for item in [*load_system_catalog(), *load_system_asset_metadata().values()]}
